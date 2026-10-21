@@ -22,3 +22,6 @@ data/
 # 질문 로그: 직원이 입력한 개인정보가 섞일 수 있다
 logs/
 *.log
+
+# 빌드 결과: scripts/build_web.py 로 다시 만든다
+dist/

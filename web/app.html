@@ -1,0 +1,540 @@
+<title>내규챗봇 시범본</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 규정집을 펼쳐 놓은 책상: 왼쪽은 묻고 답하는 칸, 오른쪽은 근거 조문 원문. 근거는 언제나 한 번 눌러 확인할 수 있게. */
+:root {
+  --paper: #f3f6f5;
+  --surface: #ffffff;
+  --sunk: #eaefed;
+  --ink: #16201c;
+  --ink-2: #4b5954;
+  --ink-3: #75837e;
+  --line: #d6dfdb;
+  --accent: #0b6b5d;
+  --accent-ink: #ffffff;
+  --accent-soft: #e1f0ec;
+  --mark: #ffe38f;
+  --mark-ink: #16201c;
+  --hl: #eef7f4;
+  --warn: #8a5300;
+  --warn-soft: #fff1d1;
+  --ok: #1b6f40;
+  --ok-soft: #def2e5;
+  --danger: #b42318;
+  --font-display: "Hahmlet", "Noto Serif KR", "AppleMyungjo", "Batang", serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #7b8a85;
+    --line: #27322e; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
+    --hl: #17302b; --warn: #f2b54b; --warn-soft: #3a2c0e; --ok: #5bd08a; --ok-soft: #12301f; --danger: #f97066;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #7b8a85;
+  --line: #27322e; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
+  --hl: #17302b; --warn: #f2b54b; --warn-soft: #3a2c0e; --ok: #5bd08a; --ok-soft: #12301f; --danger: #f97066;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px; word-break: keep-all; overflow-wrap: anywhere;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: 1200px; margin: 0 auto; }
+
+/* 머리 */
+.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-block: 22px 14px; border-bottom: 1px solid var(--line); }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 26px; letter-spacing: -0.01em; margin: 0; }
+.brand small { font-family: var(--font-body); font-weight: 500; font-size: 13px; color: var(--accent); margin-left: 8px; letter-spacing: 0.02em; }
+.basis { color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.notice { flex-basis: 100%; font-size: 13px; color: var(--ink-2); }
+.notice b { color: var(--warn); font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; padding-top: 20px; }
+@media (min-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 440px); } }
+
+/* 묻는 칸 */
+.composer { display: grid; gap: 12px; }
+.ask-row { display: flex; gap: 8px; }
+.ask-row input {
+  flex: 1; min-width: 0; padding: 13px 14px; border: 1.5px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); font-size: 16px;
+}
+.ask-row input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.btn { border: 0; border-radius: var(--radius); padding: 0 18px; background: var(--accent); color: var(--accent-ink); font-weight: 600; white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); padding: 6px 12px; font-weight: 500; font-size: 13px; }
+.label { font-size: 12px; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 13.5px; color: var(--ink-2);
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.examples .chip { border-style: dashed; }
+
+/* 대화 */
+.thread { display: grid; gap: 22px; margin-top: 22px; }
+.turn { display: grid; gap: 10px; }
+.q { justify-self: end; max-width: 85%; background: var(--sunk); border-radius: 14px 14px 4px 14px; padding: 9px 14px; font-size: 15px; }
+.q .tag { font-size: 11px; color: var(--ink-3); margin-right: 6px; letter-spacing: 0.04em; }
+.a { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 14px; display: grid; gap: 12px; min-width: 0; }
+.a-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.a-title { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
+.pill { font-size: 11.5px; border-radius: 999px; padding: 2px 9px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.ex { background: var(--sunk); color: var(--ink-3); }
+.a p { margin: 0; max-width: 68ch; }
+.a strong { font-weight: 600; background: linear-gradient(transparent 62%, var(--accent-soft) 62%); }
+.facts { width: 100%; border-collapse: collapse; font-size: 14px; }
+.facts-box { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.facts th, .facts td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.facts tr:last-child th, .facts tr:last-child td { border-bottom: 0; }
+.facts th { font-weight: 500; color: var(--ink-2); width: 30%; background: var(--sunk); }
+.cite {
+  display: inline-block; margin-top: 3px; border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 5px;
+  padding: 1px 7px; font-size: 12px; font-family: var(--font-mono), var(--font-body); font-weight: 500; text-align: left;
+}
+.cite:hover { background: var(--accent); color: var(--accent-ink); }
+.note { font-size: 13px; color: var(--ink-2); border-left: 3px solid var(--line); padding-left: 10px; }
+.soft { font-size: 13px; color: var(--ink-3); }
+.more { display: grid; gap: 6px; }
+details.box { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+details.box summary { cursor: pointer; font-size: 13.5px; color: var(--ink-2); }
+details.box[open] summary { margin-bottom: 8px; }
+.feedback { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; }
+.report { display: grid; gap: 8px; }
+.report textarea { width: 100%; min-height: 96px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--paper); font-size: 13px; }
+
+/* 계산기 */
+.calc { background: var(--hl); border-radius: 10px; padding: 12px 14px; display: grid; gap: 10px; }
+.calc h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.calc form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+.calc label { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
+.calc label.inline { display: flex; align-items: center; gap: 6px; }
+.calc input[type=date], .calc input[type=number] { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); min-width: 0; }
+.calc input[type=number] { width: 80px; }
+.calc table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.calc td { padding: 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.calc td:first-child { color: var(--ink-2); width: 42%; padding-right: 10px; }
+.calc .err { color: var(--danger); font-size: 13px; }
+
+/* 되묻기·주제 목록 */
+.cands { display: grid; gap: 8px; }
+.cand { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
+.cand:hover { border-color: var(--accent); }
+.cand b { font-weight: 600; }
+.cand span { font-size: 13px; color: var(--ink-2); }
+.hits { display: grid; gap: 8px; }
+.hit { text-align: left; border: 0; border-left: 3px solid var(--line); background: transparent; padding: 4px 0 4px 10px; display: grid; gap: 2px; }
+.hit:hover { border-left-color: var(--accent); }
+.hit b { font-size: 13.5px; font-weight: 600; }
+.hit span { font-size: 13px; color: var(--ink-2); }
+
+/* 원문 칸 */
+.source { min-width: 0; }
+.source-inner {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 10px;
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 32px); overflow: auto;
+}
+.source h2 { font-family: var(--font-display); font-size: 18px; margin: 0; }
+.source .meta { font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.law { font-size: 14px; display: grid; gap: 6px; }
+.law p { margin: 0; white-space: pre-wrap; }
+.law p.para { padding: 4px 6px; border-radius: 6px; }
+.law p.para.on { background: var(--hl); box-shadow: inset 3px 0 0 var(--accent); }
+.law mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; padding: 0 1px; }
+.law .tbl { overflow-x: auto; }
+.law table { border-collapse: collapse; font-size: 12.5px; }
+.law td, .law th { border: 1px solid var(--line); padding: 4px 6px; vertical-align: top; }
+.close { display: none; }
+.empty-source { color: var(--ink-3); font-size: 14px; }
+@media (max-width: 999px) {
+  .source { position: fixed; inset: auto 0 0 0; z-index: 20; padding: 0 max(8px, env(safe-area-inset-left, 0px)) env(safe-area-inset-bottom, 0px) max(8px, env(safe-area-inset-right, 0px)); }
+  .source[data-open="false"] { display: none; }
+  .source-inner { position: static; max-height: 78vh; border-radius: 14px 14px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18); }
+  .close { display: inline-block; justify-self: end; }
+}
+
+/* 검증 정보 */
+.about { margin-top: 36px; border-top: 1px solid var(--line); padding-top: 18px; display: grid; gap: 12px; }
+.about h3 { font-family: var(--font-display); font-size: 17px; margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; font-family: var(--font-mono), var(--font-body); }
+.stat span { font-size: 12.5px; color: var(--ink-2); }
+.about ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 4px; }
+@media (prefers-reduced-motion: no-preference) { .turn { animation: rise 0.25s ease-out; } @keyframes rise { from { transform: translateY(6px); opacity: 0.6; } to { transform: none; opacity: 1; } } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">내규챗봇<small>시범본 · 출산·육아</small></h1>
+    <span class="basis" id="basis"></span>
+    <p class="notice" id="notice"></p>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section class="composer" aria-label="질문하기">
+        <form class="ask-row" id="ask-form" autocomplete="off">
+          <label for="q" class="label" hidden>질문</label>
+          <input id="q" name="q" type="text" placeholder="예: 와이프가 다음 달 출산인데 저는 며칠 쉴 수 있나요?" aria-label="질문">
+          <button class="btn" type="submit">묻기</button>
+        </form>
+        <div class="label">상황별로 보기</div>
+        <div class="chips" id="topics"></div>
+        <div class="label">이렇게 물어보세요</div>
+        <div class="chips examples" id="examples"></div>
+      </section>
+      <div class="thread" id="thread" aria-live="polite"></div>
+      <section class="about" id="about" aria-label="검증 정보"></section>
+    </main>
+
+    <aside class="source" id="source" data-open="false" aria-label="근거 조문 원문">
+      <div class="source-inner" id="source-inner">
+        <button class="btn ghost close" type="button" id="source-close">닫기</button>
+        <p class="empty-source">답변의 근거 조문(<span class="cite" style="pointer-events:none">복무세칙 제19조…</span>)을 누르면 여기에 원문이 열립니다.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>/*__ENGINE__*/</script>
+<script>
+"use strict";
+var DATA = /*__DATA__*/;
+var E = NaegyuEngine;
+var cardIndex = new E.CardIndex(DATA.cards);
+var byId = new Map(DATA.cards.map(function (c) { return [c.id, c]; }));
+var rulesByName = new Map(DATA.rules.map(function (r) { return [r.name, r]; }));
+var articleIndex = null;
+function articles() { return articleIndex || (articleIndex = new E.ArticleIndex(DATA.rules)); }
+var $ = function (sel, el) { return (el || document).querySelector(sel); };
+
+function h(tag, attrs, kids) {
+  var el = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(function (k) {
+    if (k === "class") el.className = attrs[k];
+    else if (k === "text") el.textContent = attrs[k];
+    else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== undefined && attrs[k] !== null && attrs[k] !== false) el.setAttribute(k, attrs[k]);
+  });
+  (kids || []).forEach(function (k) { if (k !== null && k !== undefined) el.append(k.nodeType ? k : document.createTextNode(String(k))); });
+  return el;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+// 답변 문단의 **굵게**만 살린다.
+function rich(s) { var p = document.createElement("p"); p.innerHTML = esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"); return p; }
+
+/* ── 근거 조문 찾기 ───────────────────────────── */
+var RE_ART = /^(.+?) (제\d+조(?:의\d+)?)(?:제(\d+)항)?(?:제(\d+)호)?(?:([가-힣])목)?$/;
+function resolveCite(cite) {
+  var m = /^(.+?) 부칙\(([\d.]+)\)$/.exec(cite);
+  if (m) { var b = (DATA.buchik[m[1]] || {})[m[2]]; return b ? { rule: m[1], title: "부칙(" + m[2] + ")", text: b } : null; }
+  m = /^(.+?) (별표.*)$/.exec(cite);
+  if (m && m[2].indexOf("조") < 0) {
+    var r0 = rulesByName.get(m[1]);
+    var ax = r0 && r0.annexes.find(function (x) { return x.title.replace(/\s/g, "").indexOf(m[2].replace(/\s/g, "")) === 0; });
+    return ax ? { rule: m[1], title: ax.title, text: ax.text, effective: r0.effective } : null;
+  }
+  m = RE_ART.exec(cite);
+  if (!m) return null;
+  var r = rulesByName.get(m[1]);
+  var a = r && r.articles.find(function (x) { return x.no === m[2]; });
+  return a ? { rule: m[1], no: a.no, title: a.no + "(" + a.title + ")", chapter: a.chapter, text: a.text, para: m[3] ? +m[3] : 0, item: m[4], effective: r.effective } : null;
+}
+
+var CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+// 표 HTML 은 우리 규정 변환본에서만 오지만, 그래도 표 태그와 칸 합치기 속성만 남긴다.
+function safeTable(html) {
+  return esc(html).replace(/&lt;(\/?)(table|tr|td|th|br)((?:\s+(?:rowspan|colspan)=&quot;\d+&quot;)*)\s*\/?&gt;/g, function (_, slash, tag, attrs) {
+    return "<" + slash + tag + attrs.replace(/&quot;/g, '"') + ">";
+  });
+}
+// 마크다운 표. 인용 문구가 한 줄(행)의 칸들을 이어 붙인 글에 있으면 그 행을 표시한다.
+function pipeTable(lines, quote) {
+  var q = (quote || "").replace(/\s+/g, " ").trim(), hit = false;
+  var rows = lines.filter(function (l) { return !/^\|\s*-{3}/.test(l); }).map(function (l) {
+    var cells = l.replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); });
+    var on = q && cells.join(" ").replace(/<br>/g, " ").replace(/\s+/g, " ").indexOf(q) >= 0;
+    if (on) hit = true;
+    return "<tr>" + cells.map(function (c) {
+      var inner = esc(c).replace(/&lt;br&gt;/g, "<br>");
+      return "<td>" + (on ? "<mark>" + inner + "</mark>" : inner) + "</td>";
+    }).join("") + "</tr>";
+  });
+  return { html: "<div class='tbl'><table>" + rows.join("") + "</table></div>", hit: hit };
+}
+// 인용 문구를 원문에서 찾아 표시한다. 띄어쓰기·가운뎃점 차이는 무시한다.
+function markQuote(html, quote) {
+  if (!quote) return html;
+  var parts = quote.replace(/[·‧ㆍ]/g, "·").split(/\s+/).filter(Boolean).map(function (w) {
+    return esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/·/g, "[·‧ㆍ]");
+  });
+  try { return html.replace(new RegExp("(" + parts.join("\\s*") + ")"), "<mark>$1</mark>"); } catch (e) { return html; }
+}
+function renderLaw(text, para, quote) {
+  var blocks = [], cur = [], lines = text.split("\n");
+  function flush() { if (cur.length) { blocks.push(cur.join("\n")); cur = []; } }
+  for (var i = 0; i < lines.length; i++) {
+    var l = lines[i];
+    if (/^<table>/.test(l.trim())) {
+      flush(); var t = [l];
+      while (i + 1 < lines.length && !/<\/table>/.test(lines[i])) { i++; t.push(lines[i]); }
+      blocks.push({ html: "<div class='tbl'>" + safeTable(t.join("")) + "</div>" }); continue;
+    }
+    if (/^\|/.test(l.trim())) {
+      flush(); var p = [l];
+      while (i + 1 < lines.length && /^\|/.test(lines[i + 1].trim())) { i++; p.push(lines[i]); }
+      blocks.push(pipeTable(p, quote)); continue;
+    }
+    if (l.trim() === "") { flush(); continue; }
+    if (CIRCLED.indexOf(l.trim()[0]) >= 0) flush();
+    cur.push(l);
+  }
+  flush();
+  var box = h("div", { class: "law" }), marked = false, target = null;
+  blocks.forEach(function (b) {
+    if (typeof b !== "string") {
+      var d = document.createElement("div"); d.innerHTML = b.html; box.append(d);
+      if (b.hit && !marked) { marked = true; target = target || d; }
+      return;
+    }
+    var n = CIRCLED.indexOf(b.trim()[0]) + 1, el = h("p", { class: n ? "para" : "" });
+    var html = esc(b), on = para && n === para;
+    if (on || (!para && !marked)) {
+      var m2 = markQuote(html, quote);
+      if (m2 !== html) { marked = true; html = m2; if (!target) target = el; }
+    }
+    if (on) { el.classList.add("on"); target = el; }
+    el.innerHTML = html; box.append(el);
+  });
+  if (!marked && quote) box.querySelectorAll("p").forEach(function (p) {
+    if (marked) return;
+    var m3 = markQuote(p.innerHTML, quote);
+    if (m3 !== p.innerHTML) { p.innerHTML = m3; marked = true; target = target || p; }
+  });
+  return { box: box, target: target };
+}
+
+function openSource(cite, quote) {
+  var src = $("#source"), inner = $("#source-inner"), r = resolveCite(cite);
+  inner.replaceChildren($("#source-close") || closeBtn());
+  if (!r) { inner.append(h("p", { class: "empty-source", text: "원문을 찾지 못했습니다: " + cite })); }
+  else {
+    var law = renderLaw(r.text, r.para, quote);
+    inner.append(
+      h("div", { class: "label", text: "근거 조문 원문" }),
+      h("h2", { text: r.rule + " " + r.title }),
+      h("div", { class: "meta", text: [r.chapter, r.effective ? "현행 시행 " + r.effective : "", "인용: " + cite].filter(Boolean).join(" · ") }),
+      law.box
+    );
+    if (law.target) setTimeout(function () { law.target.scrollIntoView({ block: "center", behavior: "smooth" }); }, 30);
+  }
+  src.dataset.open = "true";
+  if (window.matchMedia("(max-width: 999px)").matches) inner.scrollTop = 0;
+}
+function closeBtn() { return h("button", { class: "btn ghost close", type: "button", id: "source-close", text: "닫기", onclick: function () { $("#source").dataset.open = "false"; } }); }
+$("#source-close").addEventListener("click", function () { $("#source").dataset.open = "false"; });
+function citeBtn(cite, quote) { return h("button", { class: "cite", type: "button", title: "원문 보기", onclick: function () { openSource(cite, quote); } }, [cite]); }
+
+/* ── 계산기 ───────────────────────────────── */
+var TODAY = (function () { var d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); })();
+function plus(days) { return E.iso(new Date(TODAY.getTime() + days * 86400000)); }
+var CALCS = {
+  spouseBirth: { title: "배우자 출산휴가 기간 계산", fields: [["due", "date", "출산예정일", plus(40)], ["birth", "date", "실제 출산일(알면)", ""], ["multiple", "check", "둘 이상 출산(쌍둥이 등)"]] },
+  maternity: { title: "출산전후휴가 기간 계산", fields: [["due", "date", "출산예정일", plus(60)], ["start", "date", "휴가 시작 희망일(선택)", ""], ["multiple", "check", "둘 이상 임신"]] },
+  loss: { title: "유산·사산휴가 계산", fields: [["who", "select", "누구", "self", [["self", "본인(여성직원)"], ["spouse", "배우자"]]], ["date", "date", "유산·사산한 날", plus(-3)], ["weeks", "number", "임신 주수(본인)", "12"]] },
+  childAge: { title: "자녀 나이로 쓸 수 있는 제도", fields: [["birth", "date", "자녀 생년월일", plus(-365 * 6 - 40)], ["today", "date", "기준일", E.iso(TODAY)], ["mother", "check", "여성직원(수유시간 포함)"]] },
+  familyCare: { title: "가족돌봄휴가 유급 일수", fields: [["children", "number", "대상 자녀 수", "2"], ["disabledOrSingle", "check", "장애인 자녀가 있거나 한부모"]] },
+  allowance: { title: "가족수당 계산(배우자·자녀)", fields: [["spouse", "check", "배우자 있음", true], ["children", "number", "20세 미만 자녀 수", "2"]] }
+};
+var calcSeq = 0;
+function renderCalc(kind) {
+  var spec = CALCS[kind]; if (!spec) return null;
+  var box = h("div", { class: "calc" }), form = h("form"), out = h("div"), ids = {};
+  spec.fields.forEach(function (f) {
+    var id = "c" + (++calcSeq) + "-" + f[0], input;
+    ids[f[0]] = id;
+    if (f[1] === "check") { input = h("input", { type: "checkbox", id: id }); input.checked = !!f[3]; form.append(h("label", { class: "inline", for: id }, [input, f[2]])); return; }
+    if (f[1] === "select") { input = h("select", { id: id }, f[4].map(function (o) { return h("option", { value: o[0], text: o[1] }); })); input.value = f[3]; }
+    else { input = h("input", { type: f[1], id: id, value: f[3] || "", min: f[1] === "number" ? "0" : null }); }
+    form.append(h("label", { for: id }, [f[2], input]));
+  });
+  function run() {
+    var o = {};
+    spec.fields.forEach(function (f) { var el = form.querySelector("#" + ids[f[0]]); o[f[0]] = f[1] === "check" ? el.checked : el.value; });
+    var r = E.calc[kind](o);
+    if (r.error) { out.replaceChildren(h("p", { class: "err", text: r.error })); return; }
+    out.replaceChildren(
+      h("table", null, [h("tbody", null, r.rows.map(function (row) { return h("tr", null, [h("td", { text: row[0] }), h("td", { text: row[1] })]); }))]),
+      h("div", null, (r.notes || []).map(function (n) { return h("p", { class: "soft", text: "· " + n }); }))
+    );
+  }
+  form.addEventListener("input", run); form.addEventListener("change", run);
+  form.addEventListener("submit", function (e) { e.preventDefault(); run(); });
+  box.append(h("h4", { text: spec.title + " (참고용)" }), form, out);
+  run();
+  return box;
+}
+
+/* ── 답변 그리기 ─────────────────────────────── */
+function statusPill(c) {
+  var v = (DATA.meta.verify.byCard || {})[c.id];
+  if (c.kind === "outside") return h("span", { class: "pill warn", text: "내규에 없는 내용" });
+  if (v && v.need) return h("span", { class: "pill warn", text: "검증 · 확인 필요 " + v.need + "건" });
+  return h("span", { class: "pill ok", text: "인용 원문 대조 · 독립 검증 통과" });
+}
+function cardButton(id, onPick) {
+  var c = byId.get(id);
+  return h("button", { class: "cand", type: "button", onclick: function () { onPick(c); } }, [h("b", { text: c.title }), h("span", { text: c.summary })]);
+}
+function relatedHits(question) {
+  var hits = articles().search(question, 3);
+  if (!hits.length) return null;
+  return h("details", { class: "box" }, [
+    h("summary", { text: "규정 전체에서 찾은 관련 조문 " + hits.length + "건" }),
+    h("div", { class: "hits" }, hits.map(hitButton.bind(null, question)))
+  ]);
+}
+function hitButton(question, x) {
+  var d = x.doc, cite = d.kind === "annex" ? d.rule + " " + d.no : d.rule + " " + d.no;
+  return h("button", { class: "hit", type: "button", onclick: function () { openSource(cite, ""); } }, [
+    h("b", { text: d.rule + " " + d.no + (d.title ? "(" + d.title + ")" : "") }),
+    h("span", { text: E.snippet(d.text, question) })
+  ]);
+}
+function reportBox(question, card) {
+  var wrap = h("div", { class: "report", hidden: true }), id = "r" + (++calcSeq);
+  var text = "[내규챗봇 시범본 의견]\n질문: " + (question || "-") + "\n답변: " + (card ? card.title + " (" + card.id + ")" : "준비된 답 없음") + "\n규정 기준일: " + DATA.meta.basis + "\n의견: ";
+  var ta = h("textarea", { id: id, "aria-label": "보낼 의견" }); ta.value = text;
+  var msg = h("span", { class: "soft" });
+  wrap.append(
+    h("p", { class: "soft", text: "시범본은 의견을 서버로 보내지 않습니다. 아래 내용을 복사해 담당자에게 메신저나 메일로 보내 주세요." }),
+    ta,
+    h("div", { class: "chips" }, [h("button", { class: "btn ghost", type: "button", text: "복사", onclick: function () {
+      var done = function () { msg.textContent = "복사했습니다."; };
+      try { navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); msg.textContent = "선택해 두었습니다. Ctrl+C로 복사하세요."; }); }
+      catch (e) { ta.select(); msg.textContent = "선택해 두었습니다. Ctrl+C로 복사하세요."; }
+    } }), msg])
+  );
+  return wrap;
+}
+function feedbackRow(question, card) {
+  var rep = reportBox(question, card), thanks = h("span", { class: "soft" });
+  return [h("div", { class: "feedback" }, [
+    h("span", { class: "soft", text: "답이 도움이 됐나요?" }),
+    h("button", { class: "btn ghost", type: "button", text: "도움이 됐어요", onclick: function () { thanks.textContent = "고맙습니다."; } }),
+    h("button", { class: "btn ghost", type: "button", text: "틀렸거나 부족해요", onclick: function () { rep.hidden = !rep.hidden; } }),
+    thanks
+  ]), rep];
+}
+
+function renderAnswer(c, opts) {
+  opts = opts || {};
+  var a = h("article", { class: "a" });
+  a.append(h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: c.title }), statusPill(c), opts.example ? h("span", { class: "pill ex", text: "예시" }) : null]));
+  if (opts.soft) a.append(h("p", { class: "soft", text: "질문과 가장 가까운 답입니다. 찾던 내용이 아니면 아래 다른 답이나 관련 조문을 보세요." }));
+  c.answer.forEach(function (p) { a.append(rich(p)); });
+  a.append(h("div", { class: "facts-box" }, [h("table", { class: "facts" }, [h("caption", { class: "label", style: "text-align:left;padding:8px 10px 0", text: "핵심 정리와 근거" }), h("tbody", null, c.facts.map(function (f) {
+    return h("tr", null, [h("th", { scope: "row", text: f.label }), h("td", null, [h("div", { text: f.value }), citeBtn(f.cite, f.quote)])]);
+  }))])]));
+  if (c.calc) { var cb = renderCalc(c.calc); if (cb) a.append(cb); }
+  (c.notes || []).forEach(function (n) { a.append(h("p", { class: "note", text: n })); });
+  if (c.law_refs && c.law_refs.length) a.append(h("p", { class: "note", text: "외부 법령 대조: " + c.law_refs[0].law + " " + c.law_refs[0].article + " (국가법령정보 " + DATA.meta.lawChecked + " 확인)" }));
+  var rel = (c.related || []).concat(opts.alts || []).filter(function (x, i, arr) { return x !== c.id && arr.indexOf(x) === i && byId.has(x); });
+  if (rel.length) a.append(h("div", { class: "more" }, [h("div", { class: "label", text: "함께 보면 좋은 내용" }), h("div", { class: "chips" }, rel.map(function (id) {
+    return h("button", { class: "chip", type: "button", text: byId.get(id).title, onclick: function () { pick(byId.get(id)); } });
+  }))]));
+  if (c.check && c.check.length) a.append(h("details", { class: "box" }, [h("summary", { text: "검수 메모 " + c.check.length + "건 (담당부서 확인용)" }), h("div", null, c.check.map(function (t) { return h("p", { class: "soft", text: "· " + t }); }))]));
+  if (opts.question) { var rh = relatedHits(opts.question); if (rh) a.append(rh); }
+  feedbackRow(opts.question, c).forEach(function (x) { a.append(x); });
+  return a;
+}
+
+function addTurn(qText, tag, node) {
+  var t = h("div", { class: "turn" }, [h("div", { class: "q" }, [tag ? h("span", { class: "tag", text: tag }) : null, qText]), node]);
+  var thread = $("#thread");
+  thread.insertBefore(t, thread.firstChild);
+  return t;
+}
+function pick(c) { addTurn(c.title, "선택", renderAnswer(c, {})); window.scrollTo({ top: $("#thread").offsetTop - 12, behavior: "smooth" }); }
+
+function ask(question) {
+  question = question.trim(); if (!question) return;
+  var ranked = cardIndex.score(question), dec = E.decide(ranked, question, cardIndex.lastQuery), node;
+  if (dec.mode === "answer") node = renderAnswer(byId.get(dec.id), { question: question, alts: dec.alts, soft: dec.soft });
+  else if (dec.mode === "ask") {
+    node = h("article", { class: "a" }, [
+      h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: dec.vague ? "조금 더 알려주세요" : "어떤 내용을 찾으세요?" })]),
+      h("p", { text: dec.vague ? "질문이 넓어서 여러 답이 해당됩니다. 상황에 맞는 것을 고르세요." : "질문과 비슷한 답이 여러 개 있습니다. 상황에 맞는 것을 고르세요." }),
+      h("div", { class: "cands" }, dec.ids.map(function (id) { return cardButton(id, pick); })),
+      relatedHits(question)
+    ].filter(Boolean));
+  } else {
+    var hits = articles().search(question, 5);
+    node = h("article", { class: "a" }, [
+      h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: "준비된 답이 없습니다" }), h("span", { class: "pill warn", text: "출산·육아 밖 질문" })]),
+      h("p", { text: "이 시범본은 출산·육아 분야만 답을 준비했습니다. 대신 규정 71개 전체에서 관련 조문을 찾았습니다. 조문을 누르면 원문이 열립니다." }),
+      hits.length ? h("div", { class: "hits" }, hits.map(hitButton.bind(null, question))) : h("p", { class: "soft", text: "관련 조문도 찾지 못했습니다." })
+    ]);
+    feedbackRow(question, null).forEach(function (x) { node.append(x); });
+  }
+  addTurn(question, null, node);
+}
+
+/* ── 처음 화면 ─────────────────────────────── */
+$("#basis").textContent = "규정 기준 " + DATA.meta.basis + " · 규정 " + DATA.rules.length + "개";
+$("#notice").innerHTML = "<b>AI가 작성한 답변</b>입니다. 인용 문구는 프로그램으로 원문과 대조했고 다른 AI로 다시 검증했지만, <b>담당부서 검수 전</b>입니다. 중요한 결정 전에는 근거 조문 원문과 인사팀에 확인하세요.";
+DATA.topics.forEach(function (t) {
+  $("#topics").append(h("button", { class: "chip", type: "button", text: t.name, onclick: function (e) {
+    document.querySelectorAll("#topics .chip").forEach(function (b) { b.classList.remove("on"); });
+    e.currentTarget.classList.add("on");
+    var ids = DATA.cards.filter(function (c) { return c.topics.indexOf(t.id) >= 0; }).map(function (c) { return c.id; });
+    addTurn(t.name, "상황", h("article", { class: "a" }, [h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: t.name })]), h("div", { class: "cands" }, ids.map(function (id) { return cardButton(id, pick); }))]));
+  } }));
+});
+["배우자 출산휴가 며칠이에요?", "시험관 시술 때문에 병원 가야 해요", "초등학교 1학년 아이 있는데 늦게 출근할 수 있나요", "육아휴직 2년 하면 근속 다 인정돼요?", "출산"].forEach(function (s) {
+  $("#examples").append(h("button", { class: "chip", type: "button", text: s, onclick: function () { $("#q").value = s; ask(s); } }));
+});
+$("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask($("#q").value); $("#q").select(); });
+
+(function about() {
+  var m = DATA.meta, v = m.verify, s = m.search;
+  var stat = function (b, span) { return h("div", { class: "stat" }, [h("b", { text: b }), h("span", { text: span })]); };
+  $("#about").append(
+    h("h3", { text: "이 시범본은 이렇게 검증했습니다" }),
+    h("div", { class: "stats" }, [
+      stat(m.cards + "장", "문답 카드 (예상 질문 " + m.questions + "개)"),
+      stat(m.quotesOk + "/" + m.facts, "인용 문구가 원문과 글자 그대로 일치"),
+      stat((v.match + v.judged) + "/" + v.total, "다른 AI 독립 검증 통과 (확인 필요 " + v.need + ")"),
+      stat(s.dev, "카드에 없는 시험 질문 처리 정확도"),
+      stat(s.top3, "처음 보는 표현, 3순위 안 정답")
+    ]),
+    h("ul", null, [
+      h("li", { text: "1단계 프로그램 검사: 인용한 조·항·호가 실제로 있는지, 인용 문구와 숫자가 원문과 같은지 확인했습니다." }),
+      h("li", { text: "2단계 독립 검증: 다른 AI 모델에 답을 숨긴 채 조문만 주고 같은 항목을 다시 찾게 해 비교했습니다. 어긋난 항목은 원문과 대조해 표현을 고쳤습니다." }),
+      h("li", { text: "외부 법령 대조: 내규가 인용하는 남녀고용평등법 조문을 국가법령정보로 확인했습니다(" + m.lawChecked + ")." }),
+      h("li", { text: "3단계 사람 검수는 아직입니다. 각 답의 '검수 메모'에 담당부서가 확인할 점을 적어 두었습니다." }),
+      h("li", { text: "시험 질문 정확도는 검색 기준값을 고를 때 같은 질문을 써서 실제보다 높게 나왔을 수 있습니다. 담당부서가 만든 질문으로 다시 재야 합니다." })
+    ]),
+    m.ruleFixes.length ? h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]) : null
+  );
+})();
+
+// 처음부터 작동하는 모습을 보여 주는 예시 한 건
+addTurn("와이프가 다음 달 출산 예정인데 저는 며칠 쉴 수 있나요?", "예시", renderAnswer(byId.get("spouse-birth-leave"), { example: true }));
+</script>

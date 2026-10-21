@@ -1,0 +1,188 @@
+"""문답 카드를 규정 DB와 대조하는 프로그램 검사 (검증 1단계).
+
+- 인용한 조문·항·호·목이 실제로 있는지
+- 인용 문구(quote)가 그 위치의 원문에 글자 그대로 있는지
+- 사실(value)에 나온 숫자가 인용 위치의 원문에 있는지
+- 답변 문단의 숫자가 카드가 인용한 조문들 안에 있는지
+- 관련 카드·주제 id, 중복 질문
+
+결과는 reports/check_report.md 에 쓴다. 실패가 있으면 종료 코드 1.
+"""
+import json
+import re
+import sys
+import unicodedata
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+KNOW = ROOT / "knowledge" / "birth_childcare"
+RULES = ROOT / "data" / "rules.json"
+REPORT = ROOT / "reports" / "check_report.md"
+
+RE_ART = re.compile(r"^(?P<rule>.+?) (?P<art>제\d+조(?:의\d+)?)(?:제(?P<para>\d+)항)?(?:제(?P<item>\d+)호)?(?:(?P<mok>[가-힣])목)?$")
+RE_ANNEX = re.compile(r"^(?P<rule>.+?) (?P<annex>별표.*)$")
+RE_BUCHIK = re.compile(r"^(?P<rule>.+?) 부칙\((?P<date>[\d.]+)\)$")
+
+
+def norm(s):
+    s = unicodedata.normalize("NFC", s)
+    for a in "‧ㆍ･・":
+        s = s.replace(a, "·")
+    s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+    s = s.replace("｢", "「").replace("｣", "」").replace("<br>", " ").replace("|", " ")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def digits(s):
+    return {d.replace(",", "") for d in re.findall(r"\d[\d,]*", s)}
+
+
+def sub_block(text, marker_re, next_re):
+    """text 에서 marker_re 로 시작하는 줄부터 next_re 줄 직전까지 잘라낸다."""
+    lines = text.split("\n")
+    out, on = [], False
+    for line in lines:
+        if on and next_re.match(line):
+            break
+        if not on and marker_re.match(line):
+            on = True
+        if on:
+            out.append(line)
+    return "\n".join(out) if out else None
+
+
+class Rules:
+    def __init__(self, path):
+        self.by_name = {r["name"]: r for r in json.loads(path.read_text())["rules"]}
+
+    def resolve(self, cite):
+        """인용 문자열을 (원문 범위, 조문 전체, 오류) 로 바꾼다."""
+        m = RE_BUCHIK.match(cite)
+        if m:
+            r = self.by_name.get(m["rule"])
+            if not r:
+                return None, None, f"규정 없음: {m['rule']}"
+            b = next((b for b in r["buchik"] if b.get("effective") == m["date"]), None)
+            return (b["text"], b["text"], None) if b else (None, None, f"부칙 없음: {m['date']}")
+        m = RE_ANNEX.match(cite)
+        if m and "조" not in m["annex"]:
+            r = self.by_name.get(m["rule"])
+            if not r:
+                return None, None, f"규정 없음: {m['rule']}"
+            a = next((a for a in r["annexes"] if a["title"].replace(" ", "").startswith(m["annex"].replace(" ", ""))), None)
+            return (a["text"], a["text"], None) if a else (None, None, f"별표 없음: {m['annex']}")
+        m = RE_ART.match(cite)
+        if not m:
+            return None, None, f"인용 형식 오류: {cite}"
+        r = self.by_name.get(m["rule"])
+        if not r:
+            return None, None, f"규정 없음: {m['rule']}"
+        art = next((a for a in r["articles"] if a["no"] == m["art"]), None)
+        if not art:
+            return None, None, f"조문 없음: {m['rule']} {m['art']}"
+        scope = art["text"]
+        if m["para"]:
+            n = int(m["para"])
+            p = next((p for p in art["paras"] if p["no"] == n), None)
+            if not p:
+                return None, art["text"], f"항 없음: 제{n}항"
+            scope = p["text"]
+        if m["item"]:
+            blk = sub_block(scope, re.compile(rf"^\s*{m['item']}\.\s"), re.compile(r"^\s*\d+\.\s"))
+            if not blk:
+                return None, art["text"], f"호 없음: 제{m['item']}호"
+            scope = blk
+        if m["mok"]:
+            blk = sub_block(scope, re.compile(rf"^\s*{m['mok']}\.\s"), re.compile(r"^\s*[가-힣]\.\s"))
+            if not blk:
+                return None, art["text"], f"목 없음: {m['mok']}목"
+            scope = blk
+        return scope, art["text"], None
+
+
+def main():
+    rules = Rules(RULES)
+    topics = {t["id"] for t in json.loads((KNOW / "_topics.json").read_text())["topics"]}
+    laws = json.loads((ROOT / "knowledge" / "external_laws.json").read_text())["laws"]
+    cards = []
+    for f in sorted(KNOW.glob("*.json")):
+        if f.name.startswith("_"):
+            continue
+        for c in json.loads(f.read_text()):
+            c["_file"] = f.name
+            cards.append(c)
+    ids = [c["id"] for c in cards]
+    errors, warns, lines = [], [], []
+
+    def err(c, msg):
+        errors.append(f"[{c['id']}] {msg}")
+
+    def warn(c, msg):
+        warns.append(f"[{c['id']}] {msg}")
+
+    for dup in {i for i in ids if ids.count(i) > 1}:
+        errors.append(f"[{dup}] id 중복")
+    seen_q = {}
+    n_facts = n_quotes_ok = 0
+    for c in cards:
+        for t in c["topics"]:
+            if t not in topics:
+                err(c, f"없는 주제: {t}")
+        for r in c.get("related", []):
+            if r not in ids:
+                err(c, f"없는 관련 카드: {r}")
+        if len(c["questions"]) < 4:
+            warn(c, f"예상 질문이 {len(c['questions'])}개뿐")
+        for q in c["questions"]:
+            k = norm(q)
+            if k in seen_q and seen_q[k] != c["id"]:
+                warn(c, f"다른 카드({seen_q[k]})와 같은 질문: {q}")
+            seen_q[k] = c["id"]
+        article_texts = []
+        for fct in c["facts"]:
+            n_facts += 1
+            scope, art_text, e = rules.resolve(fct["cite"])
+            if e:
+                err(c, f"{fct['label']}: {e}")
+                continue
+            article_texts.append(art_text)
+            q = norm(fct["quote"])
+            if q in norm(scope):
+                n_quotes_ok += 1
+            elif q in norm(art_text):
+                warn(c, f"{fct['label']}: 인용 문구가 {fct['cite']} 범위 밖(같은 조문 안)에 있음")
+            else:
+                err(c, f"{fct['label']}: 인용 문구가 원문에 없음 → \"{fct['quote']}\"")
+            missing = digits(fct["value"]) - digits(norm(scope).replace(",", ""))
+            if missing:
+                err(c, f"{fct['label']}: 값의 숫자 {sorted(missing)} 가 {fct['cite']} 원문에 없음")
+        for ref in c.get("law_refs", []):
+            law = next((l for l in laws if norm(l["law"]) == norm(ref["law"]) and l["article"] == ref["article"]), None)
+            if not law:
+                err(c, f"외부 법령 사본 없음: {ref['law']} {ref['article']}")
+            elif norm(ref["quote"]) not in norm(law["text"]):
+                err(c, f"외부 법령 인용이 사본에 없음 → \"{ref['quote']}\"")
+            else:
+                article_texts.append(law["text"])
+        pool = digits(" ".join(norm(t) for t in article_texts).replace(",", ""))
+        for i, para in enumerate(c["answer"], 1):
+            missing = digits(para) - pool
+            if missing:
+                warn(c, f"답변 {i}문단의 숫자 {sorted(missing)} 가 인용 조문에 없음")
+
+    lines.append("# 문답 카드 프로그램 검사 결과\n")
+    lines.append(f"- 카드 {len(cards)}개, 예상 질문 {sum(len(c['questions']) for c in cards)}개, 사실 {n_facts}개")
+    lines.append(f"- 인용 문구 일치: {n_quotes_ok}/{n_facts}")
+    lines.append(f"- 오류 {len(errors)}건, 경고 {len(warns)}건\n")
+    if errors:
+        lines.append("## 오류\n" + "\n".join(f"- {e}" for e in errors) + "\n")
+    if warns:
+        lines.append("## 경고\n" + "\n".join(f"- {w}" for w in warns) + "\n")
+    REPORT.parent.mkdir(exist_ok=True)
+    REPORT.write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
