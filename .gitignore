@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# 비밀값 (API 키 등)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# 내규 원본과 변환본: 원본은 iCloud 내규챗봇 폴더에 있고, 변환본은 언제든 다시 만들 수 있다
+data/
+
+# 질문 로그: 직원이 입력한 개인정보가 섞일 수 있다
+logs/
+*.log
