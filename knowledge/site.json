@@ -1,0 +1,10 @@
+{
+  "_note": "운영 설정. 운영부서와 오류 신고 창구가 정해지면 채우고 build_web.py 로 다시 묶는다.",
+  "feedback": {
+    "dept": "",
+    "email": "",
+    "channel": "",
+    "handling": "접수한 의견은 담당부서가 확인해 다음 판에 반영합니다."
+  },
+  "maxAgeDays": 90
+}

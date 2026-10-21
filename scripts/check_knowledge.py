@@ -15,9 +15,38 @@ import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-KNOW = ROOT / "knowledge" / "birth_childcare"
+KNOWLEDGE = ROOT / "knowledge"
 RULES = ROOT / "data" / "rules.json"
 REPORT = ROOT / "reports" / "check_report.md"
+
+
+def domain_dirs():
+    """분야 폴더 목록. 폴더마다 _topics.json(분야 이름·주제), 카드 *.json, _devset.json(시험 질문)이 있다."""
+    return sorted(p for p in KNOWLEDGE.iterdir() if p.is_dir() and (p / "_topics.json").exists())
+
+
+def load_domains(tolerant=False):
+    """(분야 정보 목록, 전체 카드). 카드마다 어느 분야인지 domain 에 적는다.
+    tolerant 이면 아직 쓰는 중이라 읽히지 않는 카드 파일은 건너뛴다(여럿이 동시에 작업할 때)."""
+    domains, cards = [], []
+    for d in domain_dirs():
+        meta = json.loads((d / "_topics.json").read_text())
+        meta["id"] = d.name
+        domains.append(meta)
+        for f in sorted(d.glob("*.json")):
+            if f.name.startswith("_"):
+                continue
+            try:
+                loaded = json.loads(f.read_text())
+            except json.JSONDecodeError:
+                if tolerant:
+                    continue
+                raise
+            for c in loaded:
+                c["domain"] = d.name
+                c["_file"] = f"{d.name}/{f.name}"
+                cards.append(c)
+    return domains, cards
 
 RE_ART = re.compile(r"^(?P<rule>.+?) (?P<art>제\d+조(?:의\d+)?)(?:제(?P<para>\d+)항)?(?:제(?P<item>\d+)호)?(?:(?P<mok>[가-힣])목)?$")
 RE_ANNEX = re.compile(r"^(?P<rule>.+?) (?P<annex>별표.*)$")
@@ -26,7 +55,7 @@ RE_BUCHIK = re.compile(r"^(?P<rule>.+?) 부칙\((?P<date>[\d.]+)\)$")
 
 def norm(s):
     s = unicodedata.normalize("NFC", s)
-    for a in "‧ㆍ･・":
+    for a in "‧ㆍ･・∙":
         s = s.replace(a, "·")
     s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
     s = s.replace("｢", "「").replace("｣", "」").replace("<br>", " ").replace("|", " ")
@@ -101,17 +130,16 @@ class Rules:
 
 
 def main():
+    # 인자로 카드 파일 경로를 주면 그 파일들만 검사한다(보고서 파일은 쓰지 않음). 여럿이 동시에 작업할 때 쓴다.
+    only = {str(Path(a).resolve()) for a in sys.argv[1:]}
     rules = Rules(RULES)
-    topics = {t["id"] for t in json.loads((KNOW / "_topics.json").read_text())["topics"]}
-    laws = json.loads((ROOT / "knowledge" / "external_laws.json").read_text())["laws"]
-    cards = []
-    for f in sorted(KNOW.glob("*.json")):
-        if f.name.startswith("_"):
-            continue
-        for c in json.loads(f.read_text()):
-            c["_file"] = f.name
-            cards.append(c)
-    ids = [c["id"] for c in cards]
+    domains, cards = load_domains(tolerant=bool(only))
+    all_cards = cards
+    if only:
+        cards = [c for c in cards if str((KNOWLEDGE / c["_file"]).resolve()) in only]
+    topics = {t["id"] for d in domains for t in d["topics"]}
+    laws = json.loads((KNOWLEDGE / "external_laws.json").read_text())["laws"]
+    ids = [c["id"] for c in all_cards]
     errors, warns, lines = [], [], []
 
     def err(c, msg):
@@ -120,9 +148,10 @@ def main():
     def warn(c, msg):
         warns.append(f"[{c['id']}] {msg}")
 
-    for dup in {i for i in ids if ids.count(i) > 1}:
+    mine = {c["id"] for c in cards}
+    for dup in {i for i in ids if ids.count(i) > 1 and i in mine}:
         errors.append(f"[{dup}] id 중복")
-    seen_q = {}
+    seen_q = {norm(q): c["id"] for c in all_cards if c["id"] not in mine for q in c["questions"]}
     n_facts = n_quotes_ok = 0
     for c in cards:
         for t in c["topics"]:
@@ -178,8 +207,9 @@ def main():
         lines.append("## 오류\n" + "\n".join(f"- {e}" for e in errors) + "\n")
     if warns:
         lines.append("## 경고\n" + "\n".join(f"- {w}" for w in warns) + "\n")
-    REPORT.parent.mkdir(exist_ok=True)
-    REPORT.write_text("\n".join(lines) + "\n")
+    if not only:
+        REPORT.parent.mkdir(exist_ok=True)
+        REPORT.write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
     return 1 if errors else 0
 

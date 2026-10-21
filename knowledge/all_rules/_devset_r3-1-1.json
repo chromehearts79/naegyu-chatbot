@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "q": "감사 결과 통보받고 이의 있으면 한 달 안에 내야 하나요?",
+      "expect": [
+        "r3-1-1-reexamination"
+      ]
+    },
+    {
+      "q": "감사담당자로 발령나면 최소 몇 년은 그 부서에 있어야 돼?",
+      "expect": [
+        "r3-1-1-auditor-status"
+      ]
+    },
+    {
+      "q": "감사실 사전 검토 받고 처리한 일이 나중에 감사에서 문제 되면 책임지나요",
+      "expect": [
+        "r3-1-1-proactive-requirements",
+        "r3-1-1-pre-consulting"
+      ]
+    },
+    {
+      "q": "감사 지적사항 조치결과는 며칠 안에 제출해야 하죠",
+      "expect": [
+        "r3-1-1-result-report"
+      ]
+    }
+  ]
+}

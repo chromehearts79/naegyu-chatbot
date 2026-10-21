@@ -1,0 +1,6 @@
+{
+  "items": [
+    {"q": "회사 DB 퇴직연금 운용 결정하는 위원회에 직원 대표도 들어가나요", "expect": ["r4-25-committee-members"]},
+    {"q": "퇴직연금 적립금 수익률은 얼마나 자주 평가해요", "expect": ["r4-25-risk-performance"]}
+  ]
+}

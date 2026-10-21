@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"q": "고객 상담 기록을 외부 생성형 AI에 붙여 넣고 요약시켜도 되나요", "expect": ["r3-7-10-external-ai-input"]},
+    {"q": "AI가 써 준 보고서를 확인 없이 대외 공문에 써도 될까요", "expect": ["r3-7-10-genai-output"]},
+    {"q": "대출 심사에 AI를 붙이려면 어떤 승인 절차를 밟아야 하나요", "expect": ["r3-7-10-high-impact"]},
+    {"q": "우리 기관 AI 총괄 책임자는 누구야", "expect": ["r3-7-10-caio-dept"]}
+  ]
+}

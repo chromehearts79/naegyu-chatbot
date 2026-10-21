@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"q": "팀 카드를 잃어버렸는데 어디에 먼저 연락해야 하나요", "expect": ["r4-1-issue"]},
+    {"q": "토요일 행사 비용을 법인카드로 긁어야 하는데 가능한가요", "expect": ["r4-1-restricted-time-items"]},
+    {"q": "맥주전문점에서 회식비를 법인카드로 내도 되나요", "expect": ["r4-1-restricted-business"]},
+    {"q": "업무추진비가 많이 나오면 증빙에 손님 정보도 써야 하나", "expect": ["r4-1-expense-disclosure"]}
+  ]
+}

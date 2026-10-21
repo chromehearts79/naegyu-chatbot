@@ -1,0 +1,5 @@
+{"items": [
+  {"q": "ESG 위원회 외부 전문가 위원은 몇 년 하고 몇 번 연임돼요", "expect": ["r4-26-composition"]},
+  {"q": "ESG 회의는 1년에 몇 번 정기적으로 하나요", "expect": ["r4-26-meetings"]},
+  {"q": "ESG위원회 회의 끝나면 회의록에 뭘 남겨야 하죠", "expect": ["r4-26-admin"]}
+]}

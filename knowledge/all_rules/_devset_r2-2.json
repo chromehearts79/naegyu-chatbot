@@ -1,0 +1,6 @@
+{"items": [
+  {"q": "원장님 임기가 내년 3월에 끝나면 추천위원회는 늦어도 언제 꾸려야 해요", "expect": ["r2-2-formation-timing"]},
+  {"q": "과반 노조가 없을 때 노동이사 후보는 어떤 식으로 정하나요", "expect": ["r2-2-labor-director"]},
+  {"q": "임원 공모에 떨어진 지원자들 서류는 계속 보관하나요", "expect": ["r2-2-records-disclosure"]},
+  {"q": "임원 후보를 몇 명이나 올려야 하고 순위도 매기나요", "expect": ["r2-2-recommendation"]}
+]}

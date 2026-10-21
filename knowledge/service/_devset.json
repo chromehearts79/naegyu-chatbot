@@ -1,0 +1,272 @@
+{
+  "_note": "복무(휴가) 검색 시험용 질문. 카드의 예상 질문(questions)에 옮겨 넣지 않는다. 출장 기본 카드를 넣은 뒤 '출장 일비 얼마'의 기대값을 조문 검색에서 국내 출장 여비 카드로 바꿨다.",
+  "items": [
+    {
+      "q": "입사 4년차 연차 며칠 받아요",
+      "expect": [
+        "annual-leave-days"
+      ]
+    },
+    {
+      "q": "작년에 쓰다 남은 연차 올해 쓸 수 있나요",
+      "expect": [
+        "annual-leave-saving"
+      ]
+    },
+    {
+      "q": "남은 연차 돈으로 정산돼요",
+      "expect": [
+        "annual-leave-pay"
+      ]
+    },
+    {
+      "q": "여름휴가 2주 가고 싶은데 승인 나요",
+      "expect": [
+        "annual-leave-long"
+      ]
+    },
+    {
+      "q": "반차 쓰면 몇 시에 퇴근해요",
+      "expect": [
+        "annual-leave-half-day",
+        "work-hours",
+        "ask"
+      ]
+    },
+    {
+      "q": "감기로 이틀 쉬었는데 진단서 없어도 돼요",
+      "expect": [
+        "sick-leave",
+        "sick-leave-deduction",
+        "ask"
+      ]
+    },
+    {
+      "q": "진단서 첨부한 병가도 연차에서 깎이나요",
+      "expect": [
+        "sick-leave-deduction"
+      ]
+    },
+    {
+      "q": "회사에서 건강검진 받으래요 연차 써야 하나",
+      "expect": [
+        "checkup-leave"
+      ]
+    },
+    {
+      "q": "예비군 2박3일 동원훈련",
+      "expect": [
+        "reserve-training-leave"
+      ]
+    },
+    {
+      "q": "헌혈하러 가도 되나요",
+      "expect": [
+        "blood-donation-leave"
+      ]
+    },
+    {
+      "q": "장모님 돌아가셨는데 며칠 쉬나요",
+      "expect": [
+        "bereavement-leave"
+      ]
+    },
+    {
+      "q": "동생 결혼식인데 휴가 나와요",
+      "expect": [
+        "wedding-leave",
+        "ask"
+      ]
+    },
+    {
+      "q": "제 결혼식 다음달인데 신혼여행 포함 휴가",
+      "expect": [
+        "wedding-leave"
+      ]
+    },
+    {
+      "q": "외조모상",
+      "expect": [
+        "bereavement-leave",
+        "ask"
+      ]
+    },
+    {
+      "q": "생리통 휴가",
+      "expect": [
+        "menstrual-leave"
+      ]
+    },
+    {
+      "q": "근속 12년 휴가 있어요",
+      "expect": [
+        "long-service-leave"
+      ]
+    },
+    {
+      "q": "휴가 결재 올릴 때 누구한테",
+      "expect": [
+        "leave-approver"
+      ]
+    },
+    {
+      "q": "태풍으로 기차 운행 중단돼 출근 못 해요",
+      "expect": [
+        "disaster-commute-leave"
+      ]
+    },
+    {
+      "q": "산불로 집 피해 입었어요",
+      "expect": [
+        "disaster-relief-leave"
+      ]
+    },
+    {
+      "q": "출근 몇 시까지 해야 돼요",
+      "expect": [
+        "work-hours"
+      ]
+    },
+    {
+      "q": "야근 수당 대신 쉬는 날",
+      "expect": [
+        "overtime-comp"
+      ]
+    },
+    {
+      "q": "추석 연휴 대체공휴일 쉬나요",
+      "expect": [
+        "holidays"
+      ]
+    },
+    {
+      "q": "5일짜리 휴가에 설날 끼면",
+      "expect": [
+        "holiday-in-leave",
+        "ask"
+      ]
+    },
+    {
+      "q": "개인 사정으로 2시간 일찍 퇴근",
+      "expect": [
+        "tardy-early-leave",
+        "half-half-leave-outside",
+        "ask"
+      ]
+    },
+    {
+      "q": "1시간 반차 같은 거 있어요",
+      "expect": [
+        "half-half-leave-outside",
+        "annual-leave-half-day",
+        "ask"
+      ]
+    },
+    {
+      "q": "안식월 있어요?",
+      "expect": [
+        "refresh-leave-outside"
+      ]
+    },
+    {
+      "q": "선거 날 출근해야 해요",
+      "expect": [
+        "vote-civic-leave"
+      ]
+    },
+    {
+      "q": "재판 증인으로 출석해야 해요",
+      "expect": [
+        "official-leave"
+      ]
+    },
+    {
+      "q": "연차 다 쓰면 그 다음 휴가는",
+      "expect": [
+        "leave-overrun"
+      ]
+    },
+    {
+      "q": "몸이 안 좋아서 오늘 못 나가요",
+      "expect": [
+        "sick-leave",
+        "absence",
+        "ask"
+      ]
+    },
+    {
+      "q": "연차 신청 당일에 해도 돼요",
+      "expect": [
+        "leave-procedure"
+      ]
+    },
+    {
+      "q": "연가 사용 촉진 통보 받았는데 무슨 뜻",
+      "expect": [
+        "annual-leave-promotion"
+      ]
+    },
+    {
+      "q": "휴직 다녀오면 연차 계산",
+      "expect": [
+        "annual-leave-days",
+        "annual-leave-attendance",
+        "parental-leave-service",
+        "ask"
+      ]
+    },
+    {
+      "q": "공가",
+      "expect": [
+        "ask",
+        "official-leave"
+      ]
+    },
+    {
+      "q": "휴가",
+      "expect": [
+        "ask"
+      ]
+    },
+    {
+      "q": "법인카드 영수증 분실",
+      "expect": [
+        "fallback"
+      ]
+    },
+    {
+      "q": "출장 일비 얼마",
+      "expect": [
+        "domestic-trip-expense"
+      ]
+    },
+    {
+      "q": "징계 받으면 승진 제한",
+      "expect": [
+        "fallback"
+      ]
+    },
+    {
+      "q": "시외출장 가면 여비 나와요",
+      "expect": [
+        "domestic-trip-expense",
+        "business-trip",
+        "ask"
+      ]
+    },
+    {
+      "q": "출장 가서 지하철 탄 요금은 따로 받나요",
+      "expect": [
+        "trip-local-transport",
+        "ask"
+      ]
+    },
+    {
+      "q": "구청 다녀오는 시내 출장 여비",
+      "expect": [
+        "in-city-trip",
+        "ask"
+      ]
+    }
+  ]
+}

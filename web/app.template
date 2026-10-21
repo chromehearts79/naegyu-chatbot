@@ -1,8 +1,5 @@
 <title>내규챗봇 시범본</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
 /* 규정집을 펼쳐 놓은 책상: 왼쪽은 묻고 답하는 칸, 오른쪽은 근거 조문 원문. 근거는 언제나 한 번 눌러 확인할 수 있게. */
 :root {
@@ -24,9 +21,10 @@
   --ok: #1b6f40;
   --ok-soft: #def2e5;
   --danger: #b42318;
-  --font-display: "Hahmlet", "Noto Serif KR", "AppleMyungjo", "Batang", serif;
-  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* 폐쇄망에서도 열리도록 외부 글꼴을 부르지 않고 PC에 깔린 글꼴만 쓴다 */
+  --font-display: "Noto Serif KR", "AppleMyungjo", "Batang", serif;
+  --font-body: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace;
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
@@ -83,6 +81,9 @@ button { cursor: pointer; }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .examples .chip { border-style: dashed; }
+.topic-groups { display: grid; gap: 8px; }
+.topic-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.topic-group > span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); min-width: 72px; }
 
 /* 대화 */
 .thread { display: grid; gap: 22px; margin-top: 22px; }
@@ -108,10 +109,13 @@ button { cursor: pointer; }
   padding: 1px 7px; font-size: 12px; font-family: var(--font-mono), var(--font-body); font-weight: 500; text-align: left;
 }
 .cite:hover { background: var(--accent); color: var(--accent-ink); }
+.caution { font-size: 14px; color: var(--ink); background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 8px 10px; border-radius: 6px; margin: 0; }
 .note { font-size: 13px; color: var(--ink-2); border-left: 3px solid var(--line); padding-left: 10px; }
 .soft { font-size: 13px; color: var(--ink-3); }
 .more { display: grid; gap: 6px; }
 details.box { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.box.multi { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; background: var(--sunk); margin-top: 6px; }
+.box.multi p { margin: 0; font-size: 14px; }
 details.box summary { cursor: pointer; font-size: 13.5px; color: var(--ink-2); }
 details.box[open] summary { margin-bottom: 8px; }
 .feedback { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; }
@@ -133,10 +137,13 @@ details.box[open] summary { margin-bottom: 8px; }
 
 /* 되묻기·주제 목록 */
 .cands { display: grid; gap: 8px; }
+.lead { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); display: grid; gap: 8px; }
+.lead > .a { padding: 0; border: 0; box-shadow: none; background: transparent; }
 .cand { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
 .cand:hover { border-color: var(--accent); }
 .cand b { font-weight: 600; }
 .cand span { font-size: 13px; color: var(--ink-2); }
+.cand-rule { font-style: normal; font-size: 11.5px; color: var(--accent); font-weight: 600; }
 .hits { display: grid; gap: 8px; }
 .hit { text-align: left; border: 0; border-left: 3px solid var(--line); background: transparent; padding: 4px 0 4px 10px; display: grid; gap: 2px; }
 .hit:hover { border-left-color: var(--accent); }
@@ -179,9 +186,21 @@ details.box[open] summary { margin-bottom: 8px; }
 @media (prefers-reduced-motion: no-preference) { .turn { animation: rise 0.25s ease-out; } @keyframes rise { from { transform: translateY(6px); opacity: 0.6; } to { transform: none; opacity: 1; } } }
 </style>
 
+<!-- 오래된 브라우저(IE 모드 등)에서는 화면이 동작하지 않으므로 안내만 띄운다. 이 부분은 옛 문법만 쓴다. -->
+<div id="oldbrowser" hidden style="margin:16px;padding:16px;border:2px solid #b54708;background:#fff8e6;color:#16201c;font-size:16px;line-height:1.6">
+  이 브라우저에서는 내규챗봇이 동작하지 않습니다. <b>크롬</b>이나 <b>엣지(최신판)</b>로 열어 주세요.
+  (인터넷 익스플로러, 엣지의 IE 모드는 지원하지 않습니다.)
+</div>
+<script>
+(function () {
+  var ok = true;
+  try { ok = !!(window.Map && window.Set && String.prototype.normalize && Element.prototype.replaceChildren && !document.documentMode); } catch (e) { ok = false; }
+  if (!ok) document.getElementById("oldbrowser").removeAttribute("hidden");
+})();
+</script>
 <div class="wrap">
   <header class="top">
-    <h1 class="brand">내규챗봇<small>시범본 · 출산·육아</small></h1>
+    <h1 class="brand">내규챗봇<small id="domains-label">시범본</small></h1>
     <span class="basis" id="basis"></span>
     <p class="notice" id="notice"></p>
   </header>
@@ -195,7 +214,7 @@ details.box[open] summary { margin-bottom: 8px; }
           <button class="btn" type="submit">묻기</button>
         </form>
         <div class="label">상황별로 보기</div>
-        <div class="chips" id="topics"></div>
+        <div class="topic-groups" id="topics"></div>
         <div class="label">이렇게 물어보세요</div>
         <div class="chips examples" id="examples"></div>
       </section>
@@ -266,10 +285,12 @@ function safeTable(html) {
 }
 // 마크다운 표. 인용 문구가 한 줄(행)의 칸들을 이어 붙인 글에 있으면 그 행을 표시한다.
 function pipeTable(lines, quote) {
-  var q = (quote || "").replace(/\s+/g, " ").trim(), hit = false;
+  // 칸 구분(|)·띄어쓰기·가운뎃점 차이는 빼고 비교한다(인용이 "16 | 3,366,820 | 8"처럼 칸을 이어 적은 경우).
+  var flat = function (t) { return t.replace(/<br>/g, "").replace(/[|\s]/g, "").replace(/[‧ㆍ∙･・]/g, "·"); };
+  var q = flat(quote || ""), hit = false;
   var rows = lines.filter(function (l) { return !/^\|\s*-{3}/.test(l); }).map(function (l) {
     var cells = l.replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); });
-    var on = q && cells.join(" ").replace(/<br>/g, " ").replace(/\s+/g, " ").indexOf(q) >= 0;
+    var on = q && flat(cells.join("")).indexOf(q) >= 0;
     if (on) hit = true;
     return "<tr>" + cells.map(function (c) {
       var inner = esc(c).replace(/&lt;br&gt;/g, "<br>");
@@ -281,10 +302,15 @@ function pipeTable(lines, quote) {
 // 인용 문구를 원문에서 찾아 표시한다. 띄어쓰기·가운뎃점 차이는 무시한다.
 function markQuote(html, quote) {
   if (!quote) return html;
-  var parts = quote.replace(/[·‧ㆍ]/g, "·").split(/\s+/).filter(Boolean).map(function (w) {
-    return esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/·/g, "[·‧ㆍ]");
+  // 한자 호환 글자(利 등)가 원문과 인용에서 다르게 들어간 경우가 있어 맞춘다
+  html = html.normalize("NFC"); quote = quote.normalize("NFC");
+  // 가운뎃점·따옴표·낫표는 원문마다 글자가 달라(·ㆍ・, "“, 「｢) 같은 것으로 본다. esc 뒤라 따옴표는 &quot; 로 바뀌어 있다.
+  var parts = quote.replace(/[·‧ㆍ∙･・]/g, "·").replace(/[“”"]/g, "\u0001").replace(/[‘’']/g, "\u0002").split(/\s+/).filter(Boolean).map(function (w) {
+    return esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/·/g, "[·‧ㆍ∙･・]").replace(/[「｢]/g, "[「｢]").replace(/[」｣]/g, "[」｣]")
+      .replace(/\u0001/g, "(?:[“”\"]|&quot;)").replace(/\u0002/g, "(?:[‘’']|&#39;)");
   });
-  try { return html.replace(new RegExp("(" + parts.join("\\s*") + ")"), "<mark>$1</mark>"); } catch (e) { return html; }
+  // 낱말 사이에 표 칸 안의 줄바꿈(<br>)이 끼어 있어도 찾는다.
+  try { return html.replace(new RegExp("(" + parts.join("(?:\\s|<br\\s*/?>)*") + ")"), "<mark>$1</mark>"); } catch (e) { return html; }
 }
 function renderLaw(text, para, quote) {
   var blocks = [], cur = [], lines = text.split("\n");
@@ -294,7 +320,8 @@ function renderLaw(text, para, quote) {
     if (/^<table>/.test(l.trim())) {
       flush(); var t = [l];
       while (i + 1 < lines.length && !/<\/table>/.test(lines[i])) { i++; t.push(lines[i]); }
-      blocks.push({ html: "<div class='tbl'>" + safeTable(t.join("")) + "</div>" }); continue;
+      var tableHtml = safeTable(t.join("")), markedHtml = markQuote(tableHtml, quote);
+      blocks.push({ html: "<div class='tbl'>" + markedHtml + "</div>", hit: markedHtml !== tableHtml }); continue;
     }
     if (/^\|/.test(l.trim())) {
       flush(); var p = [l];
@@ -326,6 +353,13 @@ function renderLaw(text, para, quote) {
     if (marked) return;
     var m3 = markQuote(p.innerHTML, quote);
     if (m3 !== p.innerHTML) { p.innerHTML = m3; marked = true; target = target || p; }
+  });
+  // 인용이 "가. 강등 … 나. 정직 …"처럼 여러 줄에 걸치면 목(가·나·다)마다 나눠 각각 표시한다.
+  if (!marked && quote && /\s[가-하]\.\s/.test(quote)) quote.split(/\s(?=[가-하]\.\s)/).forEach(function (seg) {
+    box.querySelectorAll("p").forEach(function (p) {
+      var m4 = markQuote(p.innerHTML, seg);
+      if (m4 !== p.innerHTML) { p.innerHTML = m4; marked = true; target = target || p; }
+    });
   });
   return { box: box, target: target };
 }
@@ -360,15 +394,28 @@ var CALCS = {
   loss: { title: "유산·사산휴가 계산", fields: [["who", "select", "누구", "self", [["self", "본인(여성직원)"], ["spouse", "배우자"]]], ["date", "date", "유산·사산한 날", plus(-3)], ["weeks", "number", "임신 주수(본인)", "12"]] },
   childAge: { title: "자녀 나이로 쓸 수 있는 제도", fields: [["birth", "date", "자녀 생년월일", plus(-365 * 6 - 40)], ["today", "date", "기준일", E.iso(TODAY)], ["mother", "check", "여성직원(수유시간 포함)"]] },
   familyCare: { title: "가족돌봄휴가 유급 일수", fields: [["children", "number", "대상 자녀 수", "2"], ["disabledOrSingle", "check", "장애인 자녀가 있거나 한부모"]] },
-  allowance: { title: "가족수당 계산(배우자·자녀)", fields: [["spouse", "check", "배우자 있음", true], ["children", "number", "20세 미만 자녀 수", "2"]] }
+  allowance: { title: "가족수당 계산(배우자·자녀)", fields: [["spouse", "check", "배우자 있음", true], ["children", "number", "20세 미만 자녀 수", "2"]] },
+  annualLeave: { title: "내 연가(연차) 일수", fields: [["hire", "date", "입사일", plus(-365 * 5 - 30)], ["today", "date", "기준일", E.iso(TODAY)]] },
+  longService: { title: "장기재직휴가 대상과 기한", fields: [["hire", "date", "입사일", plus(-365 * 12 - 60)], ["today", "date", "기준일", E.iso(TODAY)]] },
+  welfarePoints: { title: "연간 복지포인트 계산", fields: [["years", "number", "근속연수(전년도 말 기준)", "7"], ["spouse", "check", "배우자 있음", true], ["children", "number", "20세 미만 자녀 수", "2"], ["disabled", "check", "장애인 직원"], ["newHire", "check", "올해 신규채용"]] },
+  tripExpense: { title: "국내 출장 여비 계산(직원)", fields: [["days", "number", "출장 일수", "2"], ["nights", "number", "숙박 일수", "1"], ["region", "select", "숙박 지역", "metro", [["seoul", "서울특별시"], ["metro", "광역시·제주"], ["other", "그 밖의 지역"]]], ["car", "check", "업무용 차량 이용"]] }
 };
 var calcSeq = 0;
-function renderCalc(kind) {
+// 날짜 칸마다 그 칸의 날짜임을 알려 주는 말. 질문 속 날짜 앞뒤에 이 말이 있을 때만 채운다
+// ("12월 1일부터 출산휴가"의 12월 1일을 출산예정일 칸에 넣는 실수를 막으려고).
+var DATE_CUE = { due: /예정/, birth: /태어|낳|출생|생년|생일|출산했|출산한/, start: /부터|시작/, date: /유산|사산/, hire: /입사|입행|채용|들어(왔|온)/, today: /기준|현재|오늘/ };
+// dates: 질문에서 뽑은 날짜와 앞뒤 말({iso, ctx})
+function renderCalc(kind, dates) {
   var spec = CALCS[kind]; if (!spec) return null;
-  var box = h("div", { class: "calc" }), form = h("form"), out = h("div"), ids = {};
+  var box = h("div", { class: "calc" }), form = h("form"), out = h("div"), ids = {}, filled = [];
+  dates = (dates || []).slice();
   spec.fields.forEach(function (f) {
     var id = "c" + (++calcSeq) + "-" + f[0], input;
     ids[f[0]] = id;
+    if (f[1] === "date" && DATE_CUE[f[0]]) {
+      var hit = dates.filter(function (x) { return DATE_CUE[f[0]].test(x.ctx); })[0];
+      if (hit) { f = f.slice(); f[3] = hit.iso; filled.push(f[2] + " " + hit.iso); dates.splice(dates.indexOf(hit), 1); }
+    }
     if (f[1] === "check") { input = h("input", { type: "checkbox", id: id }); input.checked = !!f[3]; form.append(h("label", { class: "inline", for: id }, [input, f[2]])); return; }
     if (f[1] === "select") { input = h("select", { id: id }, f[4].map(function (o) { return h("option", { value: o[0], text: o[1] }); })); input.value = f[3]; }
     else { input = h("input", { type: f[1], id: id, value: f[3] || "", min: f[1] === "number" ? "0" : null }); }
@@ -386,27 +433,33 @@ function renderCalc(kind) {
   }
   form.addEventListener("input", run); form.addEventListener("change", run);
   form.addEventListener("submit", function (e) { e.preventDefault(); run(); });
-  box.append(h("h4", { text: spec.title + " (참고용)" }), form, out);
+  box.append(h("h4", { text: spec.title + " (참고용)" }), filled.length ? h("p", { class: "soft", text: "질문의 날짜를 넣어 계산했습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }) : null, form, out);
   run();
   return box;
 }
 
 /* ── 답변 그리기 ─────────────────────────────── */
+// 사람 검수를 마친 카드(reviewed 칸)만 '검수 완료'로 표시한다. 프로그램·AI 검사만 거친 카드는 검수 전으로 정직하게 적는다.
 function statusPill(c) {
-  var v = (DATA.meta.verify.byCard || {})[c.id];
+  if (c.stale) return h("span", { class: "pill warn", text: "규정 개정 · 재검수 전" });
   if (c.kind === "outside") return h("span", { class: "pill warn", text: "내규에 없는 내용" });
-  if (v && v.need) return h("span", { class: "pill warn", text: "검증 · 확인 필요 " + v.need + "건" });
-  return h("span", { class: "pill ok", text: "인용 원문 대조 · 독립 검증 통과" });
+  if (c.reviewed) return h("span", { class: "pill ok", text: "담당부서 검수 완료 · " + c.reviewed.date + " " + c.reviewed.dept });
+  return h("span", { class: "pill warn", text: "AI 작성 · 담당부서 검수 전" });
 }
+// 검수 메모·규정 정비 후보는 담당부서용이다. 주소 끝에 #review 를 붙여 열었을 때만 보인다.
+var REVIEW = /review/.test(location.hash + location.search);
 function cardButton(id, onPick) {
-  var c = byId.get(id);
-  return h("button", { class: "cand", type: "button", onclick: function () { onPick(c); } }, [h("b", { text: c.title }), h("span", { text: c.summary })]);
+  var c = byId.get(id), rule = E.ruleOfCard(c);
+  return h("button", { class: "cand", type: "button", onclick: function () { onPick(c); } }, [
+    rule ? h("em", { class: "cand-rule", text: rule }) : null, h("b", { text: c.title }), h("span", { text: c.summary })
+  ]);
 }
-function relatedHits(question) {
+// open 이면 처음부터 펼친다. 답의 점수가 애매할 때 다른 규정을 찾던 사람이 바로 보게 하려는 것.
+function relatedHits(question, open) {
   var hits = articles().search(question, 3);
   if (!hits.length) return null;
-  return h("details", { class: "box" }, [
-    h("summary", { text: "규정 전체에서 찾은 관련 조문 " + hits.length + "건" }),
+  return h("details", { class: "box", open: open ? "" : null }, [
+    h("summary", { text: (open ? "혹시 다른 규정을 찾으셨나요? " : "") + "규정 전체에서 찾은 관련 조문 " + hits.length + "건" }),
     h("div", { class: "hits" }, hits.map(hitButton.bind(null, question)))
   ]);
 }
@@ -422,45 +475,67 @@ function reportBox(question, card) {
   var text = "[내규챗봇 시범본 의견]\n질문: " + (question || "-") + "\n답변: " + (card ? card.title + " (" + card.id + ")" : "준비된 답 없음") + "\n규정 기준일: " + DATA.meta.basis + "\n의견: ";
   var ta = h("textarea", { id: id, "aria-label": "보낼 의견" }); ta.value = text;
   var msg = h("span", { class: "soft" });
+  // 오류 신고 창구(knowledge/site.json). 운영부서가 정해지기 전에는 정해지지 않았다고 그대로 알린다.
+  var fb = (DATA.meta.site || {}).feedback || {};
+  var where = fb.dept ? "보낼 곳: " + fb.dept + (fb.channel ? " (" + fb.channel + ")" : "") + (fb.email ? " · " + fb.email : "") + ". " + (fb.handling || "")
+    : "오류 신고를 받을 운영부서가 아직 정해지지 않았습니다. 아래 내용을 복사해 내규챗봇 관리자에게 보내 주세요.";
+  var mail = fb.email ? h("a", { class: "btn ghost", href: "mailto:" + fb.email + "?subject=" + encodeURIComponent("[내규챗봇 의견] " + (card ? card.title : "준비된 답 없음")),
+    onclick: function () { this.href = "mailto:" + fb.email + "?subject=" + encodeURIComponent("[내규챗봇 의견] " + (card ? card.title : "준비된 답 없음")) + "&body=" + encodeURIComponent(ta.value); }, text: "메일로 보내기" }) : null;
   wrap.append(
-    h("p", { class: "soft", text: "시범본은 의견을 서버로 보내지 않습니다. 아래 내용을 복사해 담당자에게 메신저나 메일로 보내 주세요." }),
+    h("p", { class: "soft", text: "이 화면은 의견을 어디에도 자동으로 보내지 않습니다. " + where }),
     ta,
-    h("div", { class: "chips" }, [h("button", { class: "btn ghost", type: "button", text: "복사", onclick: function () {
+    h("div", { class: "chips" }, [mail, h("button", { class: "btn ghost", type: "button", text: "복사", onclick: function () {
       var done = function () { msg.textContent = "복사했습니다."; };
       try { navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); msg.textContent = "선택해 두었습니다. Ctrl+C로 복사하세요."; }); }
       catch (e) { ta.select(); msg.textContent = "선택해 두었습니다. Ctrl+C로 복사하세요."; }
-    } }), msg])
+    } }), msg].filter(Boolean))
   );
   return wrap;
 }
 function feedbackRow(question, card) {
-  var rep = reportBox(question, card), thanks = h("span", { class: "soft" });
+  // '도움이 됐어요'는 아무 기록도 남기지 않아 뺐다. 틀린 답 신고만 받는다.
+  var rep = reportBox(question, card);
   return [h("div", { class: "feedback" }, [
-    h("span", { class: "soft", text: "답이 도움이 됐나요?" }),
-    h("button", { class: "btn ghost", type: "button", text: "도움이 됐어요", onclick: function () { thanks.textContent = "고맙습니다."; } }),
-    h("button", { class: "btn ghost", type: "button", text: "틀렸거나 부족해요", onclick: function () { rep.hidden = !rep.hidden; } }),
-    thanks
+    h("span", { class: "soft", text: "답이 틀렸거나 부족하면 알려 주세요." }),
+    h("button", { class: "btn ghost", type: "button", text: "오류 신고", onclick: function () { rep.hidden = !rep.hidden; } })
   ]), rep];
 }
 
+// 질문의 핵심 낱말이 준비된 답에 없을 때: 내규에 규정이 없을 수 있다고 분명히 알린다
+function missingNote(words) {
+  return h("p", { class: "caution", text: "질문의 " + words.map(function (w) { return "‘" + w + "’"; }).join(", ") +
+    "에 맞는 내용은 준비된 답에서 찾지 못했습니다. 내규에 직접 정한 내용이 없을 수 있으니, 아래 내용이 맞지 않으면 담당부서에 확인하세요." });
+}
 function renderAnswer(c, opts) {
   opts = opts || {};
   var a = h("article", { class: "a" });
   a.append(h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: c.title }), statusPill(c), opts.example ? h("span", { class: "pill ex", text: "예시" }) : null]));
-  if (opts.soft) a.append(h("p", { class: "soft", text: "질문과 가장 가까운 답입니다. 찾던 내용이 아니면 아래 다른 답이나 관련 조문을 보세요." }));
+  var ruleName = E.ruleOfCard(c), ruleInfo = rulesByName.get(ruleName);
+  if (ruleName) a.append(h("p", { class: "soft", text: "근거 규정: " + ruleName + (ruleInfo && ruleInfo.effective ? " (현행 시행 " + ruleInfo.effective + ")" : "") }));
+  // 근거 조문이 답을 확인한 뒤 개정됐으면 가장 먼저 알린다
+  if (c.stale) a.append(h("p", { class: "caution", text: "이 답의 근거 조문(" + c.stale.map(function (x) { return x.cite; }).join(", ") + ")이 답을 확인한 뒤 " +
+    (c.stale.some(function (x) { return x.change === "removed"; }) ? "바뀌거나 없어졌습니다" : "바뀌었습니다") + (c.stale[0].effective ? "(현행 시행 " + c.stale[0].effective + ")" : "") +
+    ". 아래 답은 개정 전 기준일 수 있으니 근거 버튼으로 현행 원문을 먼저 확인하세요." }));
+  if (opts.missing && opts.missing.length) a.append(missingNote(opts.missing));
+  else if (opts.soft) a.append(h("p", { class: "caution", text: "질문과 가장 가까운 답입니다. 찾던 내용이 아니면 아래 다른 답이나 관련 조문을 보세요." }));
   c.answer.forEach(function (p) { a.append(rich(p)); });
   a.append(h("div", { class: "facts-box" }, [h("table", { class: "facts" }, [h("caption", { class: "label", style: "text-align:left;padding:8px 10px 0", text: "핵심 정리와 근거" }), h("tbody", null, c.facts.map(function (f) {
     return h("tr", null, [h("th", { scope: "row", text: f.label }), h("td", null, [h("div", { text: f.value }), citeBtn(f.cite, f.quote)])]);
   }))])]));
-  if (c.calc) { var cb = renderCalc(c.calc); if (cb) a.append(cb); }
+  if (c.calc) { var cb = renderCalc(c.calc, E.datesIn(opts.question)); if (cb) a.append(cb); }
   (c.notes || []).forEach(function (n) { a.append(h("p", { class: "note", text: n })); });
-  if (c.law_refs && c.law_refs.length) a.append(h("p", { class: "note", text: "외부 법령 대조: " + c.law_refs[0].law + " " + c.law_refs[0].article + " (국가법령정보 " + DATA.meta.lawChecked + " 확인)" }));
+  if (c.law_refs && c.law_refs.length) {
+    var laws = c.law_refs.map(function (l) { return l.law + " " + l.article; }).filter(function (x, i, arr) { return arr.indexOf(x) === i; });
+    a.append(h("p", { class: "note", text: "외부 법령 대조: " + laws.join(", ") + " (국가법령정보 " + DATA.meta.lawChecked + " 확인)" }));
+  }
   var rel = (c.related || []).concat(opts.alts || []).filter(function (x, i, arr) { return x !== c.id && arr.indexOf(x) === i && byId.has(x); });
   if (rel.length) a.append(h("div", { class: "more" }, [h("div", { class: "label", text: "함께 보면 좋은 내용" }), h("div", { class: "chips" }, rel.map(function (id) {
-    return h("button", { class: "chip", type: "button", text: byId.get(id).title, onclick: function () { pick(byId.get(id)); } });
+    // 다른 규정의 카드면 규정 이름을 앞에 붙인다(예: 업무규정 · 퇴직금과 중간정산)
+    var r = byId.get(id), rr = E.ruleOfCard(r), own = E.ruleOfCard(c);
+    return h("button", { class: "chip", type: "button", text: (rr && rr !== own ? rr + " · " : "") + r.title, onclick: function () { pick(r); } });
   }))]));
-  if (c.check && c.check.length) a.append(h("details", { class: "box" }, [h("summary", { text: "검수 메모 " + c.check.length + "건 (담당부서 확인용)" }), h("div", null, c.check.map(function (t) { return h("p", { class: "soft", text: "· " + t }); }))]));
-  if (opts.question) { var rh = relatedHits(opts.question); if (rh) a.append(rh); }
+  if (REVIEW && c.check && c.check.length) a.append(h("details", { class: "box" }, [h("summary", { text: "검수 메모 " + c.check.length + "건 (담당부서 확인용)" }), h("div", null, c.check.map(function (t) { return h("p", { class: "soft", text: "· " + t }); }))]));
+  if (opts.question) { var rh = relatedHits(opts.question, opts.score !== undefined && opts.score < 0.6); if (rh) a.append(rh); }
   feedbackRow(opts.question, c).forEach(function (x) { a.append(x); });
   return a;
 }
@@ -473,41 +548,86 @@ function addTurn(qText, tag, node) {
 }
 function pick(c) { addTurn(c.title, "선택", renderAnswer(c, {})); window.scrollTo({ top: $("#thread").offsetTop - 12, behavior: "smooth" }); }
 
+var lastTopic = "";  // 바로 앞 질문(이어 묻기용). 화면을 닫으면 사라지고 어디에도 저장하지 않는다.
 function ask(question) {
   question = question.trim(); if (!question) return;
-  var ranked = cardIndex.score(question), dec = E.decide(ranked, question, cardIndex.lastQuery), node;
-  if (dec.mode === "answer") node = renderAnswer(byId.get(dec.id), { question: question, alts: dec.alts, soft: dec.soft });
+  var ranked = cardIndex.score(question), dec = E.decide(ranked, question, cardIndex.lastQuery), node, joined = null;
+  // "그럼 자가용으로 가면?"처럼 앞 질문에 이어 묻는 말이면 앞 질문의 주제를 붙여 다시 찾고, 더 잘 맞으면 그 결과를 쓴다
+  if (lastTopic && E.isFollowUp(question)) {
+    var q2 = lastTopic + " " + question, r2 = cardIndex.score(q2), d2 = E.decide(r2, q2, cardIndex.lastQuery);
+    if (r2[0] && (!ranked[0] || r2[0].score > ranked[0].score)) { ranked = r2; dec = d2; joined = lastTopic; }
+  }
+  if (!joined) lastTopic = question;
+  var plan = cardIndex.plan(joined ? joined + " " + question : question, ranked);
+  if (dec.mode === "answer") node = renderAnswer(byId.get(dec.id), { question: question, alts: dec.alts, soft: dec.soft, score: dec.score, missing: dec.missing });
   else if (dec.mode === "ask") {
+    // 넓은 질문이 아니면 후보 목록 아래에 가장 가까운 답을 바로 펼쳐 보여 준다(1순위가 맞는 경우가 많아 한 번 더 누르지 않게).
+    var lead = dec.vague || !dec.lead ? null : h("div", { class: "lead" }, [
+      h("div", { class: "label", text: "가장 가까운 답 (위 후보 중 1번)" }),
+      renderAnswer(byId.get(dec.ids[0]), { question: question, alts: [] })
+    ]);
     node = h("article", { class: "a" }, [
       h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: dec.vague ? "조금 더 알려주세요" : "어떤 내용을 찾으세요?" })]),
-      h("p", { text: dec.vague ? "질문이 넓어서 여러 답이 해당됩니다. 상황에 맞는 것을 고르세요." : "질문과 비슷한 답이 여러 개 있습니다. 상황에 맞는 것을 고르세요." }),
+      h("p", { text: dec.vague ? "질문이 넓어서 여러 답이 해당됩니다. 상황에 맞는 것을 고르세요." : lead ? "질문과 비슷한 답이 여러 개 있습니다. 1번 답을 아래에 펼쳤습니다. 상황이 다르면 다른 후보를 고르세요." : "딱 맞는 답을 찾지 못했습니다. 비슷한 후보 중에 고르시거나, 아래 관련 조문을 보세요." }),
+      dec.missing && dec.missing.length ? missingNote(dec.missing) : (!dec.vague && !lead ? h("p", { class: "caution", text: "내규에 직접 정한 내용이 없을 수도 있습니다. 후보와 조문에서 찾지 못하면 담당부서에 확인하세요." }) : null),
       h("div", { class: "cands" }, dec.ids.map(function (id) { return cardButton(id, pick); })),
-      relatedHits(question)
+      lead || relatedHits(question)
     ].filter(Boolean));
   } else {
     var hits = articles().search(question, 5);
     node = h("article", { class: "a" }, [
-      h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: "준비된 답이 없습니다" }), h("span", { class: "pill warn", text: "출산·육아 밖 질문" })]),
-      h("p", { text: "이 시범본은 출산·육아 분야만 답을 준비했습니다. 대신 규정 71개 전체에서 관련 조문을 찾았습니다. 조문을 누르면 원문이 열립니다." }),
+      h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: "준비된 답이 없습니다" }), h("span", { class: "pill warn", text: "맞는 답을 못 찾음" })]),
+      h("p", { text: "준비된 답 중에서 질문에 맞는 것을 찾지 못했습니다. 대신 규정 " + DATA.rules.length + "개 전체에서 관련 조문을 찾았습니다. 조문을 누르면 원문이 열립니다. 다른 말로 다시 물어보셔도 됩니다." }),
+      h("p", { class: "caution", text: "아래 조문에도 없다면 내규에 직접 정한 내용이 없는 것일 수 있습니다. 담당부서에 확인하세요." }),
       hits.length ? h("div", { class: "hits" }, hits.map(hitButton.bind(null, question))) : h("p", { class: "soft", text: "관련 조문도 찾지 못했습니다." })
     ]);
     feedbackRow(question, null).forEach(function (x) { node.append(x); });
+  }
+  if (joined) node.insertBefore(h("p", { class: "soft", text: "앞 질문 ‘" + joined + "’에 이어서 찾았습니다." }), node.firstChild.nextSibling);
+  // 한 질문에 여러 가지를 물었으면, 첫 답이 다루지 못한 부분을 맡는 카드를 함께 보여 준다
+  if (plan.length >= 2) {
+    var shown = dec.mode === "answer" ? dec.id : (dec.ids || [])[0];
+    var more = plan.filter(function (p) { return p.id !== shown; });
+    if (more.length) node.append(h("div", { class: "box multi" }, [
+      h("p", { text: "질문에 여러 가지가 들어 있어 나눠 찾았습니다. 아래 답도 함께 확인하세요." }),
+      h("div", { class: "cands" }, more.map(function (p) {
+        var b = cardButton(p.id, pick);
+        b.prepend(h("em", { class: "cand-rule", text: "‘" + p.words.join("·") + "’ 관련" }));
+        return b;
+      }))
+    ]));
   }
   addTurn(question, null, node);
 }
 
 /* ── 처음 화면 ─────────────────────────────── */
-$("#basis").textContent = "규정 기준 " + DATA.meta.basis + " · 규정 " + DATA.rules.length + "개";
-$("#notice").innerHTML = "<b>AI가 작성한 답변</b>입니다. 인용 문구는 프로그램으로 원문과 대조했고 다른 AI로 다시 검증했지만, <b>담당부서 검수 전</b>입니다. 중요한 결정 전에는 근거 조문 원문과 인사팀에 확인하세요.";
-DATA.topics.forEach(function (t) {
-  $("#topics").append(h("button", { class: "chip", type: "button", text: t.name, onclick: function (e) {
-    document.querySelectorAll("#topics .chip").forEach(function (b) { b.classList.remove("on"); });
-    e.currentTarget.classList.add("on");
-    var ids = DATA.cards.filter(function (c) { return c.topics.indexOf(t.id) >= 0; }).map(function (c) { return c.id; });
-    addTurn(t.name, "상황", h("article", { class: "a" }, [h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: t.name })]), h("div", { class: "cands" }, ids.map(function (id) { return cardButton(id, pick); }))]));
-  } }));
+$("#basis").textContent = "답변 확인 기준 " + DATA.meta.basis + " · 규정 " + DATA.rules.length + "개 (최근 개정 시행 " + DATA.meta.latestEffective + ")";
+(function () {
+  // 오래된 사본이 돌아다닐 수 있어, 만든 지 90일이 넘으면 위에 알린다
+  var days = Math.floor((Date.now() - new Date(DATA.meta.built + "T00:00:00").getTime()) / 864e5);
+  var maxAge = (DATA.meta.site || {}).maxAgeDays || 90;
+  var old = days > maxAge ? "<b>이 화면은 만든 지 " + days + "일이 지났습니다.</b> 그 사이 규정이 바뀌었을 수 있으니 최신판인지 확인하세요. " : "";
+  var stale = DATA.meta.stale ? "규정 개정 뒤 다시 확인하지 못한 답이 " + DATA.meta.stale + "개 있습니다(답에 표시). " : "";
+  $("#notice").innerHTML = old + stale + "<b>AI가 작성한 답변</b>입니다. 인용 문구는 프로그램으로 원문과 대조했고 다른 AI로 다시 검증했지만, <b>담당부서 검수 전</b>입니다. 중요한 결정 전에는 근거 조문 원문과 담당부서에 확인하세요.";
+})();
+$("#domains-label").textContent = "시범본 · " + DATA.domains.map(function (d) { return d.name; }).join(" · ");
+DATA.domains.forEach(function (dm) {
+  var row = h("div", { class: "topic-group" }, [h("span", { text: dm.name })]);
+  dm.topics.forEach(function (t) {
+    row.append(h("button", { class: "chip", type: "button", text: t.name, onclick: function (e) {
+      document.querySelectorAll("#topics .chip").forEach(function (b) { b.classList.remove("on"); });
+      e.currentTarget.classList.add("on");
+      // 규정 전체 분야는 규정마다 개요 카드만 먼저 보여준다(개요에서 그 규정의 다른 카드로 이어진다).
+      var inTopic = DATA.cards.filter(function (c) { return c.domain === dm.id && c.topics.indexOf(t.id) >= 0; });
+      // 규정 전체 분야는 규정별 개요 카드만 보여 준다. 개요 카드가 없는 묶음(상황별 종합)은 카드를 모두 보여 준다.
+      var ov = inTopic.filter(function (c) { return dm.id !== "all_rules" || c.overview; });
+      var ids = (ov.length ? ov : inTopic).map(function (c) { return c.id; });
+      addTurn(t.name, "상황", h("article", { class: "a" }, [h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: t.name })]), h("div", { class: "cands" }, ids.map(function (id) { return cardButton(id, pick); }))]));
+    } }));
+  });
+  $("#topics").append(row);
 });
-["배우자 출산휴가 며칠이에요?", "시험관 시술 때문에 병원 가야 해요", "초등학교 1학년 아이 있는데 늦게 출근할 수 있나요", "육아휴직 2년 하면 근속 다 인정돼요?", "출산"].forEach(function (s) {
+["배우자 출산휴가 며칠이에요?", "시험관 시술 때문에 병원 가야 해요", "육아휴직 2년 하면 근속 다 인정돼요?", "장모님 돌아가셨는데 며칠 쉬어요?", "반차 쓰면 몇 시간 일해요?", "출산"].forEach(function (s) {
   $("#examples").append(h("button", { class: "chip", type: "button", text: s, onclick: function () { $("#q").value = s; ask(s); } }));
 });
 $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask($("#q").value); $("#q").select(); });
@@ -520,18 +640,19 @@ $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask
     h("div", { class: "stats" }, [
       stat(m.cards + "장", "문답 카드 (예상 질문 " + m.questions + "개)"),
       stat(m.quotesOk + "/" + m.facts, "인용 문구가 원문과 글자 그대로 일치"),
-      stat((v.match + v.judged) + "/" + v.total, "다른 AI 독립 검증 통과 (확인 필요 " + v.need + ")"),
+      stat((v.match + v.judged) + "/" + v.total, "다른 AI로 다시 확인한 항목"),
+      stat(m.reviewed + "/" + m.cards, "담당부서 검수를 마친 답"),
       stat(s.dev, "카드에 없는 시험 질문 처리 정확도"),
       stat(s.top3, "처음 보는 표현, 3순위 안 정답")
     ]),
     h("ul", null, [
       h("li", { text: "1단계 프로그램 검사: 인용한 조·항·호가 실제로 있는지, 인용 문구와 숫자가 원문과 같은지 확인했습니다." }),
-      h("li", { text: "2단계 독립 검증: 다른 AI 모델에 답을 숨긴 채 조문만 주고 같은 항목을 다시 찾게 해 비교했습니다. 어긋난 항목은 원문과 대조해 표현을 고쳤습니다." }),
-      h("li", { text: "외부 법령 대조: 내규가 인용하는 남녀고용평등법 조문을 국가법령정보로 확인했습니다(" + m.lawChecked + ")." }),
-      h("li", { text: "3단계 사람 검수는 아직입니다. 각 답의 '검수 메모'에 담당부서가 확인할 점을 적어 두었습니다." }),
+      h("li", { text: "2단계 AI 재확인: 다른 AI 모델에 답을 숨긴 채 조문만 주고 같은 항목을 다시 찾게 해 비교했습니다. 결재권자 표는 프로그램으로 칸마다 대조했습니다." }),
+      h("li", { text: "외부 법령 대조: 내규가 인용하거나 내규와 다른 법령 조문(남녀고용평등법, 근로기준법, 개인정보 보호법 등)을 국가법령정보로 확인했습니다(" + m.lawChecked + ")." }),
+      h("li", { text: "3단계 담당부서 검수는 아직입니다. 검수를 마친 답에는 '담당부서 검수 완료'가 표시됩니다. 그 전까지는 중요한 결정 전에 원문과 담당부서에 확인하세요." }),
       h("li", { text: "시험 질문 정확도는 검색 기준값을 고를 때 같은 질문을 써서 실제보다 높게 나왔을 수 있습니다. 담당부서가 만든 질문으로 다시 재야 합니다." })
     ]),
-    m.ruleFixes.length ? h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]) : null
+    REVIEW && m.ruleFixes.length ? h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]) : null
   );
 })();
 

@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"q": "민원인이 업무 처리 문제로 저를 형사 고소했는데 변호사 비용은 얼마까지 지원되나요", "expect": ["r4-12-support-scope", "r4-12-support-eligibility"]},
+    {"q": "계약서에 대해 변호사 의견을 받고 싶으면 어디에 무엇을 내야 하나요", "expect": ["r4-12-advice-request"]},
+    {"q": "재판이 다 끝났는데 소송비 지원은 언제까지 신청해야 하죠", "expect": ["r4-12-support-application"]}
+  ]
+}

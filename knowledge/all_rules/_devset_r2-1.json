@@ -1,0 +1,6 @@
+{"items": [
+  {"q": "제 생일이 9월인데 만 60세 되는 해 언제 퇴직하게 되나요", "expect": ["r2-1-retirement-age"]},
+  {"q": "견책 처분 받았던 직원은 얼마 지나야 승진 심사에 들어가요", "expect": ["r2-1-promotion-limit"]},
+  {"q": "25일이 일요일이면 급여가 언제 들어오나요", "expect": ["r2-1-payday"]},
+  {"q": "육아휴직 끝나고 한 달 넘게 복직 서류를 안 내면 어떻게 되죠", "expect": ["r2-1-leave-of-absence-status"]}
+]}

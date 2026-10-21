@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"q": "작년에 견책 받았는데 올해 승진 심사 대상 되나요", "expect": ["r3-2-1-promotion-limit"]},
+    {"q": "휴직 끝나고 복귀 서류는 며칠 안에 제출해야 하나요", "expect": ["r3-2-1-reinstatement"]},
+    {"q": "4급으로 몇 년 근무해야 3급 승진 가능한가요", "expect": ["r3-2-1-promotion-years"]},
+    {"q": "만 나이로 언제 정년퇴직하나요", "expect": ["r3-2-1-automatic-dismissal"]}
+  ]
+}

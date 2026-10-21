@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from check_knowledge import KNOW, RULES, RE_ART, Rules, norm  # noqa: E402
+from check_knowledge import RULES, RE_ART, Rules, load_domains, norm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_MD = ROOT / "reports" / "blind_check.md"
@@ -64,11 +64,14 @@ def judge(scope, label, value):
               "조문과 어긋나거나 조문에서 확인할 수 없으면 '아니오'.\n"
               f"항목: {label}\n설명: {value}\n"
               '형식: {"판정": "예" 또는 "아니오", "이유": "한 문장"}\n\n[조문]\n' + scope)
-    try:
-        r = ask(prompt)
-        return r.get("판정", ""), r.get("이유", "")
-    except Exception as e:
-        return "오류", str(e)
+    # 빈 응답(JSON 해석 실패)이 가끔 나와 한 번 더 묻는다
+    for attempt in range(2):
+        try:
+            r = ask(prompt)
+            return r.get("판정", ""), r.get("이유", "")
+        except Exception as e:
+            err = str(e)
+    return "오류", err
 
 
 def scope_of(rules, cite):
@@ -80,18 +83,32 @@ def scope_of(rules, cite):
     return cite, scope
 
 
+def around(scope, quote, width=1500):
+    """긴 원문(별표 표 등)은 인용 문구 앞뒤만 잘라 넘긴다. 검증 모델의 입력 한도를 넘지 않게."""
+    if len(scope) <= 6000:
+        return scope
+    i = norm(scope).find(norm(quote)[:40])
+    i = max(0, i if i >= 0 else 0)
+    return norm(scope)[max(0, i - width): i + width]
+
+
 def main():
     rules = Rules(RULES)
-    cards = [c for f in sorted(KNOW.glob("*.json")) if not f.name.startswith("_") for c in json.loads(f.read_text())]
+    cards = load_domains()[1]
+    # 인자로 카드 id 나 분야 이름을 주면 그것만 다시 검증하고, 나머지 카드는 지난 결과를 그대로 둔다.
     only = set(sys.argv[1:])
+    chosen = [c for c in cards if not only or c["id"] in only or c["domain"] in only]
+    ids_now, redo = {c["id"] for c in cards}, {c["id"] for c in chosen}
+    kept = []
+    if only and OUT_JSON.exists():
+        kept = [r for r in json.loads(OUT_JSON.read_text()) if r["card"] in ids_now and r["card"] not in redo]
     results, t0 = [], time.time()
-    for c in cards:
-        if only and c["id"] not in only:
-            continue
+    for c in chosen:
         scopes = {}
         for fct in c["facts"]:
             k, t = scope_of(rules, fct["cite"])
-            scopes.setdefault(k, t)
+            t = around(t, fct["quote"])
+            scopes[k] = t if k not in scopes or len(scopes[k]) > 6000 else scopes[k] + ("\n…\n" + t if t not in scopes[k] else "")
         context = "\n\n".join(f"[{k}]\n{t}" for k, t in scopes.items())
         labels = [f["label"] for f in c["facts"]]
         prompt = (
@@ -112,6 +129,7 @@ def main():
                    "cite": fct["cite"], "step1": verdict, "step1_note": why}
             if verdict == "판정 필요":
                 _, scope = scope_of(rules, fct["cite"])
+                scope = around(scope, fct["quote"])
                 row["judge"], row["judge_reason"] = judge(scope, fct["label"], fct["value"])
                 row["verdict"] = "판정 통과" if row["judge"] == "예" else "확인 필요"
             else:
@@ -120,6 +138,8 @@ def main():
         bad = sum(1 for r in results if r["card"] == c["id"] and r["verdict"] == "확인 필요")
         print(f"{c['id']:<32} 항목 {len(labels):>2}  확인 필요 {bad}", flush=True)
 
+    order = {c["id"]: i for i, c in enumerate(cards)}
+    results = sorted(kept + results, key=lambda r: order[r["card"]])
     count = {v: sum(1 for r in results if r["verdict"] == v) for v in ("일치", "판정 통과", "확인 필요")}
     lines = ["# 독립 검증 결과 (로컬 qwen3.5:35b)\n",
              "1차: 카드 값을 숨기고 인용 위치의 조문만 주어 값을 다시 찾게 한 뒤 숫자를 비교.",

@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"q": "이번 달 급여가 25일 일요일인데 언제 입금되나요", "expect": ["r3-4-1-payday"]},
+    {"q": "형사 기소로 직위해제 됐는데 보수는 몇 퍼센트 나오죠", "expect": ["r3-4-1-suspension-pay"]},
+    {"q": "남편이 공무원이라 거기서 가족수당 받는데 저도 받을 수 있나요", "expect": ["r3-4-1-family-allowance-limit"]},
+    {"q": "작년 6월에 퇴사했는데 경영평가 성과급 나오나요", "expect": ["r3-4-1-bonus-eligibility"]}
+  ]
+}

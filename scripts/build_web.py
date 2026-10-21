@@ -1,31 +1,35 @@
 """시범본 웹페이지를 파일 하나로 묶는다.
 
-- dist/index.html    : 그대로 열 수 있는 독립 파일(인터넷 없이도 동작, 글꼴만 기본 글꼴로 바뀜)
+- dist/index.html    : 그대로 열 수 있는 독립 파일(인터넷 없이 동작, 외부 연결을 CSP로 막음)
 - dist/artifact.html : claude.ai 아티팩트 게시용(문서 머리 태그 없이 본문만)
 
 검사(check_knowledge.py), 독립 검증(reports/blind_check.json), 검색 시험(test_engine.js) 결과를
 화면의 '검증 정보'에 넣는다.
 """
+import datetime
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from check_knowledge import load_domains  # noqa: E402
+import check_changes  # noqa: E402
+from review_workbook import card_hash  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
-KNOW = ROOT / "knowledge" / "birth_childcare"
 DIST = ROOT / "dist"
 
 
-def load_cards():
-    cards = []
-    for f in sorted(KNOW.glob("*.json")):
-        if not f.name.startswith("_"):
-            cards += json.loads(f.read_text())
-    return cards
-
-
 def main():
+    # 시험용: --rules 다른 규정 DB, --out 다른 폴더 (개정 감지 표시를 미리 볼 때)
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--rules", default=str(ROOT / "data" / "rules.json"))
+    ap.add_argument("--out", default=str(DIST))
+    args = ap.parse_args()
+    dist = Path(args.out)
     check = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_knowledge.py")], capture_output=True, text=True)
     if check.returncode != 0:
         print(check.stdout)
@@ -33,13 +37,16 @@ def main():
     test = subprocess.run(["node", str(ROOT / "scripts" / "test_engine.js"), "--json"], capture_output=True, text=True, check=True)
     search = json.loads(next(l for l in test.stdout.splitlines() if l.startswith("JSON "))[5:])
 
-    cards = load_cards()
-    topics = json.loads((KNOW / "_topics.json").read_text())
-    rules = json.loads((ROOT / "data" / "rules.json").read_text())["rules"]
+    domains, cards = load_domains()
+    for c in cards:
+        c.pop("_file", None)
+    rules = json.loads(Path(args.rules).read_text())["rules"]
     laws = json.loads((ROOT / "knowledge" / "external_laws.json").read_text())["laws"]
     blind = json.loads((ROOT / "reports" / "blind_check.json").read_text())
     decisions = json.loads((ROOT / "reports" / "review_decisions.json").read_text())["decisions"]
     fixes = json.loads((ROOT / "knowledge" / "rule_fixes.json").read_text())["items"]
+    site = json.loads((ROOT / "knowledge" / "site.json").read_text())
+    site.pop("_note", None)
 
     # 독립 검증: 원문 대조로 결론 낸 항목은 '확인 필요'에서 뺀다
     settled = {(d["card"], d["label"]) for d in decisions}
@@ -48,6 +55,24 @@ def main():
     for r in need:
         by_card.setdefault(r["card"], {"need": 0})["need"] += 1
     m = re.search(r"인용 문구 일치: (\d+)/(\d+)", check.stdout)
+
+    # 개정 감지: 카드를 확인한 뒤 원문이 바뀐 조문을 인용한 카드에 표시를 붙인다
+    snap = json.loads(check_changes.SNAPSHOT.read_text())
+    _, _, stale, _ = check_changes.compare({r["name"]: r for r in rules}, snap, cards)
+    for c in cards:
+        if c["id"] in stale:
+            c["stale"] = [{"cite": check_changes.unit_label(x["rule"], x["unit"]), "change": x["change"],
+                           "effective": x["effective"]} for x in stale[c["id"]]]
+    latest = max((r["effective"] for r in rules if r.get("effective")), default="")
+    # 담당부서 검수: 검수한 뒤 카드 내용이 바뀌었으면 검수 표시를 떼고 다시 '검수 전'으로
+    reviewed = 0
+    for c in cards:
+        rv = c.get("reviewed")
+        if rv and rv.get("hash") == card_hash(c) and c["id"] not in stale:
+            c["reviewed"] = {"date": rv["date"], "dept": rv["dept"]}
+            reviewed += 1
+        else:
+            c.pop("reviewed", None)
 
     # 카드가 인용한 부칙만 따로 싣는다(원문 보기용)
     buchik = {}
@@ -61,7 +86,10 @@ def main():
 
     data = {
         "meta": {
-            "basis": topics["basis_date"].replace("-", ".") + ".",
+            "basis": snap["taken"].replace("-", ".") + ".",
+            "built": datetime.date.today().isoformat(),
+            "latestEffective": latest,
+            "stale": len(stale), "reviewed": reviewed,
             "cards": len(cards), "questions": sum(len(c["questions"]) for c in cards),
             "facts": int(m[2]), "quotesOk": int(m[1]),
             "verify": {"total": len(blind), "match": sum(r["verdict"] == "일치" for r in blind),
@@ -70,8 +98,9 @@ def main():
             "search": {"dev": search["dev"], "top3": search["top3"], "top1": search["top1"]},
             "lawChecked": laws[0]["checked"].replace("-", ".") + ".",
             "ruleFixes": fixes,
+            "site": site,
         },
-        "topics": topics["topics"],
+        "domains": [{"id": d["id"], "name": d["domain"], "topics": d["topics"]} for d in domains],
         "cards": cards,
         "rules": [{"name": r["name"], "code": r["code"], "kind": r["kind"], "effective": r["effective"],
                    "articles": [{"no": a["no"], "title": a["title"], "chapter": a["chapter"], "text": a["text"]} for a in r["articles"]],
@@ -79,19 +108,24 @@ def main():
         "buchik": buchik,
     }
     blob = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    page = (ROOT / "web" / "app.html").read_text()
+    page = (ROOT / "web" / "app.template").read_text()
     page = page.replace("/*__ENGINE__*/", (ROOT / "web" / "engine.js").read_text()).replace("/*__DATA__*/", blob)
-    DIST.mkdir(exist_ok=True)
-    (DIST / "artifact.html").write_text(page)
+    dist.mkdir(exist_ok=True)
+    (dist / "artifact.html").write_text(page)
+    # 폐쇄망용: 외부 주소를 하나도 부르지 않도록 CSP로 막는다(글꼴·스크립트·통신 모두 파일 안의 것만)
+    csp = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+           "img-src data:; font-src data:; base-uri 'none'; form-action 'none'")
     standalone = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
+                  f'<meta http-equiv="Content-Security-Policy" content="{csp}">\n'
                   '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
                   "<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}"
                   "body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>\n</head>\n<body>\n"
                   + page + "\n</body>\n</html>\n")
-    (DIST / "index.html").write_text(standalone)
-    size = (DIST / "index.html").stat().st_size / 1e6
-    print(f"카드 {len(cards)}장, 규정 {len(rules)}개 → dist/index.html ({size:.1f}MB), dist/artifact.html")
+    (dist / "index.html").write_text(standalone)
+    size = (dist / "index.html").stat().st_size / 1e6
+    print(f"카드 {len(cards)}장, 규정 {len(rules)}개 → {dist}/index.html ({size:.1f}MB), artifact.html")
     print(f"검증: 인용 {m[1]}/{m[2]}, 독립 검증 확인 필요 {len(need)}, 검색 시험 {search}")
+    print(f"개정 감지: 카드 확인 기준 {snap['taken']}, 개정 후 재검수 전 카드 {len(stale)}장 · 담당부서 검수 완료 {reviewed}장")
 
 
 if __name__ == "__main__":

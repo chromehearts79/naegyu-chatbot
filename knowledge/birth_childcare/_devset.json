@@ -1,52 +1,303 @@
 {
-  "_note": "검색 시험용 질문. 카드의 예상 질문(questions)에 절대 옮겨 넣지 않는다. expect 는 정답 카드 id 목록, 또는 'ask'(되묻기), 'fallback'(준비된 답 없음 → 조문 검색).",
+  "_note": "검색 시험용 질문. 카드의 예상 질문(questions)에 절대 옮겨 넣지 않는다. expect 는 정답 카드 id 목록, 또는 'ask'(되묻기), 'fallback'(준비된 답 없음 → 조문 검색). 복무 분야를 추가한 뒤 '연차 며칠이에요', '결혼 휴가 며칠'의 기대값을 조문 검색에서 복무 카드로 바꿨다. 출장 기본 카드를 넣은 뒤 '출장비 일비 얼마예요'의 기대값을 국내 출장 여비 카드로 바꿨다.",
   "items": [
-    {"q": "다음주에 아내 제왕절개 예정인데 저 휴가 몇일 받아요", "expect": ["spouse-birth-leave"]},
-    {"q": "출산 예정일 두달 전부터 쉬어도 되나요", "expect": ["maternity-leave", "maternity-split"]},
-    {"q": "육아휴직을 4번 나눠 쓸 수 있나요", "expect": ["parental-leave-period"]},
-    {"q": "남편도 아내랑 같이 육아휴직 쓰면 기간 늘어나요?", "expect": ["parental-leave-period"]},
-    {"q": "임신 8주차인데 출근이 너무 힘들어요", "expect": ["pregnancy-short-hours", "pregnancy-shift-time", "ask"]},
-    {"q": "아이 감기 걸려서 오늘 오후에 병원 가야해요", "expect": ["family-care-leave"]},
-    {"q": "초등학교 3학년 아들 육아휴직 가능해요?", "expect": ["parental-leave-basics"]},
-    {"q": "중학생 자녀 단축근무 돼요?", "expect": ["childcare-short-hours"]},
-    {"q": "시험관 1차 이식 날 쉬고 싶어요", "expect": ["infertility-leave"]},
-    {"q": "난임 시술 휴가 몇 번 쓸 수 있어", "expect": ["infertility-leave"]},
-    {"q": "둘째 태어나면 가족수당 얼마 더 받나요", "expect": ["family-allowance"]},
-    {"q": "출산했는데 복지포인트 신청은 어디서", "expect": ["birth-points"]},
-    {"q": "복직 후 아기 젖 먹이러 집에 갔다 와도 되나요", "expect": ["nursing-time"]},
-    {"q": "임신했는데 밤늦게 야근 빠져도 돼요", "expect": ["pregnancy-overtime"]},
-    {"q": "와이프가 임신 12주에 유산했어요 저는 며칠 쉴 수 있나요", "expect": ["spouse-loss-leave"]},
-    {"q": "임신 25주에 사산했어요", "expect": ["loss-leave"]},
-    {"q": "육아휴직 2년 하면 근속 다 인정돼요?", "expect": ["parental-leave-service"]},
-    {"q": "육아휴직 중에 남편 따라 미국 가도 돼요", "expect": ["parental-leave-abroad"]},
-    {"q": "출산휴가 신청하면서 육아휴직은 안 붙이려면", "expect": ["auto-parental-leave"]},
-    {"q": "아내 출산 후 5개월 됐는데 출산휴가 아직 안 썼어요", "expect": ["spouse-birth-leave"]},
-    {"q": "애기 백일인데 단축근무 할 수 있어요?", "expect": ["childcare-short-hours", "ask"]},
-    {"q": "유치원 방학이라 2주 쉬어야 하는데", "expect": ["parental-leave-period", "family-care-leave", "ask"]},
-    {"q": "임산부 해외출장 비즈니스석 타도 되나", "expect": ["pregnancy-flight"]},
-    {"q": "아이 입학식 가려는데 휴가", "expect": ["family-care-leave"]},
-    {"q": "산부인과 정기 진료 공가 처리", "expect": ["pregnancy-checkup"]},
-    {"q": "쌍둥이 아빠 출산휴가", "expect": ["spouse-birth-leave"]},
-    {"q": "육아휴직 신청은 몇 개월 전에 해야 돼요", "expect": ["parental-leave-apply"]},
-    {"q": "육아휴직 하면 그해 연차 줄어드나요", "expect": ["parental-leave-service"]},
-    {"q": "애기 낳으면 회사에서 주는 돈", "expect": ["birth-gift-outside", "birth-points", "family-allowance", "ask"]},
-    {"q": "회사에 어린이집 있어요?", "expect": ["daycare-outside"]},
-    {"q": "육아휴직 급여 신청 방법", "expect": ["parental-pay-outside"]},
-    {"q": "입양 절차랑 휴가", "expect": ["adoption"]},
-    {"q": "아버님이 수술하셔서 간병해야 해요", "expect": ["family-care-leave", "family-care-leave-of-absence", "family-care-short-hours", "ask"]},
-    {"q": "임신 중에 휴직하고 싶어요", "expect": ["pregnancy-parental-leave"]},
-    {"q": "출산휴가 120일은 언제 받아요?", "expect": ["maternity-leave"]},
-    {"q": "출산휴가 유급 기간 지나면 월급은요", "expect": ["maternity-leave", "parental-pay-outside", "ask"]},
-    {"q": "휴가 어떻게 돼요?", "expect": ["ask"]},
-    {"q": "출산", "expect": ["ask"]},
-    {"q": "육아", "expect": ["ask"]},
-    {"q": "아기", "expect": ["ask"]},
-    {"q": "임신했어요", "expect": ["ask"]},
-    {"q": "육아휴직", "expect": ["ask", "parental-leave-basics"]},
-    {"q": "법인카드 분실하면 어떻게 해요", "expect": ["fallback"]},
-    {"q": "출장비 일비 얼마예요", "expect": ["fallback"]},
-    {"q": "징계 감경 기준", "expect": ["fallback"]},
-    {"q": "연차 며칠이에요", "expect": ["fallback"]},
-    {"q": "결혼 휴가 며칠", "expect": ["fallback"]}
+    {
+      "q": "다음주에 아내 제왕절개 예정인데 저 휴가 몇일 받아요",
+      "expect": [
+        "spouse-birth-leave"
+      ]
+    },
+    {
+      "q": "출산 예정일 두달 전부터 쉬어도 되나요",
+      "expect": [
+        "maternity-leave",
+        "maternity-split"
+      ]
+    },
+    {
+      "q": "육아휴직을 4번 나눠 쓸 수 있나요",
+      "expect": [
+        "parental-leave-period"
+      ]
+    },
+    {
+      "q": "남편도 아내랑 같이 육아휴직 쓰면 기간 늘어나요?",
+      "expect": [
+        "parental-leave-period"
+      ]
+    },
+    {
+      "q": "임신 8주차인데 출근이 너무 힘들어요",
+      "expect": [
+        "pregnancy-short-hours",
+        "pregnancy-shift-time",
+        "ask"
+      ]
+    },
+    {
+      "q": "아이 감기 걸려서 오늘 오후에 병원 가야해요",
+      "expect": [
+        "family-care-leave"
+      ]
+    },
+    {
+      "q": "초등학교 3학년 아들 육아휴직 가능해요?",
+      "expect": [
+        "parental-leave-basics"
+      ]
+    },
+    {
+      "q": "중학생 자녀 단축근무 돼요?",
+      "expect": [
+        "childcare-short-hours"
+      ]
+    },
+    {
+      "q": "시험관 1차 이식 날 쉬고 싶어요",
+      "expect": [
+        "infertility-leave"
+      ]
+    },
+    {
+      "q": "난임 시술 휴가 몇 번 쓸 수 있어",
+      "expect": [
+        "infertility-leave"
+      ]
+    },
+    {
+      "q": "둘째 태어나면 가족수당 얼마 더 받나요",
+      "expect": [
+        "family-allowance"
+      ]
+    },
+    {
+      "q": "출산했는데 복지포인트 신청은 어디서",
+      "expect": [
+        "birth-points"
+      ]
+    },
+    {
+      "q": "복직 후 아기 젖 먹이러 집에 갔다 와도 되나요",
+      "expect": [
+        "nursing-time"
+      ]
+    },
+    {
+      "q": "임신했는데 밤늦게 야근 빠져도 돼요",
+      "expect": [
+        "pregnancy-overtime"
+      ]
+    },
+    {
+      "q": "와이프가 임신 12주에 유산했어요 저는 며칠 쉴 수 있나요",
+      "expect": [
+        "spouse-loss-leave"
+      ]
+    },
+    {
+      "q": "임신 25주에 사산했어요",
+      "expect": [
+        "loss-leave"
+      ]
+    },
+    {
+      "q": "육아휴직 2년 하면 근속 다 인정돼요?",
+      "expect": [
+        "parental-leave-service"
+      ]
+    },
+    {
+      "q": "육아휴직 중에 남편 따라 미국 가도 돼요",
+      "expect": [
+        "parental-leave-abroad"
+      ]
+    },
+    {
+      "q": "출산휴가 신청하면서 육아휴직은 안 붙이려면",
+      "expect": [
+        "auto-parental-leave"
+      ]
+    },
+    {
+      "q": "아내 출산 후 5개월 됐는데 출산휴가 아직 안 썼어요",
+      "expect": [
+        "spouse-birth-leave"
+      ]
+    },
+    {
+      "q": "애기 백일인데 단축근무 할 수 있어요?",
+      "expect": [
+        "childcare-short-hours",
+        "ask"
+      ]
+    },
+    {
+      "q": "유치원 방학이라 2주 쉬어야 하는데",
+      "expect": [
+        "parental-leave-period",
+        "family-care-leave",
+        "ask"
+      ]
+    },
+    {
+      "q": "임산부 해외출장 비즈니스석 타도 되나",
+      "expect": [
+        "pregnancy-flight"
+      ]
+    },
+    {
+      "q": "아이 입학식 가려는데 휴가",
+      "expect": [
+        "family-care-leave"
+      ]
+    },
+    {
+      "q": "산부인과 정기 진료 공가 처리",
+      "expect": [
+        "pregnancy-checkup"
+      ]
+    },
+    {
+      "q": "쌍둥이 아빠 출산휴가",
+      "expect": [
+        "spouse-birth-leave"
+      ]
+    },
+    {
+      "q": "육아휴직 신청은 몇 개월 전에 해야 돼요",
+      "expect": [
+        "parental-leave-apply"
+      ]
+    },
+    {
+      "q": "육아휴직 하면 그해 연차 줄어드나요",
+      "expect": [
+        "parental-leave-service"
+      ]
+    },
+    {
+      "q": "애기 낳으면 회사에서 주는 돈",
+      "expect": [
+        "birth-gift-outside",
+        "birth-points",
+        "family-allowance",
+        "ask"
+      ]
+    },
+    {
+      "q": "회사에 어린이집 있어요?",
+      "expect": [
+        "daycare-outside"
+      ]
+    },
+    {
+      "q": "육아휴직 급여 신청 방법",
+      "expect": [
+        "parental-pay-outside"
+      ]
+    },
+    {
+      "q": "입양 절차랑 휴가",
+      "expect": [
+        "adoption"
+      ]
+    },
+    {
+      "q": "아버님이 수술하셔서 간병해야 해요",
+      "expect": [
+        "family-care-leave",
+        "family-care-leave-of-absence",
+        "family-care-short-hours",
+        "ask"
+      ]
+    },
+    {
+      "q": "임신 중에 휴직하고 싶어요",
+      "expect": [
+        "pregnancy-parental-leave"
+      ]
+    },
+    {
+      "q": "출산휴가 120일은 언제 받아요?",
+      "expect": [
+        "maternity-leave"
+      ]
+    },
+    {
+      "q": "출산휴가 유급 기간 지나면 월급은요",
+      "expect": [
+        "maternity-leave",
+        "parental-pay-outside",
+        "ask"
+      ]
+    },
+    {
+      "q": "휴가 어떻게 돼요?",
+      "expect": [
+        "ask"
+      ]
+    },
+    {
+      "q": "출산",
+      "expect": [
+        "ask"
+      ]
+    },
+    {
+      "q": "육아",
+      "expect": [
+        "ask"
+      ]
+    },
+    {
+      "q": "아기",
+      "expect": [
+        "ask"
+      ]
+    },
+    {
+      "q": "임신했어요",
+      "expect": [
+        "ask"
+      ]
+    },
+    {
+      "q": "육아휴직",
+      "expect": [
+        "ask",
+        "parental-leave-basics"
+      ]
+    },
+    {
+      "q": "법인카드 분실하면 어떻게 해요",
+      "expect": [
+        "fallback"
+      ]
+    },
+    {
+      "q": "출장비 일비 얼마예요",
+      "expect": [
+        "domestic-trip-expense",
+        "ask"
+      ]
+    },
+    {
+      "q": "징계 감경 기준",
+      "expect": [
+        "fallback"
+      ]
+    },
+    {
+      "q": "연차 며칠이에요",
+      "expect": [
+        "annual-leave-days"
+      ]
+    },
+    {
+      "q": "결혼 휴가 며칠",
+      "expect": [
+        "wedding-leave"
+      ]
+    }
   ]
 }

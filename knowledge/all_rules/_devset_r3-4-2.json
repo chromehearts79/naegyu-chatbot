@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"q": "다음 달 콘도 예약했는데 못 가게 됐어요 언제까지 취소해야 하나요", "expect": ["r3-4-2-condo-booking"]},
+    {"q": "연고 없는 지사로 발령났는데 회사 숙소 들어갈 수 있나요", "expect": ["r3-4-2-dorm-eligibility"]},
+    {"q": "시어머니 돌아가시면 회사에서 조화 보내주나요", "expect": ["r3-4-2-condolence-goods"]}
+  ]
+}

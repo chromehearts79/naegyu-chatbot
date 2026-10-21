@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"q": "다음 달 하노이 출장인데 하루 숙박비 얼마까지 돼요", "expect": ["r3-6-3-overseas-expense", "r3-6-3-overseas-region"]},
+    {"q": "다른 지역 지사로 발령나서 이삿짐 옮기는 비용 받을 수 있나", "expect": ["r3-6-3-relocation"]},
+    {"q": "연수원에서 2주 교육 받는데 일비는 매일 나오나요", "expect": ["r3-6-3-training"]},
+    {"q": "같은 곳에 40일 파견 출장 가면 일비가 줄어드나", "expect": ["r3-6-3-long-stay"]}
+  ]
+}

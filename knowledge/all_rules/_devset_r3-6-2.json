@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"q": "1500만원짜리 용역을 업체 한 곳과 바로 계약해도 되나요", "expect": ["r3-6-2-private-cases", "r3-6-2-quotation"]},
+    {"q": "작년에 퇴사한 선배가 사장인 회사와 수의계약 가능해?", "expect": ["r3-6-2-former-employee"]},
+    {"q": "업체가 납기를 열흘 넘겼는데 배상금은 어떻게 계산하나", "expect": ["r3-6-2-delay-penalty"]},
+    {"q": "검수 끝내고 업체에 돈은 며칠 안에 보내야 하나요", "expect": ["r3-6-2-inspection-payment"]}
+  ]
+}

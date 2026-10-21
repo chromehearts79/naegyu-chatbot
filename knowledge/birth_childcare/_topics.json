@@ -2,13 +2,37 @@
   "domain": "출산·육아",
   "basis_date": "2026-10-21",
   "topics": [
-    {"id": "pregnancy", "name": "임신 중"},
-    {"id": "birth", "name": "출산(본인)"},
-    {"id": "spouse", "name": "배우자 임신·출산"},
-    {"id": "loss", "name": "유산·사산"},
-    {"id": "infertility", "name": "난임"},
-    {"id": "parental", "name": "육아휴직"},
-    {"id": "care", "name": "아이 돌봄·근무시간"},
-    {"id": "money", "name": "수당·복지포인트"}
+    {
+      "id": "pregnancy",
+      "name": "임신 중"
+    },
+    {
+      "id": "birth",
+      "name": "출산(본인)"
+    },
+    {
+      "id": "spouse",
+      "name": "배우자 임신·출산"
+    },
+    {
+      "id": "loss",
+      "name": "유산·사산"
+    },
+    {
+      "id": "infertility",
+      "name": "난임"
+    },
+    {
+      "id": "parental",
+      "name": "육아휴직"
+    },
+    {
+      "id": "care",
+      "name": "아이 돌봄·근무시간"
+    },
+    {
+      "id": "money",
+      "name": "수당·복지포인트"
+    }
   ]
 }

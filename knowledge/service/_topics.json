@@ -1,0 +1,30 @@
+{
+  "domain": "복무(휴가)",
+  "basis_date": "2026-10-21",
+  "topics": [
+    {
+      "id": "annual",
+      "name": "연가(연차)"
+    },
+    {
+      "id": "sick",
+      "name": "병가"
+    },
+    {
+      "id": "official",
+      "name": "공가"
+    },
+    {
+      "id": "special",
+      "name": "경조사·특별휴가"
+    },
+    {
+      "id": "attendance",
+      "name": "근무시간·근태·결재"
+    },
+    {
+      "id": "trip",
+      "name": "출장(기본)"
+    }
+  ]
+}

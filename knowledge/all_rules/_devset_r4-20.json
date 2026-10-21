@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "q": "부정청구 신고 확인 기간 셀 때 공휴일은 빼나요",
+      "expect": [
+        "r4-20-processing"
+      ]
+    },
+    {
+      "q": "부정청구 신고했더니 승진에서 밀렸어요",
+      "expect": [
+        "r4-20-retaliation",
+        "r4-20-protection"
+      ]
+    },
+    {
+      "q": "부정청구 신고 보완 요청을 두 번 무시하면 어떻게 되나",
+      "expect": [
+        "r4-20-supplement-cancel"
+      ]
+    }
+  ]
+}

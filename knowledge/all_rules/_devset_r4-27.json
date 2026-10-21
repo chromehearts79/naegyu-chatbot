@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"q": "헤어진 사람이 회사 앞까지 찾아오는데 회사 차원에서 해줄 수 있는 게 있나", "expect": ["r4-27-protection"]},
+    {"q": "스토킹 피해 상담은 어느 부서로 가야 해", "expect": ["r4-27-counseling-window"]},
+    {"q": "스토킹 조사 신청하면 결과 나오는 데 얼마나 걸려요", "expect": ["r4-27-investigation"]},
+    {"q": "가해자가 원장님이면 누가 조사를 맡아요", "expect": ["r4-27-head-perpetrator"]}
+  ]
+}
