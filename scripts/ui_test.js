@@ -39,6 +39,16 @@ const notice = d.querySelector("#notice");
 ok(/AI가 쓴 답/.test(notice.textContent) && notice.querySelector("details") && !notice.querySelector("details").open && /검수 전/.test(notice.querySelector("details").textContent), "맨 위 안내는 한 문장, 표시의 뜻은 '자세히'에 접어 둠");
 ok(/근거 문구 6,671곳/.test(d.querySelector(".about-line").textContent) && !d.querySelector("#about details").open, "검증 정보는 한 줄 요약, 숫자는 '검증 방법 보기'에 접어 둠");
 ok(d.querySelectorAll(".howto li").length === 3, "쓰는 법 3단계 안내");
+{
+  // 화면 색 고르기: 자동·밝게·어둡게
+  const root = d.documentElement, pick3 = (v) => { d.querySelector(`#theme button[data-choice=${v}]`).click(); return root.getAttribute("data-theme"); };
+  const pressed = () => d.querySelector("#theme button[aria-pressed=true]").dataset.choice;
+  const start = pressed();
+  const dark = pick3("dark") === "dark" && pressed() === "dark";
+  const light = pick3("light") === "light" && pressed() === "light";
+  const auto = pick3("auto") === null && pressed() === "auto";
+  ok(start === "auto" && dark && light && auto && /:root\[data-theme="light"\] \{ color-scheme: light; \}/.test(html), "화면 색 고르기: 자동(처음)·밝게·어둡게가 바뀌고 누른 버튼이 표시됨");
+}
 ok(!top(), "처음 화면에 미리 띄운 예시 답변 없음");
 const exs = [...d.querySelectorAll("#examples .chip")].map((b) => b.textContent);
 ok(exs.length === 4 && /출장/.test(exs[0]) && /연차|연가/.test(exs[1]) && /복지포인트/.test(exs[2]) && /가족수당/.test(exs[3]), "예시 질문 4개: 출장비·연가·복지포인트·가족수당");

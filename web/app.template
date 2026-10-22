@@ -37,6 +37,8 @@
     color-scheme: dark;
   }
 }
+/* '밝게'를 고르면 PC가 어두운 모드여도 입력칸·선택 상자까지 밝게 */
+:root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] {
   --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #8c9b96;
   --line: #27322e; --line-strong: #5f6e69; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
@@ -63,6 +65,11 @@ button { cursor: pointer; }
 
 /* 머리 */
 .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-block: 22px 14px; border-bottom: 1px solid var(--line); }
+/* 화면 색 고르기(자동·밝게·어둡게) */
+.theme { margin-left: auto; align-self: center; display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line-strong); border-radius: 999px; }
+.theme button { border: 0; background: transparent; color: var(--ink-2); border-radius: 999px; padding: 3px 12px; min-height: 28px; font-size: 13px; }
+.theme button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.old .theme { display: none; }
 .brand { font-family: var(--font-display); font-weight: 700; font-size: 26px; letter-spacing: -0.01em; margin: 0; }
 .brand small { font-family: var(--font-body); font-weight: 500; font-size: 13px; color: var(--accent); margin-left: 8px; letter-spacing: 0.02em; }
 .basis { color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -208,6 +215,7 @@ details.box[open] summary { margin-bottom: 8px; }
 @media (max-width: 999px) {
   .chip, .btn.ghost, .calc input[type=date], .calc input[type=number], .calc select, .calc label.inline { min-height: 44px; }
   .cite { min-height: 32px; }
+  .theme button { min-height: 40px; }
 }
 /* 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글 */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -227,12 +235,19 @@ details.box[open] summary { margin-bottom: 8px; }
   var ok = true;
   try { ok = !!(window.Map && window.Set && String.prototype.normalize && Element.prototype.replaceChildren && !document.documentMode); } catch (e) { ok = false; }
   if (!ok) { document.getElementById("oldbrowser").removeAttribute("hidden"); document.documentElement.className += " old"; }
+  // 지난번에 고른 화면 색(밝게·어둡게)을 화면이 그려지기 전에 되살린다. 저장이 막힌 브라우저면 자동(PC 설정)
+  try { var t = window.localStorage.getItem("naegyu-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}
 })();
 </script>
 <div class="wrap">
   <header class="top">
     <h1 class="brand">내규챗봇<small id="domains-label">시범본</small></h1>
     <span class="basis" id="basis"></span>
+    <div class="theme" id="theme" role="group" aria-label="화면 색">
+      <button type="button" data-choice="auto">자동</button>
+      <button type="button" data-choice="light">밝게</button>
+      <button type="button" data-choice="dark">어둡게</button>
+    </div>
     <div class="notice" id="notice"></div>
   </header>
 
@@ -794,6 +809,23 @@ $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask
   );
   // 검수용 화면에서만 보인다(직원 화면에 null 을 넘기면 글자 'null'이 찍힌다)
   if (REVIEW && m.ruleFixes.length) $("#about").append(h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]));
+})();
+// 화면 색: 자동(PC 설정을 따름)·밝게·어둡게. 고른 값은 이 PC의 브라우저에만 기억한다(저장이 막혀 있으면 이번에만)
+(function () {
+  var root = document.documentElement, btns = [].slice.call(document.querySelectorAll("#theme button"));
+  function mark() {
+    var cur = root.getAttribute("data-theme") || "auto";
+    btns.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.choice === cur ? "true" : "false"); });
+  }
+  btns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      var v = b.dataset.choice;
+      if (v === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", v);
+      try { if (v === "auto") localStorage.removeItem("naegyu-theme"); else localStorage.setItem("naegyu-theme", v); } catch (e) {}
+      mark();
+    });
+  });
+  mark();
 })();
 // 다 열렸으니 '여는 중' 안내를 지운다
 $("#loading").remove();
