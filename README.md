@@ -28,7 +28,12 @@ node scripts/test_engine.js -v       # 5. 검색·계산기 시험
 python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/
 ```
 
-## 규정이 개정되면
+## 규정이 개정되면 (쉬운 안내: docs/유지보수_안내.md)
+
+가장 쉬운 방법: Claude 에게 개정본 파일을 주며 "내규 개정 반영해줘" → 단계마다 버튼(스킬 `skills/naegyu-update`, 설치 위치 `~/.claude/skills/naegyu-update`).
+도구: `python3 scripts/update_rules.py status | convert | finish <규정명…>` — 바뀐 파일만 골라 변환·비교하고, 승인 뒤 새 판을 만든다.
+
+아래는 그 안에서 일어나는 일이다.
 
 1. 개정된 한글 원본을 내규 폴더에 넣고 `scripts/convert.sh`, `python3 scripts/build_db.py` 를 다시 돌린다.
 2. `python3 scripts/check_changes.py` → `reports/change_report.md`
