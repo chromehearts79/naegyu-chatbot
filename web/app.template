@@ -1,6 +1,7 @@
 <title>내규챗봇 시범본</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
+/*__FONTS__*/
 /* 규정집을 펼쳐 놓은 책상: 왼쪽은 묻고 답하는 칸, 오른쪽은 근거 조문 원문. 근거는 언제나 한 번 눌러 확인할 수 있게. */
 :root {
   --paper: #f3f6f5;
@@ -21,9 +22,9 @@
   --ok: #1b6f40;
   --ok-soft: #def2e5;
   --danger: #b42318;
-  /* 폐쇄망에서도 열리도록 외부 글꼴을 부르지 않고 PC에 깔린 글꼴만 쓴다 */
-  --font-display: "Noto Serif KR", "AppleMyungjo", "Batang", serif;
-  --font-body: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  /* 에이투지체는 파일 안에 들어 있어 폐쇄망에서도 같은 모양이다. 그 글꼴에 없는 글자(한자·일부 기호)만 PC 글꼴로 */
+  --font-display: "A2Z", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-body: "A2Z", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace;
   --radius: 10px;
 }
@@ -80,7 +81,6 @@ button { cursor: pointer; }
 }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.examples .chip { border-style: dashed; }
 .topic-groups { display: grid; gap: 8px; }
 .topic-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .topic-group > span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); min-width: 72px; }
@@ -96,7 +96,6 @@ button { cursor: pointer; }
 .pill { font-size: 11.5px; border-radius: 999px; padding: 2px 9px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
-.pill.ex { background: var(--sunk); color: var(--ink-3); }
 .a p { margin: 0; max-width: 68ch; }
 .a strong { font-weight: 600; background: linear-gradient(transparent 62%, var(--accent-soft) 62%); }
 .facts { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -210,13 +209,11 @@ details.box[open] summary { margin-bottom: 8px; }
       <section class="composer" aria-label="질문하기">
         <form class="ask-row" id="ask-form" autocomplete="off">
           <label for="q" class="label" hidden>질문</label>
-          <input id="q" name="q" type="text" placeholder="예: 와이프가 다음 달 출산인데 저는 며칠 쉴 수 있나요?" aria-label="질문">
+          <input id="q" name="q" type="text" placeholder="궁금한 것을 평소 말하듯 적어 보세요" aria-label="질문">
           <button class="btn" type="submit">묻기</button>
         </form>
         <div class="label">상황별로 보기</div>
         <div class="topic-groups" id="topics"></div>
-        <div class="label">이렇게 물어보세요</div>
-        <div class="chips examples" id="examples"></div>
       </section>
       <div class="thread" id="thread" aria-live="polite"></div>
       <section class="about" id="about" aria-label="검증 정보"></section>
@@ -398,7 +395,7 @@ var CALCS = {
   annualLeave: { title: "내 연가(연차) 일수", fields: [["hire", "date", "입사일", plus(-365 * 5 - 30)], ["today", "date", "기준일", E.iso(TODAY)]] },
   longService: { title: "장기재직휴가 대상과 기한", fields: [["hire", "date", "입사일", plus(-365 * 12 - 60)], ["today", "date", "기준일", E.iso(TODAY)]] },
   welfarePoints: { title: "연간 복지포인트 계산", fields: [["years", "number", "근속연수(전년도 말 기준)", "7"], ["spouse", "check", "배우자 있음", true], ["children", "number", "20세 미만 자녀 수", "2"], ["disabled", "check", "장애인 직원"], ["newHire", "check", "올해 신규채용"]] },
-  tripExpense: { title: "국내 출장 여비 계산(직원)", fields: [["days", "number", "출장 일수", "2"], ["nights", "number", "숙박 일수", "1"], ["region", "select", "숙박 지역", "metro", [["seoul", "서울특별시"], ["metro", "광역시·제주"], ["other", "그 밖의 지역"]]], ["car", "check", "업무용 차량 이용"]] }
+  tripExpense: { title: "국내 출장 여비 계산(직원)", fields: [["days", "number", "출장 일수", "2"], ["nights", "number", "숙박 일수", "1"], ["region", "select", "숙박 지역", "metro", [["seoul", "서울특별시"], ["metro", "광역시·제주"], ["other", "그 밖의 지역"]]], ["meals", "number", "다른 예산(회의비 등)으로 먹은 끼니", "0"], ["car", "check", "업무용 차량 이용"]] }
 };
 var calcSeq = 0;
 // 날짜 칸마다 그 칸의 날짜임을 알려 주는 말. 질문 속 날짜 앞뒤에 이 말이 있을 때만 채운다
@@ -433,7 +430,10 @@ function renderCalc(kind, dates) {
   }
   form.addEventListener("input", run); form.addEventListener("change", run);
   form.addEventListener("submit", function (e) { e.preventDefault(); run(); });
-  box.append(h("h4", { text: spec.title + " (참고용)" }), filled.length ? h("p", { class: "soft", text: "질문의 날짜를 넣어 계산했습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }) : null, form, out);
+  // append 에 null 을 넘기면 글자 'null'이 찍히므로, 날짜를 채운 경우에만 안내 문단을 넣는다
+  box.append(h("h4", { text: spec.title + " (참고용)" }));
+  if (filled.length) box.append(h("p", { class: "soft", text: "질문의 날짜를 넣어 계산했습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }));
+  box.append(form, out);
   run();
   return box;
 }
@@ -509,7 +509,7 @@ function missingNote(words) {
 function renderAnswer(c, opts) {
   opts = opts || {};
   var a = h("article", { class: "a" });
-  a.append(h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: c.title }), statusPill(c), opts.example ? h("span", { class: "pill ex", text: "예시" }) : null]));
+  a.append(h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: c.title }), statusPill(c)]));
   var ruleName = E.ruleOfCard(c), ruleInfo = rulesByName.get(ruleName);
   if (ruleName) a.append(h("p", { class: "soft", text: "근거 규정: " + ruleName + (ruleInfo && ruleInfo.effective ? " (현행 시행 " + ruleInfo.effective + ")" : "") }));
   // 근거 조문이 답을 확인한 뒤 개정됐으면 가장 먼저 알린다
@@ -627,9 +627,6 @@ DATA.domains.forEach(function (dm) {
   });
   $("#topics").append(row);
 });
-["배우자 출산휴가 며칠이에요?", "시험관 시술 때문에 병원 가야 해요", "육아휴직 2년 하면 근속 다 인정돼요?", "장모님 돌아가셨는데 며칠 쉬어요?", "반차 쓰면 몇 시간 일해요?", "출산"].forEach(function (s) {
-  $("#examples").append(h("button", { class: "chip", type: "button", text: s, onclick: function () { $("#q").value = s; ask(s); } }));
-});
 $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask($("#q").value); $("#q").select(); });
 
 (function about() {
@@ -651,11 +648,9 @@ $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask
       h("li", { text: "외부 법령 대조: 내규가 인용하거나 내규와 다른 법령 조문(남녀고용평등법, 근로기준법, 개인정보 보호법 등)을 국가법령정보로 확인했습니다(" + m.lawChecked + ")." }),
       h("li", { text: "3단계 담당부서 검수는 아직입니다. 검수를 마친 답에는 '담당부서 검수 완료'가 표시됩니다. 그 전까지는 중요한 결정 전에 원문과 담당부서에 확인하세요." }),
       h("li", { text: "시험 질문 정확도는 검색 기준값을 고를 때 같은 질문을 써서 실제보다 높게 나왔을 수 있습니다. 담당부서가 만든 질문으로 다시 재야 합니다." })
-    ]),
-    REVIEW && m.ruleFixes.length ? h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]) : null
+    ])
   );
+  // 검수용 화면에서만 보인다(직원 화면에 null 을 넘기면 글자 'null'이 찍힌다)
+  if (REVIEW && m.ruleFixes.length) $("#about").append(h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]));
 })();
-
-// 처음부터 작동하는 모습을 보여 주는 예시 한 건
-addTurn("와이프가 다음 달 출산 예정인데 저는 며칠 쉴 수 있나요?", "예시", renderAnswer(byId.get("spouse-birth-leave"), { example: true }));
 </script>

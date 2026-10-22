@@ -24,17 +24,18 @@ const top = () => d.querySelector("#thread .turn");
 
 const nTopics = w.DATA.domains.reduce((n, dm) => n + dm.topics.length, 0);
 ok(d.querySelectorAll("#topics .chip").length === nTopics && d.querySelectorAll("#topics .topic-group").length === w.DATA.domains.length, `상황별 메뉴 ${w.DATA.domains.length}개 분야, ${nTopics}개`);
-ok(d.querySelectorAll("#examples .chip").length === 6, "예시 질문 6개");
-ok(/배우자 출산전후휴가/.test(top().textContent) && top().querySelector(".pill.ex"), "처음 화면에 예시 답변");
-ok(top().querySelectorAll(".facts tbody tr").length === 7, "예시 답변 핵심 정리 7줄");
-ok(top().querySelector(".calc table"), "예시 답변 계산기 결과 표");
+ok(!top() && !d.querySelector("#examples"), "처음 화면에 예시 답변·예시 질문 없음");
+ok(!/출산/.test(d.querySelector("#q").placeholder), "입력칸 안내 문구가 특정 분야에 치우치지 않음");
 ok(d.querySelectorAll("#about .stat").length === 6, "검증 정보 숫자 6칸");
+ok(!/null|undefined/.test(d.querySelector("#about").textContent), "검증 정보에 'null' 같은 글자 없음");
 
 // 바로 답이면 그 제목, 되묻기면 아래에 펼친 '가장 가까운 답'의 제목
 const title = (t) => (t.querySelector(".lead .a-title") || t.querySelector(".a-title")).textContent;
 function ask(q) { d.querySelector("#q").value = q; d.querySelector("#ask-form").dispatchEvent(new w.Event("submit", { cancelable: true })); return top(); }
 let t = ask("배우자 출산휴가 며칠이에요?");
 ok(/배우자 출산전후휴가/.test(title(t)), "질문 → 배우자 출산전후휴가 답변");
+ok(t.querySelectorAll(".facts tbody tr").length === 7, "답변 핵심 정리 7줄");
+ok(t.querySelector(".calc table"), "답변 계산기 결과 표");
 t = ask("출산");
 ok(/조금 더 알려주세요/.test(t.textContent) && t.querySelectorAll(".cand").length >= 2, "한 단어 질문 → 되묻기 후보 " + t.querySelectorAll(".cand").length + "개");
 t.querySelector(".cand").click();
@@ -68,10 +69,14 @@ ok(/승진/.test(title(t)), "징계 받으면 승진 제한 → 승진 제한 �
 t = ask("시외출장");
 ok(/국내 출장 여비/.test(title(t)), "시외출장 → 국내 출장 여비");
 ok(/최대/.test(t.querySelector(".calc table").textContent), "여비 계산기 결과 표");
+const meals = t.querySelector(".calc input[id$='-meals']");
+meals.value = "3"; meals.dispatchEvent(new w.Event("input", { bubbles: true }));
+ok(/3끼 × 8,330원 = 25,010원/.test(t.querySelector(".calc table").textContent), "여비 계산기: 다른 예산으로 먹은 3끼 → 식비 25,010원");
 t = ask("지하철비용은 일비에 포함됨?");
 ok(/지하철/.test(title(t)), "지하철비용 일비 질문 → 지하철·버스 요금과 일비");
 // 평가단 지적 반영 확인
 ok(!/<link[^>]+href=["']https?:|<script[^>]+src=|@import|url\(\s*["']?https?:/i.test(html), "외부 주소(글꼴·스크립트)를 부르지 않음");
+ok((html.match(/@font-face\{font-family:"A2Z"/g) || []).length === 4, "에이투지체 4가지 굵기가 파일 안에 들어 있음");
 t = ask("연차몇일이야");
 ok(/연가\(연차\) 일수/.test(title(t)), "붙여 쓴 '연차몇일이야' → 연가 일수");
 t = ask("챗지피티 업무에 써도돼요?");
@@ -96,6 +101,28 @@ const dIn = t.querySelector(".calc input[type=date]");
 ok(dIn && dIn.value === "2023-03-02" && /질문의 날짜/.test(t.textContent), "질문 속 날짜를 계산기에 채움");
 ok(![...d.querySelectorAll("button")].some((b) => /도움이 됐어요/.test(b.textContent)), "기록 안 남는 '도움이 됐어요' 버튼 없음");
 
+// 모든 계산기: 칸마다 여러 값을 넣어도 'null' 같은 글자 없이 결과나 안내가 나오는지
+const BAD = /null|undefined|NaN|Invalid|Infinity|\[object/;
+const VALS = { number: ["", "0", "1", "-3", "2.7", "30", "400"], date: ["", "1950-01-01", "2000-02-29", "2026-10-22", "2045-12-31"] };
+let calcRuns = 0; const calcBad = [];
+for (const kind of Object.keys(w.CALCS)) {
+  const box = w.renderCalc(kind, []);
+  for (const f of w.CALCS[kind].fields) {
+    const el = box.querySelector("[id$='-" + f[0] + "']"), keep = f[1] === "check" ? el.checked : el.value;
+    const vals = f[1] === "check" ? [true, false] : f[1] === "select" ? f[4].map((o) => o[0]) : VALS[f[1]];
+    for (const v of vals) {
+      if (f[1] === "check") el.checked = v; else el.value = v;
+      el.dispatchEvent(new w.Event("change", { bubbles: true }));
+      calcRuns++;
+      const out = box.lastChild;
+      if (BAD.test(box.textContent) || !(out.querySelector("tr") || out.querySelector(".err"))) calcBad.push(kind + "." + f[0] + "=" + JSON.stringify(v));
+    }
+    if (f[1] === "check") el.checked = keep; else el.value = keep;
+    el.dispatchEvent(new w.Event("change", { bubbles: true }));
+  }
+}
+ok(calcBad.length === 0, `계산기 ${Object.keys(w.CALCS).length}종, ${calcRuns}가지 입력에 이상한 글자·빈 결과 없음` + (calcBad.length ? ": " + calcBad.slice(0, 5).join(", ") : ""));
+
 // 모든 카드를 열고, 모든 근거 버튼을 눌러 원문과 인용 표시를 확인
 const cards = w.DATA.cards;
 let cites = 0, marked = 0, missing = [];
@@ -103,6 +130,7 @@ for (const c of cards) {
   w.pick(c);
   const a = top();
   if (!a.querySelector(".a-title")) { missing.push(c.id + " 답변 없음"); continue; }
+  if (BAD.test(a.textContent)) missing.push(c.id + " 화면에 '" + a.textContent.match(BAD)[0] + "' 글자");
   a.querySelectorAll(".cite").forEach((b) => {
     cites++;
     b.click();

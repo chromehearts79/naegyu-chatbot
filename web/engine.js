@@ -582,6 +582,7 @@
 
   var CUT_SPOUSE_LOSS = parseDate("2026-09-18");
   var CUT_SPOUSE_PREBIRTH = parseDate("2026-09-18");
+  var SPOUSE_RULE_FROM = parseDate("2026-08-12");  // 지금 복무세칙(배우자 출산휴가 20일·120일) 시행일
   var CUT_INFERTILITY = parseDate("2026-11-27");
 
   var calc = {
@@ -589,16 +590,20 @@
     spouseBirth: function (o) {
       var due = parseDate(o.due), birth = parseDate(o.birth) || null;
       if (!due) return { error: "출산예정일을 입력하세요." };
-      var days = o.multiple ? 25 : 20, start = addDays(due, -50), notes = [];
+      var base = birth || due;
+      if (base < SPOUSE_RULE_FROM) return { error: "출산(예정)일이 지금 복무세칙 시행일(2026.8.12.)보다 앞섭니다. 그때 기준은 인사팀에 확인하세요." };
+      var days = o.multiple ? 25 : 20, start = addDays(due, -50), startWhy = " (출산예정일 50일 전)", notes = [];
       if (start < CUT_SPOUSE_PREBIRTH) {
         notes.push("출산 전 사용은 2026.9.18.부터 적용되므로, 그 전 날짜에는 쓸 수 없습니다.");
-        start = CUT_SPOUSE_PREBIRTH;
+        // 예정일이 적용일 전이면 출산 전에는 쓸 수 없어 출산일부터 쓴다
+        if (due > CUT_SPOUSE_PREBIRTH) { start = CUT_SPOUSE_PREBIRTH; startWhy = " (출산 전 사용 적용일)"; }
+        else { start = base; startWhy = " (출산일부터)"; }
       }
-      var base = birth || due, last = addDays(base, 120);
+      var last = addDays(base, 120);
       return {
         rows: [
           ["휴가일수", days + "일 (유급, 모두 사용해야 함)"],
-          ["쓸 수 있는 첫날", fmt(start) + " (출산예정일 50일 전)"],
+          ["쓸 수 있는 첫날", fmt(start) + startWhy],
           ["쓸 수 있는 마지막 무렵", fmt(last) + (birth ? " (출산일 + 120일)" : " (예정일에 출산한다고 가정, 출산일 + 120일)")],
           ["나눠 쓰기", "3회까지"],
           ["자동육아휴직 신청서", "배우자 출산휴가 시작일까지 제출 (별지 제15-3호)"]
@@ -624,6 +629,7 @@
         ["휴가 끝 무렵", fmt(addDays(start, total - 1))],
         ["출산휴가·자동육아휴직 신청서", fmt(addDays(start, -15)) + "까지 제출 (시작일 15일 전, 별지 제15-2호)"]
       ], notes = ["30일 이상 이어지는 휴가라 토요일·공휴일도 일수에 포함됩니다.", "실제 출산일에 따라 출산 후 " + after + "일을 채우도록 끝나는 날이 달라질 수 있습니다."];
+      if (start > due) notes.unshift("시작일이 출산예정일보다 늦습니다. 시작일을 다시 확인하세요.");
       if (start < earliest) notes.unshift("시작일이 너무 이릅니다. 출산 전에는 최대 " + before + "일까지 쓸 수 있습니다(분할 사유가 있으면 예외).");
       return { rows: rows, notes: notes };
     },
@@ -644,6 +650,7 @@
       }
       var w = +o.weeks;
       if (!(w > 0)) return { error: "임신 주수를 입력하세요." };
+      if (w > 45) return { error: "임신 주수를 확인하세요(45주 이하)." };
       var days = w <= 15 ? 10 : w <= 21 ? 30 : w <= 27 ? 60 : 90;
       return {
         rows: [
@@ -658,6 +665,7 @@
     childAge: function (o) {
       var b = parseDate(o.birth), today = parseDate(o.today) || new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()));
       if (!b) return { error: "자녀 생년월일을 입력하세요." };
+      if (b > today) return { error: "자녀 생년월일이 기준일보다 늦습니다." };
       function until(d) { return today <= d ? "가능 (" + fmt(d) + "까지)" : "기간 지남 (" + fmt(d) + "까지였음)"; }
       function later(a, c) { return a > c ? a : c; }
       var rows = [
@@ -709,6 +717,7 @@
     longService: function (o) {
       var hire = parseDate(o.hire), today = parseDate(o.today);
       if (!hire || !today) return { error: "입사일과 기준일을 입력하세요." };
+      if (today < hire) return { error: "기준일이 입사일보다 빠릅니다." };
       var y = yearsMonths(hire, today).y, d10 = addYears(hire, 10), d20 = addYears(hire, 20), rows = [["근속연수", y + "년"]];
       if (y < 10) rows.push(["장기재직휴가", "아직 대상 아님 → " + fmt(d10) + "부터 5일"]);
       else if (y < 20) {
@@ -722,18 +731,26 @@
     tripExpense: function (o) {
       var days = Math.max(0, Math.floor(+o.days || 0)), nights = Math.max(0, Math.floor(+o.nights || 0));
       if (!days) return { error: "출장 일수를 입력하세요." };
+      if (nights >= days) return { error: "숙박 일수는 출장 일수보다 적어야 합니다(" + days + "일 출장이면 " + (days - 1) + "박까지)." };
       var cap = { seoul: 100000, metro: 80000, other: 70000 }[o.region] || 70000;
+      // 회의비·업무추진비 등 다른 예산으로 먹은 끼니는 1식 8,330원씩 뺀다(제20조제2항, 1일 3식 기준)
+      var meals = Math.max(0, Math.floor(+o.meals || 0));
+      if (meals > days * 3) return { error: "다른 예산으로 먹은 끼니가 " + days + "일 × 3끼(" + days * 3 + "끼)보다 많습니다." };
       var perDay = o.car ? 12500 : 25000, meal = days === 1 && nights === 0 ? 12500 : 25000;
-      var dayPay = perDay * days, mealPay = meal * days, lodge = cap * nights, won = function (n) { return n.toLocaleString("ko-KR") + "원"; };
+      var dayPay = perDay * days, mealFull = meal * days, mealPay = Math.max(0, mealFull - 8330 * meals), lodge = cap * nights, won = function (n) { return n.toLocaleString("ko-KR") + "원"; };
+      var notes = [];
+      if (days > 15) notes.push("같은 곳에 15일 넘게 머무르면 일비가 10~30% 줄어듭니다(제22조). 계산기는 반영하지 않았습니다.");
+      if (meals && meal === 12500) notes.push("당일 출장(식비 절반)에서 끼니를 빼는 방법은 세칙에 따로 없어 1끼 8,330원씩 뺐습니다. 회계 담당에 확인하세요.");
       return {
         rows: [
           ["일비", won(perDay) + " × " + days + "일 = " + won(dayPay) + (o.car ? " (업무용 차량: 절반)" : "")],
-          ["식비", won(meal) + " × " + days + "일 = " + won(mealPay) + (meal === 12500 ? " (당일 출장: 절반)" : "")],
+          ["식비", won(meal) + " × " + days + "일 = " + won(mealFull) + (meal === 12500 ? " (당일 출장: 절반)" : "") +
+            (meals ? " − 다른 예산 " + meals + "끼 × 8,330원 = " + won(mealPay) : "")],
           ["숙박비", nights ? "실비, 상한 " + won(cap) + " × " + nights + "박 = 최대 " + won(lodge) : "숙박 없음"],
           ["합계(운임 제외)", "최대 " + won(dayPay + mealPay + lodge)],
           ["운임", "실비 (철도 일반실·고속열차 한도, 항공·선박 2등석)"]
         ],
-        notes: ["운임과 숙박비는 다녀온 다음 날부터 2주 안에 증거서류로 정산합니다.", "출장지가 '근무지 외'인지는 공무원 여비 규정 기준이라 인사·회계 담당에 확인하세요.", "조사업무 담당자의 제주·기획조사 출장 일비 가산은 반영하지 않았습니다."]
+        notes: notes.concat(["회의비·업무추진비 등 다른 예산으로 먹은 끼니는 1끼 8,330원씩 빼고 받습니다(1일 3끼 기준).", "운임과 숙박비는 다녀온 다음 날부터 2주 안에 증거서류로 정산합니다.", "출장지가 '근무지 외'인지는 공무원 여비 규정 기준이라 인사·회계 담당에 확인하세요.", "조사업무 담당자의 제주·기획조사 출장 일비 가산은 반영하지 않았습니다."])
       };
     },
     // 연간 복지포인트(기본 + 근속 + 가족 + 우대). 출산포인트는 따로.
@@ -753,11 +770,9 @@
     allowance: function (o) {
       var n = Math.max(0, Math.floor(+o.children || 0)), sum = o.spouse ? 40000 : 0, parts = [];
       if (o.spouse) parts.push(["배우자", "40,000원"]);
-      for (var i = 1; i <= n; i++) {
-        var a = i === 1 ? 20000 : i === 2 ? 40000 : 110000;
-        sum += a;
-        parts.push([i + "번째 자녀", a.toLocaleString("ko-KR") + "원"]);
-      }
+      if (n >= 1) { sum += 20000; parts.push(["첫째 자녀", "20,000원"]); }
+      if (n >= 2) { sum += 40000; parts.push(["둘째 자녀", "40,000원"]); }
+      if (n >= 3) { sum += 110000 * (n - 2); parts.push(["셋째부터 자녀 " + (n - 2) + "명", "110,000원 × " + (n - 2) + "명 = " + (110000 * (n - 2)).toLocaleString("ko-KR") + "원"]); }
       parts.push(["월 합계", sum.toLocaleString("ko-KR") + "원"]);
       return { rows: parts, notes: ["부모 등 다른 부양가족이 있으면 4인 한도 계산이 달라질 수 있습니다.", "부부가 모두 직원이면 한 명만 받습니다."] };
     }

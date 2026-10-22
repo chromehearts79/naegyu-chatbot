@@ -6,6 +6,7 @@
 검사(check_knowledge.py), 독립 검증(reports/blind_check.json), 검색 시험(test_engine.js) 결과를
 화면의 '검증 정보'에 넣는다.
 """
+import base64
 import datetime
 import json
 import re
@@ -20,6 +21,18 @@ from review_workbook import card_hash  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
+FONTS = ROOT / "web" / "fonts"
+
+
+
+def font_faces():
+    """web/fonts 의 에이투지체를 파일 안에 넣는다(폐쇄망·PC 글꼴과 상관없이 같은 모양으로 보이게)."""
+    css = ["/* 에이투지체: Copyright (c) 2026 PT&, 이주임. SIL Open Font License 1.1 (https://openfontlicense.org) */"]
+    for p in sorted(FONTS.glob("a2z-*.woff2")):
+        b64 = base64.b64encode(p.read_bytes()).decode()
+        css.append(f'@font-face{{font-family:"A2Z";font-weight:{p.stem.split("-")[1]};'
+                   f'src:url(data:font/woff2;base64,{b64}) format("woff2")}}')
+    return "\n".join(css)
 
 
 def main():
@@ -109,7 +122,9 @@ def main():
     }
     blob = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     page = (ROOT / "web" / "app.template").read_text()
-    page = page.replace("/*__ENGINE__*/", (ROOT / "web" / "engine.js").read_text()).replace("/*__DATA__*/", blob)
+    page = (page.replace("/*__FONTS__*/", font_faces())
+            .replace("/*__ENGINE__*/", (ROOT / "web" / "engine.js").read_text())
+            .replace("/*__DATA__*/", blob))
     dist.mkdir(exist_ok=True)
     (dist / "artifact.html").write_text(page)
     # 폐쇄망용: 외부 주소를 하나도 부르지 않도록 CSP로 막는다(글꼴·스크립트·통신 모두 파일 안의 것만)
