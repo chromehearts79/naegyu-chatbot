@@ -351,6 +351,7 @@
         "quote": "25,000 (1식 : 8,330)"
       }
     ],
+    "calc_link": "tripExpense",
     "related": [
       "r3-6-3-limits",
       "domestic-trip-expense"

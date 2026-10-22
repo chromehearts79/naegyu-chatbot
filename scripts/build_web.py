@@ -71,7 +71,9 @@ def main():
 
     # 개정 감지: 카드를 확인한 뒤 원문이 바뀐 조문을 인용한 카드에 표시를 붙인다
     snap = json.loads(check_changes.SNAPSHOT.read_text())
-    _, _, stale, _ = check_changes.compare({r["name"]: r for r in rules}, snap, cards)
+    changes, _, stale, _ = check_changes.compare({r["name"]: r for r in rules}, snap, cards)
+    # 계산기 숫자의 근거 조문이 바뀌었으면 그 계산기는 숫자를 고칠 때까지 계산하지 않는다
+    calc_stale = {k: [x["cite"] for x in v["cites"]] for k, v in check_changes.calc_stale(changes, {r["name"]: r for r in rules}).items()}
     for c in cards:
         if c["id"] in stale:
             c["stale"] = [{"cite": check_changes.unit_label(x["rule"], x["unit"]), "change": x["change"],
@@ -102,7 +104,7 @@ def main():
             "basis": snap["taken"].replace("-", ".") + ".",
             "built": datetime.date.today().isoformat(),
             "latestEffective": latest,
-            "stale": len(stale), "reviewed": reviewed,
+            "stale": len(stale), "reviewed": reviewed, "calcStale": calc_stale,
             "cards": len(cards), "questions": sum(len(c["questions"]) for c in cards),
             "facts": int(m[2]), "quotesOk": int(m[1]),
             "verify": {"total": len(blind), "match": sum(r["verdict"] == "일치" for r in blind),

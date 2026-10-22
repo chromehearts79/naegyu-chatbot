@@ -120,7 +120,8 @@ def convert():
     print(out)
     chk = run(sys.executable, "scripts/check_knowledge.py", check=False)
     errs = re.search(r"오류 (\d+)건", chk)
-    stale = json.loads((ROOT / "knowledge" / "stale_cards.json").read_text())["cards"]
+    stale_all = json.loads((ROOT / "knowledge" / "stale_cards.json").read_text())
+    stale, calcs = stale_all["cards"], stale_all.get("calcs", {})
     rules = json.loads((ROOT / "data" / "rules.json").read_text())["rules"]
     card_rules = set()
     for f in (ROOT / "knowledge").glob("*/[!_]*.json"):
@@ -135,10 +136,12 @@ def convert():
         "date": datetime.date.today().isoformat(), "files": todo, "gone": d["gone"],
         "stale_cards": len(stale), "stale_rules": sorted({x["rule"] for v in stale.values() for x in v}),
         "rules_without_cards": no_cards, "check_errors": int(errs[1]) if errs else None,
+        "stale_calcs": {k: v["title"] for k, v in calcs.items()},
     }
     (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1))
     lines = ["", "## 비교 결과",
              f"- 다시 확인할 카드: {len(stale)}장 (규정: {', '.join(summary['stale_rules']) or '없음'})",
+             f"- 다시 확인할 계산기: {len(calcs)}종 ({', '.join(v['title'] for v in calcs.values()) or '없음'})",
              f"- 카드가 아직 없는 규정(새 내규): {', '.join(no_cards) or '없음'}",
              f"- 카드 검사 오류(조문이 없어지거나 번호가 바뀐 인용): {summary['check_errors']}건",
              "- 자세한 내용: reports/change_report.md (바뀐 조문의 개정 전·후 글자)"]
@@ -152,6 +155,12 @@ def finish(accept):
         sys.exit("카드 검사 오류가 남아 있어 마무리하지 않습니다.")
     if accept:
         print(run(sys.executable, "scripts/check_changes.py", "--accept", *accept).strip())
+    # 새로 배포할 판 번호(옛 사본과 구별하려고 화면 위쪽에 '제N판'으로 보인다)
+    site_path = ROOT / "knowledge" / "site.json"
+    site = json.loads(site_path.read_text())
+    site.setdefault("release", {"no": 0, "where": ""})["no"] += 1
+    site_path.write_text(json.dumps(site, ensure_ascii=False, indent=2) + "\n")
+    print(f"판 번호: 제{site['release']['no']}판")
     print(run(sys.executable, "scripts/check_changes.py").strip())
     print(run(sys.executable, "scripts/check_approval_table.py").strip())
     print(run(sys.executable, "scripts/build_web.py").strip())

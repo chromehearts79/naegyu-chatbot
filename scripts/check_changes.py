@@ -6,6 +6,7 @@ knowledge/source_snapshot.json 에 남겨 두고, 규정 원본을 다시 변환
 
 사용:
   python3 scripts/check_changes.py                 # 비교 → reports/change_report.md, knowledge/stale_cards.json
+                                                   # (계산기 숫자 근거 조문이 바뀌면 '다시 확인할 계산기'도 알린다)
   python3 scripts/check_changes.py --accept 복무세칙  # 그 규정의 카드를 다시 확인했으면 지문을 지금 원문으로 갱신
   python3 scripts/check_changes.py --accept-all    # 전부 갱신(처음 만들 때)
   python3 scripts/check_changes.py --rules 다른.json  # 다른 규정 DB와 비교(시험용)
@@ -23,6 +24,7 @@ from check_knowledge import RE_ANNEX, RE_ART, RE_BUCHIK, RULES, ROOT, KNOWLEDGE,
 
 SNAPSHOT = KNOWLEDGE / "source_snapshot.json"
 STALE = KNOWLEDGE / "stale_cards.json"
+CALC_BASIS = KNOWLEDGE / "calc_basis.json"
 REPORT = ROOT / "reports" / "change_report.md"
 # 바뀐 조문을 글자 단위로 보여 주기 위한 원문 사본(규정 원문이라 data/ 처럼 저장소에는 넣지 않는다)
 TEXTS = ROOT / "data" / "snapshot_texts.json"
@@ -141,6 +143,26 @@ def compare(rules, snap, cards):
     return changes, eff, stale, related
 
 
+def calc_stale(changes, rules):
+    """계산기 숫자 근거(calc_basis.json) 조문이 바뀐 계산기 → {계산기: {title, cites: [{cite, change}]}}"""
+    basis = json.loads(CALC_BASIS.read_text())
+    basis.pop("_note", None)
+    out = {}
+    for kind, b in basis.items():
+        for x in b["basis"]:
+            key = unit_of_cite(x["cite"], rules)
+            ch = changes.get(key)
+            if ch not in ("changed", "removed"):
+                continue
+            para = para_of_cite(x["cite"])
+            pk = changes.get((key[0], para)) if para else None
+            # 항까지 적었는데 같은 조의 다른 항만 바뀌었으면 넘어간다(바뀐 항을 하나도 못 찾으면 안전하게 포함)
+            if para and pk is None and any(k[0] == key[0] and k[1].startswith(key[1] + "제") for k in changes):
+                continue
+            out.setdefault(kind, {"title": b["title"], "cites": []})["cites"].append({"cite": x["cite"], "change": pk or ch})
+    return out
+
+
 def unit_label(name, unit):
     if unit.startswith("별표:"):
         return f"{name} {unit[3:]}"
@@ -178,8 +200,9 @@ def main():
     # 시험용 다른 규정 DB와 비교할 때는 실제 결과 파일을 건드리지 않고 그 DB 옆에 보고서만 쓴다
     trial = Path(args.rules).resolve() != RULES.resolve()
     report = Path(args.rules).with_suffix(".change_report.md") if trial else REPORT
+    calcs = calc_stale(changes, rules)
     if not trial:
-        STALE.write_text(json.dumps({"taken": old["taken"], "cards": stale}, ensure_ascii=False, indent=1) + "\n")
+        STALE.write_text(json.dumps({"taken": old["taken"], "cards": stale, "calcs": calcs}, ensure_ascii=False, indent=1) + "\n")
 
     # 보고서
     cited = {}
@@ -195,6 +218,7 @@ def main():
     lines += [f"- 바뀌거나 없어진 조문·별표·부칙: {len(changed)}개",
               f"- 다시 확인해야 할 카드: **{len(stale)}장** (인용한 조·항이 바뀜)",
               f"- 참고할 카드: {len(related)}장 (같은 조의 다른 항만 바뀜)",
+              f"- 다시 확인할 계산기: **{len(calcs)}종** (계산기 숫자의 근거 조문이 바뀜)",
               f"- 새로 생긴 조문·별표(카드가 없을 수 있음): {len(added)}개",
               f"- 새 부칙(개정 이력): {len(new_buchik)}개", ""]
     if eff:
@@ -218,15 +242,21 @@ def main():
                 if diff:
                     lines += ["", "```diff"] + diff[:60] + ["```"]
             lines.append("")
+    if calcs:
+        lines += ["## 다시 확인할 계산기", "",
+                  "계산기 숫자의 근거 조문이 바뀌었다. 새 원문을 보고 web/engine.js 의 그 계산기 숫자와 knowledge/calc_basis.json 의 문구(has)를 고친다.",
+                  "확인 전에 화면을 다시 만들면 그 계산기는 '근거 조문 개정 · 계산 멈춤'으로 표시되고 계산하지 않는다.", ""]
+        lines += [f"- {v['title']} ({k}): " + ", ".join(f"{x['cite']}({'삭제' if x['change'] == 'removed' else '변경'})" for x in v["cites"]) for k, v in sorted(calcs.items())] + [""]
     if added:
         lines += ["## 새로 생긴 조문·별표", ""] + [f"- {unit_label(n, u)}" + (" (카드 있음)" if (n, u) in cited else " — 카드 없음, 필요하면 새 카드 작성") for n, u in added] + [""]
     lines += ["## 처리 순서", "",
               "1. 위 카드의 답·근거를 새 원문에 맞게 고친다(`python3 scripts/show_rule.py <규정명>`).",
               "2. `python3 scripts/check_knowledge.py` 오류 0건, `python3 scripts/blind_check.py <카드 id…>` 로 다시 검증.",
+              "   '다시 확인할 계산기'가 있으면 그 계산기 숫자(web/engine.js)와 근거표(knowledge/calc_basis.json)도 새 원문대로 고친다.",
               "3. 그 규정의 카드를 다 확인했으면 `python3 scripts/check_changes.py --accept <규정명>`.",
               "4. `python3 scripts/build_web.py` 로 다시 묶는다. 확인 전 카드는 화면에 '규정 개정 · 재검수 전'으로 표시된다.", ""]
     report.write_text("\n".join(lines))
-    print(f"바뀐 단위 {len(changed)}개, 다시 확인할 카드 {len(stale)}장, 새 조문 {len(added)}개 → {report}")
+    print(f"바뀐 단위 {len(changed)}개, 다시 확인할 카드 {len(stale)}장, 다시 확인할 계산기 {len(calcs)}종, 새 조문 {len(added)}개 → {report}")
 
 
 if __name__ == "__main__":

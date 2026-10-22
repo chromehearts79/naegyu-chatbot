@@ -5,6 +5,7 @@
 - 사실(value)에 나온 숫자가 인용 위치의 원문에 있는지
 - 답변 문단의 숫자가 카드가 인용한 조문들 안에 있는지
 - 관련 카드·주제 id, 중복 질문
+- 계산기 숫자 근거표(knowledge/calc_basis.json)의 문구가 그 조문 원문에 있는지
 
 결과는 reports/check_report.md 에 쓴다. 실패가 있으면 종료 코드 1.
 """
@@ -199,9 +200,32 @@ def main():
             if missing:
                 warn(c, f"답변 {i}문단의 숫자 {sorted(missing)} 가 인용 조문에 없음")
 
+    # 계산기 숫자 근거: 계산기가 쓰는 숫자의 출처 문구가 지금 원문에 그대로 있는지(개정되면 여기서 걸린다)
+    basis = json.loads((KNOWLEDGE / "calc_basis.json").read_text())
+    basis.pop("_note", None)
+    n_has = n_has_ok = 0
+    for c in cards:
+        if c.get("calc") and c["calc"] not in basis:
+            err(c, f"계산기 숫자 근거표(calc_basis.json)에 없는 계산기: {c['calc']}")
+        if c.get("calc_link") and c["calc_link"] not in basis:
+            err(c, f"계산기 숫자 근거표(calc_basis.json)에 없는 계산기: {c['calc_link']}")
+    for kind, b in basis.items():
+        for x in b["basis"]:
+            scope, _, e = rules.resolve(x["cite"])
+            if e:
+                errors.append(f"[계산기 {kind}] {x['cite']}: {e}")
+                continue
+            for has in x["has"]:
+                n_has += 1
+                if norm(has) in norm(scope):
+                    n_has_ok += 1
+                else:
+                    errors.append(f"[계산기 {kind}] {x['cite']} 원문에 \"{has}\" 가 없음 → 계산기 숫자(web/engine.js)를 새 원문대로 고치고 근거표도 고칠 것")
+
     lines.append("# 문답 카드 프로그램 검사 결과\n")
     lines.append(f"- 카드 {len(cards)}개, 예상 질문 {sum(len(c['questions']) for c in cards)}개, 사실 {n_facts}개")
     lines.append(f"- 인용 문구 일치: {n_quotes_ok}/{n_facts}")
+    lines.append(f"- 계산기 숫자 근거: 계산기 {len(basis)}종, 근거 문구 일치 {n_has_ok}/{n_has}")
     lines.append(f"- 오류 {len(errors)}건, 경고 {len(warns)}건\n")
     if errors:
         lines.append("## 오류\n" + "\n".join(f"- {e}" for e in errors) + "\n")

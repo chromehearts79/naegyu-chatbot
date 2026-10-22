@@ -127,7 +127,11 @@ details.box[open] summary { margin-bottom: 8px; }
 .calc form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
 .calc label { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
 .calc label.inline { display: flex; align-items: center; gap: 6px; }
-.calc input[type=date], .calc input[type=number] { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); min-width: 0; }
+.calc input[type=date], .calc input[type=number], .calc select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); min-width: 0; font: inherit; }
+.calc label.need > span::after { content: "확인 필요"; margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 1px 7px; }
+.calc label.need input, .calc label.need select { border-color: var(--warn); }
+.calc .need-msg { margin: 0; font-size: 13px; color: var(--warn); }
+.calc-link { margin: 2px 0; }
 .calc input[type=number] { width: 80px; }
 .calc table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .calc td { padding: 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -212,6 +216,8 @@ details.box[open] summary { margin-bottom: 8px; }
           <input id="q" name="q" type="text" placeholder="궁금한 것을 평소 말하듯 적어 보세요" aria-label="질문">
           <button class="btn" type="submit">묻기</button>
         </form>
+        <div class="label">이렇게 물어보세요</div>
+        <div class="chips examples" id="examples"></div>
         <div class="label">상황별로 보기</div>
         <div class="topic-groups" id="topics"></div>
       </section>
@@ -384,43 +390,74 @@ function citeBtn(cite, quote) { return h("button", { class: "cite", type: "butto
 
 /* ── 계산기 ───────────────────────────────── */
 var TODAY = (function () { var d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); })();
-function plus(days) { return E.iso(new Date(TODAY.getTime() + days * 86400000)); }
+// 칸: [이름, 종류, 이름표, 기본값, 고를 것, 선택 칸이면 "opt"].
+// 기본값이 없는 칸은 질문에서 읽지 못하면 비워 두고 '확인 필요'로 표시한다. 채우기 전에는 계산하지 않는다
+// (기본값으로 계산한 금액을 직원이 자기 금액으로 믿지 않게). optional: 다른 칸 값에 따라 비워도 되는 칸.
+var CHOOSE = ["", "선택"];
 var CALCS = {
-  spouseBirth: { title: "배우자 출산휴가 기간 계산", fields: [["due", "date", "출산예정일", plus(40)], ["birth", "date", "실제 출산일(알면)", ""], ["multiple", "check", "둘 이상 출산(쌍둥이 등)"]] },
-  maternity: { title: "출산전후휴가 기간 계산", fields: [["due", "date", "출산예정일", plus(60)], ["start", "date", "휴가 시작 희망일(선택)", ""], ["multiple", "check", "둘 이상 임신"]] },
-  loss: { title: "유산·사산휴가 계산", fields: [["who", "select", "누구", "self", [["self", "본인(여성직원)"], ["spouse", "배우자"]]], ["date", "date", "유산·사산한 날", plus(-3)], ["weeks", "number", "임신 주수(본인)", "12"]] },
-  childAge: { title: "자녀 나이로 쓸 수 있는 제도", fields: [["birth", "date", "자녀 생년월일", plus(-365 * 6 - 40)], ["today", "date", "기준일", E.iso(TODAY)], ["mother", "check", "여성직원(수유시간 포함)"]] },
-  familyCare: { title: "가족돌봄휴가 유급 일수", fields: [["children", "number", "대상 자녀 수", "2"], ["disabledOrSingle", "check", "장애인 자녀가 있거나 한부모"]] },
-  allowance: { title: "가족수당 계산(배우자·자녀)", fields: [["spouse", "check", "배우자 있음", true], ["children", "number", "20세 미만 자녀 수", "2"]] },
-  annualLeave: { title: "내 연가(연차) 일수", fields: [["hire", "date", "입사일", plus(-365 * 5 - 30)], ["today", "date", "기준일", E.iso(TODAY)]] },
-  longService: { title: "장기재직휴가 대상과 기한", fields: [["hire", "date", "입사일", plus(-365 * 12 - 60)], ["today", "date", "기준일", E.iso(TODAY)]] },
-  welfarePoints: { title: "연간 복지포인트 계산", fields: [["years", "number", "근속연수(전년도 말 기준)", "7"], ["spouse", "check", "배우자 있음", true], ["children", "number", "20세 미만 자녀 수", "2"], ["disabled", "check", "장애인 직원"], ["newHire", "check", "올해 신규채용"]] },
-  tripExpense: { title: "국내 출장 여비 계산(직원)", fields: [["days", "number", "출장 일수", "2"], ["nights", "number", "숙박 일수", "1"], ["region", "select", "숙박 지역", "metro", [["seoul", "서울특별시"], ["metro", "광역시·제주"], ["other", "그 밖의 지역"]]], ["meals", "number", "다른 예산(회의비 등)으로 먹은 끼니", "0"], ["car", "check", "업무용 차량 이용"]] }
+  spouseBirth: { title: "배우자 출산휴가 기간 계산", fields: [["due", "date", "출산예정일", ""], ["birth", "date", "실제 출산일(알면)", "", null, "opt"], ["multiple", "check", "둘 이상 출산(쌍둥이 등)"]] },
+  maternity: { title: "출산전후휴가 기간 계산", fields: [["due", "date", "출산예정일", ""], ["start", "date", "휴가 시작 희망일(선택)", "", null, "opt"], ["multiple", "check", "둘 이상 임신"]] },
+  loss: { title: "유산·사산휴가 계산", fields: [["who", "select", "누구", "", [CHOOSE, ["self", "본인(여성직원)"], ["spouse", "배우자"]]], ["date", "date", "유산·사산한 날", ""], ["weeks", "number", "임신 주수(본인)", ""]],
+    optional: { weeks: function (o) { return o.who !== "self"; } } },
+  childAge: { title: "자녀 나이로 쓸 수 있는 제도", fields: [["birth", "date", "자녀 생년월일", ""], ["today", "date", "기준일", E.iso(TODAY), null, "opt"], ["mother", "check", "여성직원(수유시간 포함)"]] },
+  familyCare: { title: "가족돌봄휴가 유급 일수", fields: [["children", "number", "대상 자녀 수", ""], ["disabledOrSingle", "check", "장애인 자녀가 있거나 한부모"]] },
+  allowance: { title: "가족수당 계산(배우자·자녀)", fields: [["spouse", "yesno", "배우자", ""], ["children", "number", "20세 미만 자녀 수", ""]] },
+  annualLeave: { title: "내 연가(연차) 일수", fields: [["hire", "date", "입사일", ""], ["today", "date", "기준일", E.iso(TODAY), null, "opt"]] },
+  longService: { title: "장기재직휴가 대상과 기한", fields: [["hire", "date", "입사일", ""], ["today", "date", "기준일", E.iso(TODAY), null, "opt"]] },
+  welfarePoints: { title: "연간 복지포인트 계산", fields: [["years", "number", "근속연수(전년도 말 기준)", ""], ["spouse", "yesno", "배우자", ""], ["children", "number", "20세 미만 자녀 수", ""], ["disabled", "check", "장애인 직원"], ["newHire", "check", "올해 신규채용"]] },
+  tripExpense: { title: "국내 출장 여비 계산(직원)", fields: [["days", "number", "출장 일수", ""], ["nights", "number", "숙박 일수", ""], ["region", "select", "숙박 지역", "", [CHOOSE, ["seoul", "서울특별시"], ["metro", "광역시·제주"], ["other", "그 밖의 지역"]]], ["meals", "number", "다른 예산(회의비 등)으로 먹은 끼니", "0", null, "opt"], ["car", "check", "업무용 차량 이용"]],
+    optional: { region: function (o) { return o.nights === "0"; } } }
 };
 var calcSeq = 0;
 // 날짜 칸마다 그 칸의 날짜임을 알려 주는 말. 질문 속 날짜 앞뒤에 이 말이 있을 때만 채운다
 // ("12월 1일부터 출산휴가"의 12월 1일을 출산예정일 칸에 넣는 실수를 막으려고).
 var DATE_CUE = { due: /예정/, birth: /태어|낳|출생|생년|생일|출산했|출산한/, start: /부터|시작/, date: /유산|사산/, hire: /입사|입행|채용|들어(왔|온)/, today: /기준|현재|오늘/ };
-// dates: 질문에서 뽑은 날짜와 앞뒤 말({iso, ctx})
-function renderCalc(kind, dates) {
+// question: 질문(날짜·일수·지역·인원을 읽어 칸을 채운다)
+function renderCalc(kind, question) {
   var spec = CALCS[kind]; if (!spec) return null;
-  var box = h("div", { class: "calc" }), form = h("form"), out = h("div"), ids = {}, filled = [];
-  dates = (dates || []).slice();
+  var box = h("div", { class: "calc" }), head = h("h4", { text: spec.title + " (참고용)" });
+  // 계산기 숫자의 근거 조문이 개정됐거나(숫자를 다시 확인하기 전) 운영부서가 꺼 둔 계산기는 계산하지 않는다
+  var stale = (DATA.meta.calcStale || {})[kind], off = ((DATA.meta.site || {}).calcOff || []).indexOf(kind) >= 0;
+  if (stale || off) {
+    box.append(head, h("p", { class: "caution", text: (stale ? "근거 조문(" + stale.join(", ") + ")이 개정돼 계산기 숫자를 다시 확인하는 중이라 계산하지 않습니다."
+      : "이 계산기는 점검 중이라 계산하지 않습니다.") + " 위 답의 근거 조문 원문을 보고 담당부서에 확인하세요." }));
+    return box;
+  }
+  var form = h("form"), out = h("div", { class: "calc-out" }), ids = {}, filled = [];
+  var dates = E.datesIn(question), vals = E.valuesIn(question);
   spec.fields.forEach(function (f) {
-    var id = "c" + (++calcSeq) + "-" + f[0], input;
+    var id = "c" + (++calcSeq) + "-" + f[0], input, val = f[3] || "", v = vals[f[0]];
     ids[f[0]] = id;
     if (f[1] === "date" && DATE_CUE[f[0]]) {
       var hit = dates.filter(function (x) { return DATE_CUE[f[0]].test(x.ctx); })[0];
-      if (hit) { f = f.slice(); f[3] = hit.iso; filled.push(f[2] + " " + hit.iso); dates.splice(dates.indexOf(hit), 1); }
+      if (hit) { val = hit.iso; filled.push(f[2] + " " + hit.iso); dates.splice(dates.indexOf(hit), 1); }
+    } else if (v !== undefined && v !== null) {
+      val = v;
+      var shown = f[1] === "select" ? (f[4].filter(function (o) { return o[0] === v; })[0] || [])[1] : f[1] === "yesno" ? (v === "y" ? "있음" : "없음") : f[1] === "check" ? "예" : v;
+      filled.push(f[2] + " " + shown);
     }
-    if (f[1] === "check") { input = h("input", { type: "checkbox", id: id }); input.checked = !!f[3]; form.append(h("label", { class: "inline", for: id }, [input, f[2]])); return; }
-    if (f[1] === "select") { input = h("select", { id: id }, f[4].map(function (o) { return h("option", { value: o[0], text: o[1] }); })); input.value = f[3]; }
-    else { input = h("input", { type: f[1], id: id, value: f[3] || "", min: f[1] === "number" ? "0" : null }); }
-    form.append(h("label", { for: id }, [f[2], input]));
+    if (f[1] === "check") { input = h("input", { type: "checkbox", id: id }); input.checked = !!val; form.append(h("label", { class: "inline", for: id }, [input, f[2]])); return; }
+    if (f[1] === "select" || f[1] === "yesno") {
+      input = h("select", { id: id }, (f[1] === "yesno" ? [CHOOSE, ["y", "있음"], ["n", "없음"]] : f[4]).map(function (o) { return h("option", { value: o[0], text: o[1] }); }));
+      input.value = val;
+    } else { input = h("input", { type: f[1], id: id, value: String(val), min: f[1] === "number" ? "0" : null }); }
+    form.append(h("label", { for: id }, [h("span", { text: f[2] }), input]));
   });
   function run() {
-    var o = {};
-    spec.fields.forEach(function (f) { var el = form.querySelector("#" + ids[f[0]]); o[f[0]] = f[1] === "check" ? el.checked : el.value; });
+    var o = {}, miss = [];
+    spec.fields.forEach(function (f) {
+      var el = form.querySelector("#" + ids[f[0]]);
+      o[f[0]] = f[1] === "check" ? el.checked : f[1] === "yesno" ? el.value === "y" : el.value;
+    });
+    // 비어 있으면 안 되는 칸에 '확인 필요' 표시
+    spec.fields.forEach(function (f) {
+      if (f[1] === "check") return;
+      var el = form.querySelector("#" + ids[f[0]]);
+      var need = el.value === "" && f[5] !== "opt" && !(spec.optional && spec.optional[f[0]] && spec.optional[f[0]](o));
+      el.parentNode.classList.toggle("need", need);
+      if (need) miss.push(f[2]);
+    });
+    if (miss.length) { out.replaceChildren(h("p", { class: "need-msg", text: "‘확인 필요’ 칸(" + miss.join(", ") + ")을 채우면 계산합니다." })); return; }
     var r = E.calc[kind](o);
     if (r.error) { out.replaceChildren(h("p", { class: "err", text: r.error })); return; }
     out.replaceChildren(
@@ -430,12 +467,20 @@ function renderCalc(kind, dates) {
   }
   form.addEventListener("input", run); form.addEventListener("change", run);
   form.addEventListener("submit", function (e) { e.preventDefault(); run(); });
-  // append 에 null 을 넘기면 글자 'null'이 찍히므로, 날짜를 채운 경우에만 안내 문단을 넣는다
-  box.append(h("h4", { text: spec.title + " (참고용)" }));
-  if (filled.length) box.append(h("p", { class: "soft", text: "질문의 날짜를 넣어 계산했습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }));
+  // append 에 null 을 넘기면 글자 'null'이 찍히므로, 질문에서 읽어 채운 칸이 있을 때만 안내 문단을 넣는다
+  box.append(head);
+  if (filled.length) box.append(h("p", { class: "soft", text: "질문에서 읽어 넣었습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }));
   box.append(form, out);
   run();
   return box;
+}
+// 계산기가 없는 답에 관련 계산기를 여는 버튼(누르면 그 자리에 계산기가 열린다)
+function calcButton(kind, question) {
+  var wrap = h("div", { class: "calc-link" });
+  wrap.append(h("button", { class: "btn ghost", type: "button", text: "계산기 열기 · " + CALCS[kind].title, onclick: function () {
+    wrap.replaceChildren(renderCalc(kind, question));
+  } }));
+  return wrap;
 }
 
 /* ── 답변 그리기 ─────────────────────────────── */
@@ -472,7 +517,9 @@ function hitButton(question, x) {
 }
 function reportBox(question, card) {
   var wrap = h("div", { class: "report", hidden: true }), id = "r" + (++calcSeq);
-  var text = "[내규챗봇 시범본 의견]\n질문: " + (question || "-") + "\n답변: " + (card ? card.title + " (" + card.id + ")" : "준비된 답 없음") + "\n규정 기준일: " + DATA.meta.basis + "\n의견: ";
+  var rel = (DATA.meta.site || {}).release || {};
+  var text = "[내규챗봇 시범본 의견]\n질문: " + (question || "-") + "\n답변: " + (card ? card.title + " (" + card.id + ")" : "준비된 답 없음") +
+    "\n판: " + (rel.no ? "제" + rel.no + "판, " : "") + DATA.meta.built + " 만듦 · 규정 기준일: " + DATA.meta.basis + "\n의견: ";
   var ta = h("textarea", { id: id, "aria-label": "보낼 의견" }); ta.value = text;
   var msg = h("span", { class: "soft" });
   // 오류 신고 창구(knowledge/site.json). 운영부서가 정해지기 전에는 정해지지 않았다고 그대로 알린다.
@@ -522,7 +569,10 @@ function renderAnswer(c, opts) {
   a.append(h("div", { class: "facts-box" }, [h("table", { class: "facts" }, [h("caption", { class: "label", style: "text-align:left;padding:8px 10px 0", text: "핵심 정리와 근거" }), h("tbody", null, c.facts.map(function (f) {
     return h("tr", null, [h("th", { scope: "row", text: f.label }), h("td", null, [h("div", { text: f.value }), citeBtn(f.cite, f.quote)])]);
   }))])]));
-  if (c.calc) { var cb = renderCalc(c.calc, E.datesIn(opts.question)); if (cb) a.append(cb); }
+  if (c.calc) { var cb = renderCalc(c.calc, opts.question); if (cb) a.append(cb); }
+  // 계산기가 없는 답이라도 관련 계산기가 있으면(카드에 적어 둔 calc_link, 또는 금액·기간을 묻는 질문) 여는 버튼을 단다
+  var link = c.calc ? null : c.calc_link || E.calcFor(opts.question);
+  if (link && CALCS[link]) a.append(calcButton(link, opts.question));
   (c.notes || []).forEach(function (n) { a.append(h("p", { class: "note", text: n })); });
   if (c.law_refs && c.law_refs.length) {
     var laws = c.law_refs.map(function (l) { return l.law + " " + l.article; }).filter(function (x, i, arr) { return arr.indexOf(x) === i; });
@@ -570,6 +620,8 @@ function ask(question) {
       h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: dec.vague ? "조금 더 알려주세요" : "어떤 내용을 찾으세요?" })]),
       h("p", { text: dec.vague ? "질문이 넓어서 여러 답이 해당됩니다. 상황에 맞는 것을 고르세요." : lead ? "질문과 비슷한 답이 여러 개 있습니다. 1번 답을 아래에 펼쳤습니다. 상황이 다르면 다른 후보를 고르세요." : "딱 맞는 답을 찾지 못했습니다. 비슷한 후보 중에 고르시거나, 아래 관련 조문을 보세요." }),
       dec.missing && dec.missing.length ? missingNote(dec.missing) : (!dec.vague && !lead ? h("p", { class: "caution", text: "내규에 직접 정한 내용이 없을 수도 있습니다. 후보와 조문에서 찾지 못하면 담당부서에 확인하세요." }) : null),
+      // "가족수당 얼마"처럼 넓지만 계산을 원하는 질문이면 후보를 고르기 전에 계산기부터 열 수 있게
+      !lead && E.calcFor(question) ? calcButton(E.calcFor(question), question) : null,
       h("div", { class: "cands" }, dec.ids.map(function (id) { return cardButton(id, pick); })),
       lead || relatedHits(question)
     ].filter(Boolean));
@@ -601,14 +653,18 @@ function ask(question) {
 }
 
 /* ── 처음 화면 ─────────────────────────────── */
-$("#basis").textContent = "답변 확인 기준 " + DATA.meta.basis + " · 규정 " + DATA.rules.length + "개 (최근 개정 시행 " + DATA.meta.latestEffective + ")";
+// 판 번호와 만든 날: 게시판·공유폴더에서 받은 옛 사본과 구별하려고 맨 위에 보인다(knowledge/site.json 의 release)
+var REL = (DATA.meta.site || {}).release || {};
+$("#basis").textContent = (REL.no ? "제" + REL.no + "판 · " : "") + DATA.meta.built.replace(/-/g, ".") + ". 만듦 · 답변 확인 기준 " + DATA.meta.basis +
+  " · 규정 " + DATA.rules.length + "개 (최근 개정 시행 " + DATA.meta.latestEffective + ")";
 (function () {
   // 오래된 사본이 돌아다닐 수 있어, 만든 지 90일이 넘으면 위에 알린다
   var days = Math.floor((Date.now() - new Date(DATA.meta.built + "T00:00:00").getTime()) / 864e5);
   var maxAge = (DATA.meta.site || {}).maxAgeDays || 90;
+  var where = REL.where ? "최신본은 " + esc(REL.where) + "에서 받으세요. " : "";
   var old = days > maxAge ? "<b>이 화면은 만든 지 " + days + "일이 지났습니다.</b> 그 사이 규정이 바뀌었을 수 있으니 최신판인지 확인하세요. " : "";
   var stale = DATA.meta.stale ? "규정 개정 뒤 다시 확인하지 못한 답이 " + DATA.meta.stale + "개 있습니다(답에 표시). " : "";
-  $("#notice").innerHTML = old + stale + "<b>AI가 작성한 답변</b>입니다. 인용 문구는 프로그램으로 원문과 대조했고 다른 AI로 다시 검증했지만, <b>담당부서 검수 전</b>입니다. 중요한 결정 전에는 근거 조문 원문과 담당부서에 확인하세요.";
+  $("#notice").innerHTML = old + where + stale + "<b>AI가 작성한 답변</b>입니다. 인용 문구는 프로그램으로 원문과 대조했고 다른 AI로 다시 검증했지만, <b>담당부서 검수 전</b>입니다. 중요한 결정 전에는 근거 조문 원문과 담당부서에 확인하세요.";
 })();
 $("#domains-label").textContent = "시범본 · " + DATA.domains.map(function (d) { return d.name; }).join(" · ");
 DATA.domains.forEach(function (dm) {
@@ -626,6 +682,11 @@ DATA.domains.forEach(function (dm) {
     } }));
   });
   $("#topics").append(row);
+});
+// 예시 질문: 출장비·연가·복지포인트·가족수당을 한 개씩(한 분야에 치우치지 않게). 화면 점검이 모두 맞는 답에 닿는지 확인한다
+var EXAMPLES = (DATA.meta.site || {}).examples || [];  // knowledge/site.json 에서 바꾼다
+EXAMPLES.forEach(function (s) {
+  $("#examples").append(h("button", { class: "chip", type: "button", text: s, onclick: function () { $("#q").value = s; ask(s); } }));
 });
 $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask($("#q").value); $("#q").select(); });
 

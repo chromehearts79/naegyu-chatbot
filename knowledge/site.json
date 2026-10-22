@@ -1,10 +1,21 @@
 {
-  "_note": "운영 설정. 운영부서와 오류 신고 창구가 정해지면 채우고 build_web.py 로 다시 묶는다.",
+  "_note": "운영 설정. 운영부서와 오류 신고 창구가 정해지면 채우고 build_web.py 로 다시 묶는다. release.no 는 배포할 판 번호(update_rules.py finish 가 1씩 올린다), release.where 는 직원이 최신본을 받는 곳. calcOff 에 계산기 이름(예: \"tripExpense\")을 넣으면 그 계산기는 '점검 중'으로 멈춘다(틀린 금액이 신고되면 바로 끌 때). examples 는 첫 화면 '이렇게 물어보세요' 질문(여러 분야에서, 맞는 답에 닿는지 화면 점검으로 확인한 것만).",
+  "release": {
+    "no": 1,
+    "where": ""
+  },
   "feedback": {
     "dept": "",
     "email": "",
     "channel": "",
     "handling": "접수한 의견은 담당부서가 확인해 다음 판에 반영합니다."
   },
-  "maxAgeDays": 90
+  "maxAgeDays": 90,
+  "calcOff": [],
+  "examples": [
+    "부산 당일 출장 가면 여비 얼마예요?",
+    "입사 3년 차인데 연차 며칠이에요?",
+    "근속 7년이면 복지포인트 몇 점이에요?",
+    "아이 둘이면 가족수당 얼마 나와요?"
+  ]
 }

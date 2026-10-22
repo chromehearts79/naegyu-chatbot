@@ -95,6 +95,7 @@
         "quote": "불가피한 사유로 카드를 사용할 경우에는 원장의 결재를 득한 후 사용할 수 있다"
       }
     ],
+    "calc_link": "tripExpense",
     "related": [
       "business-trip",
       "leave-approver",

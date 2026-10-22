@@ -737,17 +737,20 @@
       var meals = Math.max(0, Math.floor(+o.meals || 0));
       if (meals > days * 3) return { error: "다른 예산으로 먹은 끼니가 " + days + "일 × 3끼(" + days * 3 + "끼)보다 많습니다." };
       var perDay = o.car ? 12500 : 25000, meal = days === 1 && nights === 0 ? 12500 : 25000;
-      var dayPay = perDay * days, mealFull = meal * days, mealPay = Math.max(0, mealFull - 8330 * meals), lodge = cap * nights, won = function (n) { return n.toLocaleString("ko-KR") + "원"; };
+      // 당일 출장은 식비가 이미 절반이라, 거기서 끼니를 빼는 방법이 세칙에 없다 → 계산하지 않고 회계 담당 확인 안내만
+      var sameDayCut = meals && meal === 12500;
+      var dayPay = perDay * days, mealFull = meal * days, mealPay = sameDayCut ? mealFull : Math.max(0, mealFull - 8330 * meals), lodge = cap * nights, won = function (n) { return n.toLocaleString("ko-KR") + "원"; };
       var notes = [];
       if (days > 15) notes.push("같은 곳에 15일 넘게 머무르면 일비가 10~30% 줄어듭니다(제22조). 계산기는 반영하지 않았습니다.");
-      if (meals && meal === 12500) notes.push("당일 출장(식비 절반)에서 끼니를 빼는 방법은 세칙에 따로 없어 1끼 8,330원씩 뺐습니다. 회계 담당에 확인하세요.");
+      if (sameDayCut) notes.push("당일 출장(식비 절반)에서 다른 예산으로 먹은 끼니를 얼마나 빼는지는 세칙에 정한 방법이 없어 계산하지 않았습니다. 회계 담당에 확인하세요.");
+      if (meals && !sameDayCut && meals % 3 === 0) notes.push("1끼 8,330원 × 3끼 = 24,990원이라, 하루 세 끼를 모두 빼도 하루 10원이 남습니다(세칙 금액 그대로 계산).");
       return {
         rows: [
           ["일비", won(perDay) + " × " + days + "일 = " + won(dayPay) + (o.car ? " (업무용 차량: 절반)" : "")],
           ["식비", won(meal) + " × " + days + "일 = " + won(mealFull) + (meal === 12500 ? " (당일 출장: 절반)" : "") +
-            (meals ? " − 다른 예산 " + meals + "끼 × 8,330원 = " + won(mealPay) : "")],
+            (sameDayCut ? " · 다른 예산 " + meals + "끼는 빼는 방법이 정해져 있지 않음(회계 담당 확인)" : meals ? " − 다른 예산 " + meals + "끼 × 8,330원 = " + won(mealPay) : "")],
           ["숙박비", nights ? "실비, 상한 " + won(cap) + " × " + nights + "박 = 최대 " + won(lodge) : "숙박 없음"],
-          ["합계(운임 제외)", "최대 " + won(dayPay + mealPay + lodge)],
+          ["합계(운임 제외)", "최대 " + won(dayPay + mealPay + lodge) + (sameDayCut ? " (끼니 공제 전, 회계 담당 확인)" : "")],
           ["운임", "실비 (철도 일반실·고속열차 한도, 항공·선박 2등석)"]
         ],
         notes: notes.concat(["회의비·업무추진비 등 다른 예산으로 먹은 끼니는 1끼 8,330원씩 빼고 받습니다(1일 3끼 기준).", "운임과 숙박비는 다녀온 다음 날부터 2주 안에 증거서류로 정산합니다.", "출장지가 '근무지 외'인지는 공무원 여비 규정 기준이라 인사·회계 담당에 확인하세요.", "조사업무 담당자의 제주·기획조사 출장 일비 가산은 반영하지 않았습니다."])
@@ -790,6 +793,70 @@
     }
     return out;
   }
+  // 질문 속 일수·지역·인원 등(계산기 칸 채우기용). 분명히 읽히는 것만 돌려주고, 못 읽은 칸은 계산기가 비워 둔다.
+  var KNUM = { "하나": 1, "한": 1, "둘": 2, "두": 2, "셋": 3, "세": 3, "넷": 4, "네": 4, "다섯": 5, "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9, "열": 10 };
+  var NUMW = "(\\d+|하나|한|둘|두|셋|세|넷|네|다섯|여섯|일곱|여덟|아홉|열)";
+  var ORDINAL = { "첫": 1, "둘": 2, "셋": 3, "넷": 4, "다섯": 5 };
+  var OTHER_BUDGET = /회의비|업무추진비|회사\s*(돈|카드|비용|에서)|법인\s*카드|다른\s*예산|제공|대접|사\s*줬|사\s*주/;
+  function num(w) { return /^\d+$/.test(w) ? +w : KNUM[w]; }
+  function valuesIn(text) {
+    var t = String(text || ""), v = {}, m;
+    // 출장 일수·숙박 일수: "1박2일", "2박 3일", "당일", "3일 출장"
+    if ((m = t.match(new RegExp(NUMW + "\\s*박\\s*" + NUMW + "\\s*일")))) { v.nights = num(m[1]); v.days = num(m[2]); }
+    else if (/당일|하루\s*(출장|만|짜리)|숙박\s*(없|안\s*하)/.test(t)) { v.days = 1; v.nights = 0; }
+    else if ((m = t.match(new RegExp(NUMW + "\\s*일\\s*(간|동안)?\\s*출장")))) v.days = num(m[1]);
+    // 숙박 지역: 서울, 광역시·제주만 넣는다(경기 광주 제외). 그 밖의 지명은 구분이 애매해 비워 둔다
+    if (/서울/.test(t)) v.region = "seoul";
+    else if (/부산|대구|인천|광주|대전|울산|제주/.test(t) && !/경기\s*광주/.test(t)) v.region = "metro";
+    // 회의비 등 다른 예산으로 먹은 끼니: 그런 말이 있을 때만("2끼", "점심·저녁")
+    if (OTHER_BUDGET.test(t)) {
+      if ((m = t.match(new RegExp(NUMW + "\\s*끼")))) v.meals = num(m[1]);
+      else {
+        var k = (t.match(/아침|점심|저녁/g) || []).filter(function (x, i, a) { return a.indexOf(x) === i; }).length;
+        if (k) v.meals = k;
+      }
+    }
+    // 자녀 수: "아이 둘", "자녀 2명", "애가 셋", "두 아이", "셋째". 나이("아이 7살")는 자녀 수가 아니다
+    var re = new RegExp("(자녀|아이|애|아들|딸)\\s*(가|는|이|도)?\\s*" + NUMW + "\\s*(명)?(\\s*\\S)?");
+    if ((m = t.match(re)) && !/[살세개학주년]/.test((m[5] || "").trim().charAt(0) || "")) v.children = num(m[3]);
+    else if ((m = t.match(new RegExp(NUMW + "\\s*(명의\\s*)?(자녀|아이|애)")))) v.children = num(m[1]);
+    else if ((m = t.match(/(첫|둘|셋|넷|다섯)째/))) v.children = ORDINAL[m[1]];
+    // 근속연수: "근속 7년", "7년 차", "입사 7년"
+    if ((m = t.match(/근속\s*(\d+)\s*년|(\d+)\s*년\s*(차|째)|입사\s*(\d+)\s*년/))) v.years = +(m[1] || m[2] || m[4]);
+    if (/임신|유산|사산/.test(t) && (m = t.match(/(\d+)\s*주/))) v.weeks = +m[1];
+    // 배우자 있음·없음(가족수당·복지포인트)
+    if (/미혼|싱글|배우자\s*(가\s*)?없|이혼|사별/.test(t)) v.spouse = "n";
+    else if (/배우자|아내|와이프|남편|부인|집사람|기혼|결혼했/.test(t)) v.spouse = "y";
+    if (/쌍둥이|다태|둘\s*이상\s*(임신|출산)/.test(t)) v.multiple = true;
+    if (/업무용\s*차|관용\s*차|공용\s*차|회사\s*차/.test(t)) v.car = true;
+    if (/유산|사산/.test(t)) {
+      if (/아내|와이프|배우자|부인|집사람/.test(t)) v.who = "spouse";
+      else if (/제가|본인|내가/.test(t)) v.who = "self";
+    }
+    return v;
+  }
+  // 질문이 계산을 원하는지(주제어 + 금액·기간을 묻는 말). 계산기 없는 답이 나와도 '계산기 열기'를 붙이는 데 쓴다.
+  // 여비·수당·포인트는 낱말 자체가 금액이라 묻는 말이 없어도 계산기를 붙인다(세 번째 칸 true)
+  var CALC_ASK = /얼마|며칠|몇\s*일|몇\s*점|몇\s*포인트|계산|금액|기간|언제|깎|빼|나와|나오|받(아|나|을|는|으)/;
+  var CALC_TOPIC = [
+    ["tripExpense", /출장\s*(비|여비)|출장.{0,8}(여비|일비|식비|숙박|얼마)|여비|일비|숙박비/, true],
+    ["allowance", /가족\s*수당/, true],
+    ["welfarePoints", /복지\s*포인트|가족\s*포인트|근속\s*포인트/, true],
+    ["longService", /장기\s*재직/],
+    ["familyCare", /가족\s*돌봄\s*휴가/],
+    ["annualLeave", /연가|연차/],
+    ["spouseBirth", /배우자\s*출산|(아내|와이프|부인|집사람).{0,8}출산/],
+    ["maternity", /출산\s*(전후\s*)?휴가/],
+    ["loss", /유산|사산/]
+  ];
+  function calcFor(text) {
+    var t = String(text || "");
+    // "출장 가서 점심을 회사 돈으로 먹었어요"처럼 묻는 말이 없어도 끼니 공제를 말하면 출장 여비 계산기
+    if (/출장/.test(t) && OTHER_BUDGET.test(t) && /아침|점심|저녁|식사|밥|끼/.test(t)) return "tripExpense";
+    var ask = CALC_ASK.test(t);
+    for (var i = 0; i < CALC_TOPIC.length; i++) if ((ask || CALC_TOPIC[i][2]) && CALC_TOPIC[i][1].test(t)) return CALC_TOPIC[i][0];
+    return null;
+  }
   // 이어 묻기("그럼 자가용으로 가면?")인지: 앞 질문의 주제를 이어 붙여 다시 찾는다
   var FOLLOW = /^(그럼|그러면|그런데|근데|그\s?경우|그때|그건|그거|이\s?경우|만약에?|혹시\s?그)/;
   function isFollowUp(text) {
@@ -799,7 +866,7 @@
     return FOLLOW.test(t) || shortTail;
   }
 
-  var api = { datesIn: datesIn, isFollowUp: isFollowUp, ruleOfCard: ruleOfCard, normalize: normalize, content: content, expand: expand, CardIndex: CardIndex, decide: decide, ArticleIndex: ArticleIndex, snippet: snippet, calc: calc, thresholds: T, parseDate: parseDate, iso: iso };
+  var api = { datesIn: datesIn, valuesIn: valuesIn, calcFor: calcFor, isFollowUp: isFollowUp, ruleOfCard: ruleOfCard, normalize: normalize, content: content, expand: expand, CardIndex: CardIndex, decide: decide, ArticleIndex: ArticleIndex, snippet: snippet, calc: calc, thresholds: T, parseDate: parseDate, iso: iso };
   root.NaegyuEngine = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

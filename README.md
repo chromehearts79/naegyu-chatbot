@@ -41,9 +41,11 @@ python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/
    - **다시 확인할 카드**: 인용한 조(항까지 적었으면 그 항)가 바뀌었거나 없어진 카드. 바뀐 글자를 diff 로 보여 준다.
    - **참고 카드**: 같은 조의 다른 항만 바뀐 카드. **새 조문**: 카드가 없을 수 있는 신설 조문.
    - 인용 문구가 그대로 남는 개정(예: 같은 항에 "다만, 수습 직원은 10일" 추가)도 잡는다. `check_knowledge.py` 만으로는 못 잡는다.
+   - **다시 확인할 계산기**: 계산기 숫자의 근거 조문(`knowledge/calc_basis.json`)이 바뀐 계산기. 숫자는 `web/engine.js` 안에 있어 카드만 고쳐서는 바뀌지 않는다.
 3. 다시 확인할 카드를 새 원문에 맞게 고치고 `check_knowledge.py`(오류 0건), `blind_check.py <카드 id…>` 로 검증한다. 필요하면 새 조문 카드를 만든다.
+   다시 확인할 계산기가 있으면 `web/engine.js` 의 그 계산기 숫자와 `knowledge/calc_basis.json` 의 근거 문구(has)를 새 원문대로 고친다. 근거 문구가 원문에서 사라지면 `check_knowledge.py` 가 오류로 알린다.
 4. 그 규정의 카드를 다 확인했으면 `python3 scripts/check_changes.py --accept <규정명>` 으로 지문을 갱신한다.
-5. `python3 scripts/build_web.py` 로 묶는다. 아직 확인 못 한 카드는 화면에 **"규정 개정 · 재검수 전"**과 바뀐 조문이 표시되고, 위 안내 줄에 그 개수가 나온다. 화면을 만든 지 90일이 지나면 "최신판인지 확인하세요" 안내가 뜬다.
+5. `python3 scripts/build_web.py` 로 묶는다. 아직 확인 못 한 카드는 화면에 **"규정 개정 · 재검수 전"**과 바뀐 조문이 표시되고, 위 안내 줄에 그 개수가 나온다. 근거 조문이 바뀐 계산기는 숫자를 고칠 때까지 계산하지 않는다. 화면을 만든 지 90일이 지나면 "최신판인지 확인하세요" 안내가 뜬다.
 
 미리 보기: `python3 scripts/check_changes.py --rules <개정본 rules.json>`, `python3 scripts/build_web.py --rules <개정본> --out <폴더>` 는 실제 결과 파일을 건드리지 않는다.
 
@@ -65,4 +67,15 @@ python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/
 
 ## 운영 설정
 
-`knowledge/site.json`: 오류 신고를 받을 운영부서(dept)·메일(email)·창구(channel), 오래된 판 안내 기준일 수(maxAgeDays). 채운 뒤 다시 묶는다.
+`knowledge/site.json`: 채운 뒤 다시 묶는다(`python3 scripts/build_web.py`).
+- `release`: 판 번호(no, 화면 맨 위 "제N판", `update_rules.py finish` 가 1씩 올린다)와 최신본 받는 곳(where).
+- `feedback`: 오류 신고를 받을 운영부서(dept)·메일(email)·창구(channel).
+- `examples`: 첫 화면 '이렇게 물어보세요' 질문. 한 분야에 치우치지 않게, 화면 점검(`scripts/ui_test.js`)에서 맞는 답과 계산기에 닿는 것만.
+- `calcOff`: 끌 계산기 이름(예: `["tripExpense"]`). 시범 운영 중 틀린 금액이 신고되면 바로 넣고 다시 묶는다. 그 계산기는 '점검 중'으로 멈춘다.
+- `maxAgeDays`: 오래된 판 안내 기준일 수.
+
+## 계산기
+
+카드의 `calc` 에 계산기 이름을 적으면 답 아래에 계산기가 붙는다(10종, `web/engine.js` 의 `calc`). 계산기가 없는 관련 카드에는 `calc_link` 로 '계산기 열기' 버튼을 단다. 질문에 금액·기간을 묻는 말과 주제어가 있으면(예: "가족수당 얼마") 어느 답이 나와도 같은 버튼이 붙는다.
+- 질문 속 날짜·일수·지역·자녀 수 등을 읽어 칸을 채운다. 못 읽은 칸은 비워 두고 '확인 필요'로 표시하며, 채우기 전에는 계산하지 않는다(기본값 금액을 자기 금액으로 믿지 않게).
+- 숫자의 근거 조문과 원문 문구는 `knowledge/calc_basis.json`. 계산기 숫자를 고치면 이 표도 고친다.

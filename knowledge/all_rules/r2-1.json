@@ -4075,6 +4075,7 @@
         "quote": "복리후생 제도 운영 및 관리"
       }
     ],
+    "calc_link": "welfarePoints",
     "related": [
       "r2-1-duties-admin",
       "r2-1-pay-structure",

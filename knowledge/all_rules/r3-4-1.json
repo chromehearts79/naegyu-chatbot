@@ -931,6 +931,7 @@
         "quote": "매 분기 끝 달에 부양가족 변동사항과 지급제한 해당여부 등에 대하여 직원이 확인하고 신고할 수 있도록 가족수당 변동 정기신고제를 운영한다"
       }
     ],
+    "calc_link": "allowance",
     "related": [
       "family-allowance",
       "r3-4-1-family-allowance-limit"

@@ -24,7 +24,10 @@ const top = () => d.querySelector("#thread .turn");
 
 const nTopics = w.DATA.domains.reduce((n, dm) => n + dm.topics.length, 0);
 ok(d.querySelectorAll("#topics .chip").length === nTopics && d.querySelectorAll("#topics .topic-group").length === w.DATA.domains.length, `상황별 메뉴 ${w.DATA.domains.length}개 분야, ${nTopics}개`);
-ok(!top() && !d.querySelector("#examples"), "처음 화면에 예시 답변·예시 질문 없음");
+ok(!top(), "처음 화면에 미리 띄운 예시 답변 없음");
+const exs = [...d.querySelectorAll("#examples .chip")].map((b) => b.textContent);
+ok(exs.length === 4 && /출장/.test(exs[0]) && /연차|연가/.test(exs[1]) && /복지포인트/.test(exs[2]) && /가족수당/.test(exs[3]), "예시 질문 4개: 출장비·연가·복지포인트·가족수당");
+ok(/^제\d+판 · \d{4}\.\d{2}\.\d{2}\. 만듦/.test(d.querySelector("#basis").textContent), "맨 위에 판 번호와 만든 날");
 ok(!/출산/.test(d.querySelector("#q").placeholder), "입력칸 안내 문구가 특정 분야에 치우치지 않음");
 ok(d.querySelectorAll("#about .stat").length === 6, "검증 정보 숫자 6칸");
 ok(!/null|undefined/.test(d.querySelector("#about").textContent), "검증 정보에 'null' 같은 글자 없음");
@@ -35,7 +38,7 @@ function ask(q) { d.querySelector("#q").value = q; d.querySelector("#ask-form").
 let t = ask("배우자 출산휴가 며칠이에요?");
 ok(/배우자 출산전후휴가/.test(title(t)), "질문 → 배우자 출산전후휴가 답변");
 ok(t.querySelectorAll(".facts tbody tr").length === 7, "답변 핵심 정리 7줄");
-ok(t.querySelector(".calc table"), "답변 계산기 결과 표");
+ok(!t.querySelector(".calc table") && /출산예정일/.test(t.querySelector(".calc .need-msg").textContent), "날짜 없는 질문: 출산예정일을 '확인 필요'로 비우고 계산하지 않음");
 t = ask("출산");
 ok(/조금 더 알려주세요/.test(t.textContent) && t.querySelectorAll(".cand").length >= 2, "한 단어 질문 → 되묻기 후보 " + t.querySelectorAll(".cand").length + "개");
 t.querySelector(".cand").click();
@@ -68,10 +71,29 @@ t = ask("징계 받으면 승진 제한");
 ok(/승진/.test(title(t)), "징계 받으면 승진 제한 → 승진 제한 카드");
 t = ask("시외출장");
 ok(/국내 출장 여비/.test(title(t)), "시외출장 → 국내 출장 여비");
-ok(/최대/.test(t.querySelector(".calc table").textContent), "여비 계산기 결과 표");
+const tf = (n) => t.querySelector(".calc [id$='-" + n + "']");
+ok(!t.querySelector(".calc table") && t.querySelectorAll(".calc label.need").length === 3, "여비 계산기: 일수·숙박·지역을 모르면 '확인 필요' 3칸, 금액 없음");
+tf("days").value = "2"; tf("nights").value = "1"; tf("region").value = "metro"; tf("region").dispatchEvent(new w.Event("change", { bubbles: true }));
+ok(/최대 180,000원/.test(t.querySelector(".calc table").textContent), "여비 계산기: 2일·1박·광역시 → 최대 180,000원");
 const meals = t.querySelector(".calc input[id$='-meals']");
 meals.value = "3"; meals.dispatchEvent(new w.Event("input", { bubbles: true }));
-ok(/3끼 × 8,330원 = 25,010원/.test(t.querySelector(".calc table").textContent), "여비 계산기: 다른 예산으로 먹은 3끼 → 식비 25,010원");
+ok(/3끼 × 8,330원 = 25,010원/.test(t.querySelector(".calc table").textContent) && /10원이 남습니다/.test(t.querySelector(".calc").textContent), "여비 계산기: 다른 예산으로 먹은 3끼 → 식비 25,010원(10원 남는 이유 안내)");
+tf("days").value = "1"; tf("nights").value = "0"; meals.value = "1"; meals.dispatchEvent(new w.Event("input", { bubbles: true }));
+ok(/빼는 방법이 정해져 있지 않음/.test(t.querySelector(".calc table").textContent) && !/8,330원 =/.test(t.querySelector(".calc table").textContent), "당일 출장 끼니 공제는 계산하지 않고 회계 담당 확인 안내");
+t = ask("부산 1박2일 출장 여비");
+ok(t.querySelector(".calc-link button"), "계산기 없는 답(국내 출장 종합 안내)에 '계산기 열기' 버튼");
+t.querySelector(".calc-link button").click();
+ok(t.querySelector(".calc [id$='-days']").value === "2" && t.querySelector(".calc [id$='-nights']").value === "1" && t.querySelector(".calc [id$='-region']").value === "metro" && /최대 180,000원/.test(t.querySelector(".calc table").textContent),
+  "'부산 1박2일' → 버튼을 누르면 2일·1박·광역시를 채운 여비 계산기");
+// 돈·기간을 묻는 질문은 어떤 답이 나와도 계산기나 '계산기 열기'에 닿는다(평가단이 계산기를 못 찾았던 질문들)
+const reach = ["출장비 얼마 받아요", "부산 1박2일 출장 여비", "출장 식비 얼마", "회의비로 밥 먹으면 출장비 깎여요?", "출장 가서 점심을 회사 돈으로 먹었어요",
+  "연차 며칠이에요", "가족수당 얼마", "복지포인트 얼마 나와요", "아이 7살인데 육아휴직 돼요?", "출산휴가 언제부터 쓸 수 있어요", "장기재직휴가 언제 받아요", "가족돌봄휴가 유급 며칠"];
+const lost = reach.filter((q) => { const x = ask(q); return !(x.querySelector(".calc") || x.querySelector(".calc-link")); });
+ok(lost.length === 0, `돈·기간 질문 ${reach.length}개 모두 계산기에 닿음` + (lost.length ? ": " + lost.join(", ") : ""));
+// 첫 화면 예시 질문은 맞는 카드와 계산기로 간다
+const exWant = [/국내 출장 여비/, /연가\(연차\) 일수/, /복지포인트/, /가족수당/];
+const exBad = exs.filter((q, i) => { const x = ask(q); return !exWant[i].test(title(x)) || !x.querySelector(".calc"); });
+ok(exBad.length === 0, "예시 질문 4개 모두 맞는 답과 계산기" + (exBad.length ? ": " + exBad.join(", ") : ""));
 t = ask("지하철비용은 일비에 포함됨?");
 ok(/지하철/.test(title(t)), "지하철비용 일비 질문 → 지하철·버스 요금과 일비");
 // 평가단 지적 반영 확인
@@ -98,30 +120,48 @@ const due2 = t.querySelector(".calc input[type=date]");
 ok(!due2 || due2.value !== "2026-12-01", "'12월 1일부터'를 출산예정일 칸에 넣지 않음");
 t = ask("2023.3.2 입사했는데 2026년 연가 며칠?");
 const dIn = t.querySelector(".calc input[type=date]");
-ok(dIn && dIn.value === "2023-03-02" && /질문의 날짜/.test(t.textContent), "질문 속 날짜를 계산기에 채움");
+ok(dIn && dIn.value === "2023-03-02" && /질문에서 읽어 넣었습니다/.test(t.textContent), "질문 속 날짜를 계산기에 채움");
 ok(![...d.querySelectorAll("button")].some((b) => /도움이 됐어요/.test(b.textContent)), "기록 안 남는 '도움이 됐어요' 버튼 없음");
 
-// 모든 계산기: 칸마다 여러 값을 넣어도 'null' 같은 글자 없이 결과나 안내가 나오는지
+// 모든 계산기: 질문에서 못 읽은 칸은 비워 두고 계산하지 않는지, 칸마다 여러 값을 넣어도 'null' 같은 글자 없이 결과·안내가 나오는지
 const BAD = /null|undefined|NaN|Invalid|Infinity|\[object/;
-const VALS = { number: ["", "0", "1", "-3", "2.7", "30", "400"], date: ["", "1950-01-01", "2000-02-29", "2026-10-22", "2045-12-31"] };
-let calcRuns = 0; const calcBad = [];
+const VALS = { number: ["", "0", "1", "-3", "2.7", "30", "400"], date: ["", "1950-01-01", "2000-02-29", "2026-10-22", "2045-12-31"], yesno: ["", "y", "n"] };
+// 필수 칸을 채운 기준값(이 값에서 한 칸씩 바꿔 본다)
+const BASE = { spouseBirth: { due: "2026-12-01" }, maternity: { due: "2026-12-01" }, loss: { who: "self", date: "2026-10-01", weeks: "12" },
+  childAge: { birth: "2020-03-01" }, familyCare: { children: "2" }, allowance: { spouse: "y", children: "2" }, annualLeave: { hire: "2021-03-02" },
+  longService: { hire: "2014-03-02" }, welfarePoints: { years: "7", spouse: "y", children: "2" }, tripExpense: { days: "2", nights: "1", region: "metro" } };
+const fire = (el) => el.dispatchEvent(new w.Event("change", { bubbles: true }));
+let calcRuns = 0; const calcBad = [], emptyBad = [];
 for (const kind of Object.keys(w.CALCS)) {
-  const box = w.renderCalc(kind, []);
+  const box = w.renderCalc(kind, "");
+  const out = () => box.querySelector(".calc-out");
+  if (out().querySelector("tr") || !out().querySelector(".need-msg") || !box.querySelector("label.need")) emptyBad.push(kind);
+  const field = (n) => box.querySelector("[id$='-" + n + "']");
+  for (const [n, v] of Object.entries(BASE[kind] || {})) { field(n).value = v; fire(field(n)); }
+  if (!out().querySelector("tr")) calcBad.push(kind + " 기준값으로 결과 없음: " + out().textContent);
   for (const f of w.CALCS[kind].fields) {
-    const el = box.querySelector("[id$='-" + f[0] + "']"), keep = f[1] === "check" ? el.checked : el.value;
+    const el = field(f[0]), keep = f[1] === "check" ? el.checked : el.value;
     const vals = f[1] === "check" ? [true, false] : f[1] === "select" ? f[4].map((o) => o[0]) : VALS[f[1]];
     for (const v of vals) {
       if (f[1] === "check") el.checked = v; else el.value = v;
-      el.dispatchEvent(new w.Event("change", { bubbles: true }));
+      fire(el);
       calcRuns++;
-      const out = box.lastChild;
-      if (BAD.test(box.textContent) || !(out.querySelector("tr") || out.querySelector(".err"))) calcBad.push(kind + "." + f[0] + "=" + JSON.stringify(v));
+      if (BAD.test(box.textContent) || !(out().querySelector("tr") || out().querySelector(".err") || out().querySelector(".need-msg"))) calcBad.push(kind + "." + f[0] + "=" + JSON.stringify(v));
     }
     if (f[1] === "check") el.checked = keep; else el.value = keep;
-    el.dispatchEvent(new w.Event("change", { bubbles: true }));
+    fire(el);
   }
 }
+ok(emptyBad.length === 0, "질문에서 못 읽은 칸은 '확인 필요'로 비워 두고 금액·기간을 계산하지 않음" + (emptyBad.length ? ": " + emptyBad.join(", ") : ""));
 ok(calcBad.length === 0, `계산기 ${Object.keys(w.CALCS).length}종, ${calcRuns}가지 입력에 이상한 글자·빈 결과 없음` + (calcBad.length ? ": " + calcBad.slice(0, 5).join(", ") : ""));
+// 근거 조문이 개정된 계산기, 운영부서가 끈 계산기는 계산하지 않는다
+w.DATA.meta.calcStale = { tripExpense: ["여비지급세칙 별표 제1호"] };
+let cb = w.renderCalc("tripExpense", "부산 1박2일 출장");
+ok(!cb.querySelector("form") && /개정돼 계산기 숫자를 다시 확인/.test(cb.textContent), "근거 조문이 개정된 계산기는 계산 멈춤");
+w.DATA.meta.calcStale = {}; w.DATA.meta.site.calcOff = ["allowance"];
+cb = w.renderCalc("allowance", "");
+ok(!cb.querySelector("form") && /점검 중/.test(cb.textContent), "운영부서가 끈 계산기(calcOff)는 '점검 중'");
+w.DATA.meta.site.calcOff = [];
 
 // 모든 카드를 열고, 모든 근거 버튼을 눌러 원문과 인용 표시를 확인
 const cards = w.DATA.cards;

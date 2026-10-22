@@ -138,6 +138,7 @@
         "quote": "개인별로 복지포인트를 부여할 때 소수점 이하 포인트는 절사하여 산정한다"
       }
     ],
+    "calc_link": "welfarePoints",
     "related": [
       "r4-4-point-period",
       "r4-4-overview",
