@@ -9,8 +9,9 @@
   --sunk: #eaefed;
   --ink: #16201c;
   --ink-2: #4b5954;
-  --ink-3: #75837e;
+  --ink-3: #5f6d68;
   --line: #d6dfdb;
+  --line-strong: #7d8b86;  /* 입력칸·버튼처럼 눌러야 하는 것의 테두리(대비 3:1 이상) */
   --accent: #0b6b5d;
   --accent-ink: #ffffff;
   --accent-soft: #e1f0ec;
@@ -30,21 +31,21 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #7b8a85;
-    --line: #27322e; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
+    --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #8c9b96;
+    --line: #27322e; --line-strong: #5f6e69; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
     --hl: #17302b; --warn: #f2b54b; --warn-soft: #3a2c0e; --ok: #5bd08a; --ok-soft: #12301f; --danger: #f97066;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #7b8a85;
-  --line: #27322e; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
+  --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #8c9b96;
+  --line: #27322e; --line-strong: #5f6e69; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
   --hl: #17302b; --warn: #f2b54b; --warn-soft: #3a2c0e; --ok: #5bd08a; --ok-soft: #12301f; --danger: #f97066;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
-  background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 0 48px; word-break: keep-all; overflow-wrap: anywhere;
 }
@@ -52,6 +53,13 @@ button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .wrap { max-width: 1200px; margin: 0 auto; }
+.featured .chip { color: var(--ink); font-weight: 600; }
+.all-topics summary { cursor: pointer; font-size: 13.5px; color: var(--accent); font-weight: 600; }
+.all-topics[open] summary { margin-bottom: 8px; }
+.howto { margin: 0; padding: 10px 12px; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ink-2); background: var(--sunk); border-radius: 8px; }
+.howto b { color: var(--ink); }
+.topic-block { display: grid; gap: 6px; }
+.about-line { margin: 0; font-size: 14px; color: var(--ink-2); }
 
 /* 머리 */
 .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-block: 22px 14px; border-bottom: 1px solid var(--line); }
@@ -60,40 +68,50 @@ button { cursor: pointer; }
 .basis { color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; }
 .notice { flex-basis: 100%; font-size: 13px; color: var(--ink-2); }
 .notice b { color: var(--warn); font-weight: 600; }
+.notice details { display: inline; }
+.notice summary { display: inline; cursor: pointer; color: var(--accent); font-weight: 600; }
+.notice details[open] summary { display: block; margin-bottom: 4px; }
+.notice ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.notice li b { color: var(--ink); }
 
+/* 처음에는 한 칸(원문 칸 접음). 근거를 눌러 원문을 열면(.reading) 넓은 화면에서 오른쪽에 원문 칸이 붙는다 */
 .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; padding-top: 20px; }
-@media (min-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 440px); } }
+@media (min-width: 1000px) {
+  .wrap:not(.reading) { max-width: 880px; }
+  .wrap:not(.reading) .source { display: none; }
+  .wrap.reading .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 440px); }
+}
 
 /* 묻는 칸 */
 .composer { display: grid; gap: 12px; }
 .ask-row { display: flex; gap: 8px; }
 .ask-row input {
-  flex: 1; min-width: 0; padding: 13px 14px; border: 1.5px solid var(--line); border-radius: var(--radius);
+  flex: 1; min-width: 0; padding: 13px 14px; border: 1.5px solid var(--line-strong); border-radius: var(--radius);
   background: var(--surface); font-size: 16px;
 }
 .ask-row input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 .btn { border: 0; border-radius: var(--radius); padding: 0 18px; background: var(--accent); color: var(--accent-ink); font-weight: 600; white-space: nowrap; }
-.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); padding: 6px 12px; font-weight: 500; font-size: 13px; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line-strong); padding: 6px 12px; font-weight: 500; font-size: 13px; min-height: 36px; }
 .label { font-size: 12px; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 600; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 13.5px; color: var(--ink-2);
 }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .topic-groups { display: grid; gap: 8px; }
-.topic-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.topic-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .topic-group > span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); min-width: 72px; }
 
 /* 대화 */
 .thread { display: grid; gap: 22px; margin-top: 22px; }
 .turn { display: grid; gap: 10px; }
-.q { justify-self: end; max-width: 85%; background: var(--sunk); border-radius: 14px 14px 4px 14px; padding: 9px 14px; font-size: 15px; }
-.q .tag { font-size: 11px; color: var(--ink-3); margin-right: 6px; letter-spacing: 0.04em; }
+.q { justify-self: end; max-width: 85%; background: var(--sunk); border-radius: 14px 14px 4px 14px; padding: 9px 14px; font-size: 16px; }
+.q .tag { font-size: 12px; color: var(--ink-3); margin-right: 6px; letter-spacing: 0.04em; }
 .a { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 14px; display: grid; gap: 12px; min-width: 0; }
 .a-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .a-title { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
-.pill { font-size: 11.5px; border-radius: 999px; padding: 2px 9px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+.pill { font-size: 12px; border-radius: 999px; padding: 2px 9px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .a p { margin: 0; max-width: 68ch; }
@@ -104,8 +122,8 @@ button { cursor: pointer; }
 .facts tr:last-child th, .facts tr:last-child td { border-bottom: 0; }
 .facts th { font-weight: 500; color: var(--ink-2); width: 30%; background: var(--sunk); }
 .cite {
-  display: inline-block; margin-top: 3px; border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 5px;
-  padding: 1px 7px; font-size: 12px; font-family: var(--font-mono), var(--font-body); font-weight: 500; text-align: left;
+  display: inline-flex; align-items: center; min-height: 24px; margin-top: 3px; border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 5px;
+  padding: 2px 8px; font-size: 12.5px; font-family: var(--font-mono), var(--font-body); font-weight: 500; text-align: left;
 }
 .cite:hover { background: var(--accent); color: var(--accent-ink); }
 .caution { font-size: 14px; color: var(--ink); background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 8px 10px; border-radius: 6px; margin: 0; }
@@ -119,16 +137,17 @@ details.box summary { cursor: pointer; font-size: 13.5px; color: var(--ink-2); }
 details.box[open] summary { margin-bottom: 8px; }
 .feedback { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; }
 .report { display: grid; gap: 8px; }
-.report textarea { width: 100%; min-height: 96px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--paper); font-size: 13px; }
+.report textarea { width: 100%; min-height: 96px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px; background: var(--paper); font-size: 13px; }
 
 /* 계산기 */
 .calc { background: var(--hl); border-radius: 10px; padding: 12px 14px; display: grid; gap: 10px; }
 .calc h4 { margin: 0; font-size: 14px; font-weight: 600; }
 .calc form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
 .calc label { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
-.calc label.inline { display: flex; align-items: center; gap: 6px; }
-.calc input[type=date], .calc input[type=number], .calc select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); min-width: 0; font: inherit; }
-.calc label.need > span::after { content: "확인 필요"; margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 1px 7px; }
+.calc label.inline { display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; }
+.calc input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.calc input[type=date], .calc input[type=number], .calc select { padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); color: var(--ink); min-width: 0; font: inherit; }
+.calc label.need > span::after { content: "확인 필요"; margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 1px 7px; }
 .calc label.need input, .calc label.need select { border-color: var(--warn); }
 .calc .need-msg { margin: 0; font-size: 13px; color: var(--warn); }
 .calc-link { margin: 2px 0; }
@@ -146,7 +165,7 @@ details.box[open] summary { margin-bottom: 8px; }
 .cand:hover { border-color: var(--accent); }
 .cand b { font-weight: 600; }
 .cand span { font-size: 13px; color: var(--ink-2); }
-.cand-rule { font-style: normal; font-size: 11.5px; color: var(--accent); font-weight: 600; }
+.cand-rule { font-style: normal; font-size: 12px; color: var(--accent); font-weight: 600; }
 .hits { display: grid; gap: 8px; }
 .hit { text-align: left; border: 0; border-left: 3px solid var(--line); background: transparent; padding: 4px 0 4px 10px; display: grid; gap: 2px; }
 .hit:hover { border-left-color: var(--accent); }
@@ -169,13 +188,12 @@ details.box[open] summary { margin-bottom: 8px; }
 .law .tbl { overflow-x: auto; }
 .law table { border-collapse: collapse; font-size: 12.5px; }
 .law td, .law th { border: 1px solid var(--line); padding: 4px 6px; vertical-align: top; }
-.close { display: none; }
+.close { justify-self: end; }
 .empty-source { color: var(--ink-3); font-size: 14px; }
 @media (max-width: 999px) {
   .source { position: fixed; inset: auto 0 0 0; z-index: 20; padding: 0 max(8px, env(safe-area-inset-left, 0px)) env(safe-area-inset-bottom, 0px) max(8px, env(safe-area-inset-right, 0px)); }
   .source[data-open="false"] { display: none; }
   .source-inner { position: static; max-height: 78vh; border-radius: 14px 14px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18); }
-  .close { display: inline-block; justify-self: end; }
 }
 
 /* 검증 정보 */
@@ -186,6 +204,16 @@ details.box[open] summary { margin-bottom: 8px; }
 .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; font-family: var(--font-mono), var(--font-body); }
 .stat span { font-size: 12.5px; color: var(--ink-2); }
 .about ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 4px; }
+/* 휴대폰 폭: 손가락으로 누르는 것은 44px 이상 */
+@media (max-width: 999px) {
+  .chip, .btn.ghost, .calc input[type=date], .calc input[type=number], .calc select, .calc label.inline { min-height: 44px; }
+  .cite { min-height: 32px; }
+}
+/* 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글 */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* 여는 동안 안내(6MB 넘는 파일이라 사양 낮은 PC에서 몇 초 걸린다). 스크립트가 끝나면 지운다 */
+.loading { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--hl); color: var(--ink-2); font-size: 14px; }
+.old .loading { display: none; }
 @media (prefers-reduced-motion: no-preference) { .turn { animation: rise 0.25s ease-out; } @keyframes rise { from { transform: translateY(6px); opacity: 0.6; } to { transform: none; opacity: 1; } } }
 </style>
 
@@ -198,28 +226,35 @@ details.box[open] summary { margin-bottom: 8px; }
 (function () {
   var ok = true;
   try { ok = !!(window.Map && window.Set && String.prototype.normalize && Element.prototype.replaceChildren && !document.documentMode); } catch (e) { ok = false; }
-  if (!ok) document.getElementById("oldbrowser").removeAttribute("hidden");
+  if (!ok) { document.getElementById("oldbrowser").removeAttribute("hidden"); document.documentElement.className += " old"; }
 })();
 </script>
 <div class="wrap">
   <header class="top">
     <h1 class="brand">내규챗봇<small id="domains-label">시범본</small></h1>
     <span class="basis" id="basis"></span>
-    <p class="notice" id="notice"></p>
+    <div class="notice" id="notice"></div>
   </header>
 
   <div class="layout">
     <main>
       <section class="composer" aria-label="질문하기">
-        <form class="ask-row" id="ask-form" autocomplete="off">
+        <form class="ask-row" id="ask-form" autocomplete="off" onsubmit="return false">
           <label for="q" class="label" hidden>질문</label>
           <input id="q" name="q" type="text" placeholder="궁금한 것을 평소 말하듯 적어 보세요" aria-label="질문">
           <button class="btn" type="submit">묻기</button>
         </form>
+        <p class="loading" id="loading" role="status">내규챗봇을 여는 중입니다. 규정 전체와 답이 이 파일 안에 들어 있어 사양이 낮은 PC에서는 몇 초 걸릴 수 있습니다.</p>
         <div class="label">이렇게 물어보세요</div>
         <div class="chips examples" id="examples"></div>
-        <div class="label">상황별로 보기</div>
-        <div class="topic-groups" id="topics"></div>
+        <div class="label">자주 찾는 분야</div>
+        <div class="chips featured" id="featured"></div>
+        <details class="all-topics"><summary>모든 분야 보기</summary><div class="topic-groups" id="topics"></div></details>
+        <ol class="howto" aria-label="쓰는 법">
+          <li><b>① 묻기</b> 평소 말하듯 적거나 분야를 고릅니다</li>
+          <li><b>② 확인</b> 답 아래 연두색 근거 버튼을 누르면 내규 원문이 열립니다</li>
+          <li><b>③ 막히면</b> 답이 없거나 틀리면 담당부서에 확인하고 '오류 신고'를 눌러 주세요</li>
+        </ol>
       </section>
       <div class="thread" id="thread" aria-live="polite"></div>
       <section class="about" id="about" aria-label="검증 정보"></section>
@@ -381,11 +416,13 @@ function openSource(cite, quote) {
     );
     if (law.target) setTimeout(function () { law.target.scrollIntoView({ block: "center", behavior: "smooth" }); }, 30);
   }
-  src.dataset.open = "true";
+  setSource(true);
   if (window.matchMedia("(max-width: 999px)").matches) inner.scrollTop = 0;
 }
-function closeBtn() { return h("button", { class: "btn ghost close", type: "button", id: "source-close", text: "닫기", onclick: function () { $("#source").dataset.open = "false"; } }); }
-$("#source-close").addEventListener("click", function () { $("#source").dataset.open = "false"; });
+// 원문 칸 열고 닫기(넓은 화면에서는 열 때만 오른쪽 칸이 생긴다)
+function setSource(open) { $("#source").dataset.open = open ? "true" : "false"; $(".wrap").classList.toggle("reading", open); }
+function closeBtn() { return h("button", { class: "btn ghost close", type: "button", id: "source-close", text: "닫기", onclick: function () { setSource(false); } }); }
+$("#source-close").addEventListener("click", function () { setSource(false); });
 function citeBtn(cite, quote) { return h("button", { class: "cite", type: "button", title: "원문 보기", onclick: function () { openSource(cite, quote); } }, [cite]); }
 
 /* ── 계산기 ───────────────────────────────── */
@@ -423,7 +460,9 @@ function renderCalc(kind, question) {
       : "이 계산기는 점검 중이라 계산하지 않습니다.") + " 위 답의 근거 조문 원문을 보고 담당부서에 확인하세요." }));
     return box;
   }
-  var form = h("form"), out = h("div", { class: "calc-out" }), ids = {}, filled = [];
+  // 결과 표는 바뀔 때마다 통째로 읽히지 않게 하고(aria-live off), 짧은 결과 한 줄만 화면 읽기 프로그램에 알린다(live)
+  var form = h("form"), out = h("div", { class: "calc-out", "aria-live": "off" }), live = h("p", { class: "sr-only", role: "status" });
+  var ids = {}, filled = [], msgId = "c" + (++calcSeq) + "-need";
   var dates = E.datesIn(question), vals = E.valuesIn(question);
   spec.fields.forEach(function (f) {
     var id = "c" + (++calcSeq) + "-" + f[0], input, val = f[3] || "", v = vals[f[0]];
@@ -449,17 +488,23 @@ function renderCalc(kind, question) {
       var el = form.querySelector("#" + ids[f[0]]);
       o[f[0]] = f[1] === "check" ? el.checked : f[1] === "yesno" ? el.value === "y" : el.value;
     });
-    // 비어 있으면 안 되는 칸에 '확인 필요' 표시
+    // 비어 있으면 안 되는 칸에 '확인 필요' 표시(눈에 보이는 배지 + 화면 읽기 프로그램용 필수·오류 표시)
     spec.fields.forEach(function (f) {
       if (f[1] === "check") return;
       var el = form.querySelector("#" + ids[f[0]]);
-      var need = el.value === "" && f[5] !== "opt" && !(spec.optional && spec.optional[f[0]] && spec.optional[f[0]](o));
+      var required = f[5] !== "opt" && !(spec.optional && spec.optional[f[0]] && spec.optional[f[0]](o)), need = required && el.value === "";
       el.parentNode.classList.toggle("need", need);
-      if (need) miss.push(f[2]);
+      el.setAttribute("aria-required", required ? "true" : "false");
+      el.setAttribute("aria-invalid", need ? "true" : "false");
+      if (need) { el.setAttribute("aria-describedby", msgId); miss.push(f[2]); } else el.removeAttribute("aria-describedby");
     });
-    if (miss.length) { out.replaceChildren(h("p", { class: "need-msg", text: "‘확인 필요’ 칸(" + miss.join(", ") + ")을 채우면 계산합니다." })); return; }
+    if (miss.length) {
+      var msg = "‘확인 필요’ 칸(" + miss.join(", ") + ")을 채우면 계산합니다.";
+      out.replaceChildren(h("p", { class: "need-msg", id: msgId, text: msg })); live.textContent = msg; return;
+    }
     var r = E.calc[kind](o);
-    if (r.error) { out.replaceChildren(h("p", { class: "err", text: r.error })); return; }
+    if (r.error) { out.replaceChildren(h("p", { class: "err", text: r.error })); live.textContent = r.error; return; }
+    live.textContent = "계산 결과: " + r.rows.slice(0, 2).map(function (row) { return row[0] + " " + row[1]; }).join(", ");
     out.replaceChildren(
       h("table", null, [h("tbody", null, r.rows.map(function (row) { return h("tr", null, [h("td", { text: row[0] }), h("td", { text: row[1] })]); }))]),
       h("div", null, (r.notes || []).map(function (n) { return h("p", { class: "soft", text: "· " + n }); }))
@@ -470,7 +515,7 @@ function renderCalc(kind, question) {
   // append 에 null 을 넘기면 글자 'null'이 찍히므로, 질문에서 읽어 채운 칸이 있을 때만 안내 문단을 넣는다
   box.append(head);
   if (filled.length) box.append(h("p", { class: "soft", text: "질문에서 읽어 넣었습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }));
-  box.append(form, out);
+  box.append(form, out, live);
   run();
   return box;
 }
@@ -664,23 +709,52 @@ $("#basis").textContent = (REL.no ? "제" + REL.no + "판 · " : "") + DATA.meta
   var where = REL.where ? "최신본은 " + esc(REL.where) + "에서 받으세요. " : "";
   var old = days > maxAge ? "<b>이 화면은 만든 지 " + days + "일이 지났습니다.</b> 그 사이 규정이 바뀌었을 수 있으니 최신판인지 확인하세요. " : "";
   var stale = DATA.meta.stale ? "규정 개정 뒤 다시 확인하지 못한 답이 " + DATA.meta.stale + "개 있습니다(답에 표시). " : "";
-  $("#notice").innerHTML = old + where + stale + "<b>AI가 작성한 답변</b>입니다. 인용 문구는 프로그램으로 원문과 대조했고 다른 AI로 다시 검증했지만, <b>담당부서 검수 전</b>입니다. 중요한 결정 전에는 근거 조문 원문과 담당부서에 확인하세요.";
+  var fb = (DATA.meta.site || {}).feedback || {};
+  var askWhere = fb.dept ? esc(fb.dept) + (fb.channel ? "(" + esc(fb.channel) + ")" : "") : "해당 업무 담당부서";
+  // 한 문장만 보이고, 표시의 뜻·틀렸을 때·판 번호는 '자세히'를 눌러야 펼친다
+  $("#notice").innerHTML = old + where + stale + "<b>AI가 쓴 답</b>입니다. 중요한 결정 전에는 근거 원문과 담당부서에 확인하세요. " +
+    "<details><summary>자세히</summary><ul>" +
+    "<li><b>AI 작성 · 담당부서 검수 전</b>: 답과 근거는 AI가 썼고, 인용 문구는 프로그램으로 내규 원문과 대조했으며 다른 AI로 다시 확인했습니다. 소관부서 확인을 마친 답에는 '담당부서 검수 완료'가 붙습니다.</li>" +
+    "<li><b>계산기(참고용)</b>: 규정의 기준대로 계산한 값입니다. 실제 지급·승인은 담당부서 기준을 따릅니다.</li>" +
+    "<li><b>틀린 답을 찾으면</b>: 답 아래 '오류 신고'를 눌러 알려 주세요. 급한 일은 " + askWhere + "에 확인하세요.</li>" +
+    "<li><b>판 번호</b>: 맨 위 '제N판'과 만든 날로 최신판인지 확인하세요." + (REL.where ? " 최신본은 " + esc(REL.where) + "에서 받습니다." : "") + "</li></ul></details>";
 })();
-$("#domains-label").textContent = "시범본 · " + DATA.domains.map(function (d) { return d.name; }).join(" · ");
-DATA.domains.forEach(function (dm) {
+// 분야 버튼: 누르면 그 분야의 답 목록을 보여 준다. refs 는 "분야id:주제id", extra 는 함께 보여 줄 카드 id
+function topicCards(dmId, tId) {
+  var inTopic = DATA.cards.filter(function (c) { return c.domain === dmId && c.topics.indexOf(tId) >= 0; });
+  // 규정 전체 분야는 규정별 개요 카드만 보여 준다(개요에서 그 규정의 다른 카드로 이어진다). 개요 카드가 없는 묶음(상황별 종합)은 카드를 모두 보여 준다.
+  var ov = inTopic.filter(function (c) { return dmId !== "all_rules" || c.overview; });
+  return (ov.length ? ov : inTopic).map(function (c) { return c.id; });
+}
+function topicName(ref) {
+  var p = ref.split(":"), dm = DATA.domains.filter(function (d) { return d.id === p[0]; })[0];
+  return ((dm && dm.topics.filter(function (t) { return t.id === p[1]; })[0]) || {}).name || ref;
+}
+function showTopics(title, refs, extra) {
+  var groups = refs.map(function (r) { var p = r.split(":"); return { name: topicName(r), ids: topicCards(p[0], p[1]) }; });
+  extra = (extra || []).filter(function (id) { return byId.get(id); });
+  if (extra.length) groups.push({ name: "관련 규정 안내", ids: extra });
+  addTurn(title, "분야", h("article", { class: "a" }, [h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: title })])].concat(groups.map(function (g) {
+    return h("div", { class: "topic-block" }, [groups.length > 1 ? h("div", { class: "label", text: g.name }) : null, h("div", { class: "cands" }, g.ids.map(function (id) { return cardButton(id, pick); }))]);
+  }))));
+}
+function topicChip(text, onclick) {
+  return h("button", { class: "chip", type: "button", text: text, onclick: function (e) {
+    document.querySelectorAll("#featured .chip, #topics .chip").forEach(function (b) { b.classList.remove("on"); });
+    e.currentTarget.classList.add("on");
+    onclick();
+  } });
+}
+// 자주 찾는 분야(knowledge/site.json 의 featured). 시범 때 만든 분야(출산·육아, 복무)도 여기에 합쳐 따로 줄을 차지하지 않는다
+var FEATURED = (DATA.meta.site || {}).featured || [], covered = {};
+FEATURED.forEach(function (f) {
+  f.topics.forEach(function (r) { covered[r] = 1; });
+  $("#featured").append(topicChip(f.name, function () { showTopics(f.name, f.topics, f.cards); }));
+});
+// 모든 분야 보기: 자주 찾는 분야가 전부 덮는 분야는 빼고 보여 준다(자주 찾는 분야가 없으면 모두)
+DATA.domains.filter(function (dm) { return !dm.topics.every(function (t) { return covered[dm.id + ":" + t.id]; }); }).forEach(function (dm) {
   var row = h("div", { class: "topic-group" }, [h("span", { text: dm.name })]);
-  dm.topics.forEach(function (t) {
-    row.append(h("button", { class: "chip", type: "button", text: t.name, onclick: function (e) {
-      document.querySelectorAll("#topics .chip").forEach(function (b) { b.classList.remove("on"); });
-      e.currentTarget.classList.add("on");
-      // 규정 전체 분야는 규정마다 개요 카드만 먼저 보여준다(개요에서 그 규정의 다른 카드로 이어진다).
-      var inTopic = DATA.cards.filter(function (c) { return c.domain === dm.id && c.topics.indexOf(t.id) >= 0; });
-      // 규정 전체 분야는 규정별 개요 카드만 보여 준다. 개요 카드가 없는 묶음(상황별 종합)은 카드를 모두 보여 준다.
-      var ov = inTopic.filter(function (c) { return dm.id !== "all_rules" || c.overview; });
-      var ids = (ov.length ? ov : inTopic).map(function (c) { return c.id; });
-      addTurn(t.name, "상황", h("article", { class: "a" }, [h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: t.name })]), h("div", { class: "cands" }, ids.map(function (id) { return cardButton(id, pick); }))]));
-    } }));
-  });
+  dm.topics.forEach(function (t) { row.append(topicChip(t.name, function () { showTopics(t.name, [dm.id + ":" + t.id]); })); });
   $("#topics").append(row);
 });
 // 예시 질문: 출장비·연가·복지포인트·가족수당을 한 개씩(한 분야에 치우치지 않게). 화면 점검이 모두 맞는 답에 닿는지 확인한다
@@ -693,7 +767,14 @@ $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask
 (function about() {
   var m = DATA.meta, v = m.verify, s = m.search;
   var stat = function (b, span) { return h("div", { class: "stat" }, [h("b", { text: b }), h("span", { text: span })]); };
+  // 직원에게는 한 줄 요약만 보이고, 숫자와 방법은 '검증 방법 보기'를 눌러야 펼친다(검수용 화면 #review 에서는 펼친 채로)
+  var detail = h("details", { class: "box", open: REVIEW ? "" : null }, [h("summary", { text: "검증 방법 보기" })]);
   $("#about").append(
+    h("p", { class: "about-line", text: "모든 답의 근거 문구 " + m.quotesOk.toLocaleString("ko-KR") + "곳을 내규 원문과 글자 그대로 대조했고, 다른 AI로 다시 확인했습니다. 담당부서 검수는 " +
+      (m.reviewed ? m.reviewed + "장 마쳤습니다." : "아직입니다.") }),
+    detail
+  );
+  detail.append(
     h("h3", { text: "이 시범본은 이렇게 검증했습니다" }),
     h("div", { class: "stats" }, [
       stat(m.cards + "장", "문답 카드 (예상 질문 " + m.questions + "개)"),
@@ -714,4 +795,6 @@ $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask
   // 검수용 화면에서만 보인다(직원 화면에 null 을 넘기면 글자 'null'이 찍힌다)
   if (REVIEW && m.ruleFixes.length) $("#about").append(h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]));
 })();
+// 다 열렸으니 '여는 중' 안내를 지운다
+$("#loading").remove();
 </script>

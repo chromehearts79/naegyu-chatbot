@@ -22,8 +22,23 @@ const w = dom.window, d = w.document;
 const ok = (cond, msg) => { console.log((cond ? "✓ " : "✗ ") + msg); if (!cond) process.exitCode = 1; };
 const top = () => d.querySelector("#thread .turn");
 
-const nTopics = w.DATA.domains.reduce((n, dm) => n + dm.topics.length, 0);
-ok(d.querySelectorAll("#topics .chip").length === nTopics && d.querySelectorAll("#topics .topic-group").length === w.DATA.domains.length, `상황별 메뉴 ${w.DATA.domains.length}개 분야, ${nTopics}개`);
+// 첫 화면 정리(디자인 개선 2단계): 자주 찾는 분야, 모든 분야 보기, 원문 칸 접기, 한 문장 안내, 검증 한 줄 요약
+const FEAT = w.DATA.meta.site.featured || [];
+const featChips = [...d.querySelectorAll("#featured .chip")];
+ok(FEAT.length >= 8 && featChips.length === FEAT.length, `자주 찾는 분야 ${featChips.length}개`);
+const rowNames = [...d.querySelectorAll("#topics .topic-group > span")].map((x) => x.textContent);
+ok(!d.querySelector(".all-topics").open && rowNames.length === 1 && rowNames[0] === "규정 전체" && d.querySelectorAll("#topics .chip").length === 11,
+  "모든 분야 보기는 접혀 있고, 시범 분야(출산·육아·복무)는 자주 찾는 분야로 합쳐 따로 줄이 없음");
+const allRefs = w.DATA.domains.flatMap((dm) => dm.topics.map((t) => dm.id + ":" + t.id));
+const shownRefs = new Set([...FEAT.flatMap((f) => f.topics), ...w.DATA.domains.filter((dm) => rowNames.includes(dm.name)).flatMap((dm) => dm.topics.map((t) => dm.id + ":" + t.id))]);
+ok(allRefs.every((r) => shownRefs.has(r)), `주제 ${allRefs.length}개 모두 자주 찾는 분야나 모든 분야 보기에서 닿음`);
+const emptyFeat = featChips.filter((b) => { b.click(); const x = d.querySelector("#thread .turn"); const n = x.querySelectorAll(".cand").length; x.remove(); return !n; }).map((b) => b.textContent);
+ok(emptyFeat.length === 0, "자주 찾는 분야 버튼마다 답 목록이 나옴" + (emptyFeat.length ? ": " + emptyFeat.join(", ") : ""));
+ok(!d.querySelector(".wrap").classList.contains("reading") && d.querySelector("#source").dataset.open === "false", "처음에는 오른쪽 원문 칸을 접어 둠");
+const notice = d.querySelector("#notice");
+ok(/AI가 쓴 답/.test(notice.textContent) && notice.querySelector("details") && !notice.querySelector("details").open && /검수 전/.test(notice.querySelector("details").textContent), "맨 위 안내는 한 문장, 표시의 뜻은 '자세히'에 접어 둠");
+ok(/근거 문구 6,671곳/.test(d.querySelector(".about-line").textContent) && !d.querySelector("#about details").open, "검증 정보는 한 줄 요약, 숫자는 '검증 방법 보기'에 접어 둠");
+ok(d.querySelectorAll(".howto li").length === 3, "쓰는 법 3단계 안내");
 ok(!top(), "처음 화면에 미리 띄운 예시 답변 없음");
 const exs = [...d.querySelectorAll("#examples .chip")].map((b) => b.textContent);
 ok(exs.length === 4 && /출장/.test(exs[0]) && /연차|연가/.test(exs[1]) && /복지포인트/.test(exs[2]) && /가족수당/.test(exs[3]), "예시 질문 4개: 출장비·연가·복지포인트·가족수당");
@@ -52,6 +67,9 @@ ok(!t.querySelector(".lead") && t.querySelector(".hits, details.box"), "점수 �
 t = ask("법인카드 분실 신고");
 t.querySelector(".a .hit") ? t.querySelector(".a .hit").click() : t.querySelector(".cite").click();
 ok(/법인카드/.test(d.querySelector("#source h2").textContent), "근거나 조문 누르면 원문 열림");
+ok(d.querySelector(".wrap").classList.contains("reading") && d.querySelector("#source").dataset.open === "true", "근거를 누르면 원문 칸이 열림");
+d.querySelector("#source-close").click();
+ok(!d.querySelector(".wrap").classList.contains("reading") && d.querySelector("#source").dataset.open === "false", "닫기를 누르면 원문 칸이 다시 접힘");
 
 // 계산기: 예정일을 바꾸면 결과가 바뀐다
 t = ask("와이프 출산 휴가");
@@ -99,6 +117,30 @@ ok(/지하철/.test(title(t)), "지하철비용 일비 질문 → 지하철·버
 // 평가단 지적 반영 확인
 ok(!/<link[^>]+href=["']https?:|<script[^>]+src=|@import|url\(\s*["']?https?:/i.test(html), "외부 주소(글꼴·스크립트)를 부르지 않음");
 ok((html.match(/@font-face\{font-family:"A2Z"/g) || []).length === 4, "에이투지체 4가지 굵기가 파일 안에 들어 있음");
+// 디자인 기본기(docs/디자인_개선_계획.md 1단계): 글씨 대비, 테두리 대비, 글씨 크기, 누르는 크기, 화면 읽기 프로그램, 여는 동안 안내
+const cssAt = html.lastIndexOf("<style>", html.indexOf("--paper:")), css = html.slice(cssAt, html.indexOf("</style>", cssAt));
+const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+const themes = [...css.matchAll(/--paper: (#[0-9a-f]{6})[\s\S]*?--ink-3: (#[0-9a-f]{6})[\s\S]*?--line-strong: (#[0-9a-f]{6})/g)].map((m) => {
+  const tok = (name) => (css.slice(m.index).match(new RegExp("--" + name + ": (#[0-9a-f]{6})")) || [])[1];
+  return { ink3: [tok("paper"), tok("surface"), tok("sunk"), tok("hl")].map((bg) => ratio(m[2], bg)), line: ratio(m[3], tok("surface")) };
+});
+ok(themes.length === 3 && themes.every((t) => Math.min(...t.ink3) >= 4.5 && t.line >= 3), "흐린 글씨 대비 4.5:1 이상, 입력칸·버튼 테두리 3:1 이상(밝은·어두운 화면) " +
+  themes.map((t) => Math.min(...t.ink3).toFixed(2) + "/" + t.line.toFixed(2)).join(" "));
+const sizes = [...css.matchAll(/font-size:\s*([\d.]+)px/g)].map((m) => +m[1]);
+ok(sizes.length > 20 && Math.min(...sizes) >= 12 && /body \{[^}]*font-size: 16px/.test(css), "본문 16px, 12px보다 작은 글씨 없음(가장 작은 글씨 " + Math.min(...sizes) + "px)");
+ok(/\.cite \{[^}]*min-height: 24px/.test(css) && /@media \(max-width: 999px\) \{\s*\.chip, \.btn\.ghost[^}]*min-height: 44px/.test(css), "누르는 크기: 근거 조문 24px 이상, 휴대폰에서 버튼 44px 이상");
+ok(!d.querySelector("#loading") && /여는 중/.test(html) && d.querySelector("#ask-form").getAttribute("onsubmit") === "return false", "여는 동안 안내가 있고 다 열리면 사라짐, 열리기 전 '묻기'로 화면이 다시 열리지 않음");
+{
+  const box = w.renderCalc("tripExpense", "");
+  const days = box.querySelector("[id$='-days']"), live = box.querySelector("[role=status]");
+  const desc = d.getElementById(days.getAttribute("aria-describedby") || "x") || box.querySelector("#" + days.getAttribute("aria-describedby"));
+  const before = days.getAttribute("aria-invalid") === "true" && days.getAttribute("aria-required") === "true" && desc && /확인 필요/.test(desc.textContent) && /확인 필요/.test(live.textContent);
+  days.value = "2"; box.querySelector("[id$='-nights']").value = "1"; box.querySelector("[id$='-region']").value = "metro";
+  box.querySelector("[id$='-region']").dispatchEvent(new w.Event("change", { bubbles: true }));
+  const after = days.getAttribute("aria-invalid") === "false" && !days.hasAttribute("aria-describedby") && /계산 결과: 일비/.test(live.textContent) && box.querySelector(".calc-out").getAttribute("aria-live") === "off";
+  ok(before && after, "계산기: 빈 필수 칸은 화면 읽기 프로그램에도 '확인 필요'(aria-invalid·describedby), 결과는 한 줄로 알림");
+}
 t = ask("연차몇일이야");
 ok(/연가\(연차\) 일수/.test(title(t)), "붙여 쓴 '연차몇일이야' → 연가 일수");
 t = ask("챗지피티 업무에 써도돼요?");

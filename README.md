@@ -70,6 +70,7 @@ python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/
 `knowledge/site.json`: 채운 뒤 다시 묶는다(`python3 scripts/build_web.py`).
 - `release`: 판 번호(no, 화면 맨 위 "제N판", `update_rules.py finish` 가 1씩 올린다)와 최신본 받는 곳(where).
 - `feedback`: 오류 신고를 받을 운영부서(dept)·메일(email)·창구(channel).
+- `featured`: 첫 화면 '자주 찾는 분야' 버튼(`topics`: `"분야id:주제id"`, `cards`: 함께 보여 줄 카드 id). 여기에 전부 들어간 분야는 '모든 분야 보기'에서 빠진다. 잘못된 주제·카드는 `check_knowledge.py` 가 오류로 알린다.
 - `examples`: 첫 화면 '이렇게 물어보세요' 질문. 한 분야에 치우치지 않게, 화면 점검(`scripts/ui_test.js`)에서 맞는 답과 계산기에 닿는 것만.
 - `calcOff`: 끌 계산기 이름(예: `["tripExpense"]`). 시범 운영 중 틀린 금액이 신고되면 바로 넣고 다시 묶는다. 그 계산기는 '점검 중'으로 멈춘다.
 - `maxAgeDays`: 오래된 판 안내 기준일 수.

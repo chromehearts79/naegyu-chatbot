@@ -222,6 +222,18 @@ def main():
                 else:
                     errors.append(f"[계산기 {kind}] {x['cite']} 원문에 \"{has}\" 가 없음 → 계산기 숫자(web/engine.js)를 새 원문대로 고치고 근거표도 고칠 것")
 
+    # 첫 화면 '자주 찾는 분야'(site.json featured)가 있는 주제·카드를 가리키는지
+    site = json.loads((KNOWLEDGE / "site.json").read_text())
+    by_id = {c["id"] for c in all_cards}
+    topic_refs = {f"{d['id']}:{t['id']}" for d in domains for t in d["topics"]}
+    for f in site.get("featured", []):
+        for r in f["topics"]:
+            if r not in topic_refs:
+                errors.append(f"[site.json 자주 찾는 분야 '{f['name']}'] 없는 주제: {r}")
+        for cid in f.get("cards", []):
+            if cid not in by_id:
+                errors.append(f"[site.json 자주 찾는 분야 '{f['name']}'] 없는 카드: {cid}")
+
     lines.append("# 문답 카드 프로그램 검사 결과\n")
     lines.append(f"- 카드 {len(cards)}개, 예상 질문 {sum(len(c['questions']) for c in cards)}개, 사실 {n_facts}개")
     lines.append(f"- 인용 문구 일치: {n_quotes_ok}/{n_facts}")

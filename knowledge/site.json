@@ -1,5 +1,5 @@
 {
-  "_note": "운영 설정. 운영부서와 오류 신고 창구가 정해지면 채우고 build_web.py 로 다시 묶는다. release.no 는 배포할 판 번호(update_rules.py finish 가 1씩 올린다), release.where 는 직원이 최신본을 받는 곳. calcOff 에 계산기 이름(예: \"tripExpense\")을 넣으면 그 계산기는 '점검 중'으로 멈춘다(틀린 금액이 신고되면 바로 끌 때). examples 는 첫 화면 '이렇게 물어보세요' 질문(여러 분야에서, 맞는 답에 닿는지 화면 점검으로 확인한 것만).",
+  "_note": "운영 설정. 운영부서와 오류 신고 창구가 정해지면 채우고 build_web.py 로 다시 묶는다. release.no 는 배포할 판 번호(update_rules.py finish 가 1씩 올린다), release.where 는 직원이 최신본을 받는 곳. calcOff 에 계산기 이름(예: \"tripExpense\")을 넣으면 그 계산기는 '점검 중'으로 멈춘다(틀린 금액이 신고되면 바로 끌 때). examples 는 첫 화면 '이렇게 물어보세요' 질문(여러 분야에서, 맞는 답에 닿는지 화면 점검으로 확인한 것만). featured 는 첫 화면 '자주 찾는 분야' 버튼(topics: \"분야id:주제id\", cards: 함께 보여 줄 카드 id). 여기에 전부 들어간 분야는 '모든 분야 보기'에서 빠진다.",
   "release": {
     "no": 1,
     "where": ""
@@ -17,5 +17,92 @@
     "입사 3년 차인데 연차 며칠이에요?",
     "근속 7년이면 복지포인트 몇 점이에요?",
     "아이 둘이면 가족수당 얼마 나와요?"
+  ],
+  "featured": [
+    {
+      "name": "휴가·근무",
+      "topics": [
+        "service:annual",
+        "service:sick",
+        "service:official",
+        "service:special",
+        "service:attendance"
+      ],
+      "cards": [
+        "r3-3-1-overview"
+      ]
+    },
+    {
+      "name": "출산·육아",
+      "topics": [
+        "birth_childcare:pregnancy",
+        "birth_childcare:birth",
+        "birth_childcare:spouse",
+        "birth_childcare:loss",
+        "birth_childcare:infertility",
+        "birth_childcare:parental",
+        "birth_childcare:care"
+      ]
+    },
+    {
+      "name": "수당·복지포인트",
+      "topics": [
+        "birth_childcare:money"
+      ],
+      "cards": [
+        "r3-4-1-overview",
+        "r4-4-overview",
+        "r3-4-2-overview"
+      ]
+    },
+    {
+      "name": "출장·여비",
+      "topics": [
+        "service:trip"
+      ],
+      "cards": [
+        "r3-6-3-overview",
+        "combo-domestic-trip"
+      ]
+    },
+    {
+      "name": "인사·평가",
+      "topics": [
+        "all_rules:g2",
+        "all_rules:g3"
+      ]
+    },
+    {
+      "name": "감사·징계·신고",
+      "topics": [
+        "all_rules:g6",
+        "all_rules:g7"
+      ]
+    },
+    {
+      "name": "보안·개인정보",
+      "topics": [
+        "all_rules:g8",
+        "all_rules:g9"
+      ]
+    },
+    {
+      "name": "계약·예산",
+      "topics": [
+        "all_rules:g5"
+      ]
+    },
+    {
+      "name": "결재·AI·공시",
+      "topics": [
+        "all_rules:g10"
+      ]
+    },
+    {
+      "name": "여러 규정 한눈에",
+      "topics": [
+        "all_rules:g11"
+      ]
+    }
   ]
 }
