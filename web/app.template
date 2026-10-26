@@ -530,6 +530,7 @@ function renderCalc(kind, question) {
   // append 에 null 을 넘기면 글자 'null'이 찍히므로, 질문에서 읽어 채운 칸이 있을 때만 안내 문단을 넣는다
   box.append(head);
   if (filled.length) box.append(h("p", { class: "soft", text: "질문에서 읽어 넣었습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }));
+  if (kind === "tripExpense" && vals.regionNote) box.append(h("p", { class: "soft", text: vals.regionNote }));
   box.append(form, out, live);
   run();
   return box;

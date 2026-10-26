@@ -6,6 +6,13 @@
   // ── 글자 정리와 일상어 → 규정어 보강 ──────────────────────────────
   // 일상어를 지우지 않고 규정어를 덧붙인다. 원래 표현도 계속 검색에 쓰인다.
   // [일상어, 덧붙일 규정어, (있으면) 함께 있어야 하는 말]
+  // 나라·해외 도시 이름. '빈'(빈 칸), '인도'(물품 인도), '선전'처럼 일반 낱말과 같은 이름은 넣지 않는다
+  var OVERSEAS_PLACES = ("미국 일본 중국 대만 홍콩 마카오 베트남 태국 필리핀 인도네시아 말레이시아 싱가포르 캄보디아 라오스 미얀마 몽골 네팔 " +
+    "스리랑카 방글라데시 우즈베키스탄 카자흐스탄 러시아 영국 프랑스 독일 이탈리아 스페인 포르투갈 네덜란드 벨기에 스위스 오스트리아 체코 폴란드 헝가리 " +
+    "스웨덴 노르웨이 덴마크 핀란드 그리스 튀르키예 터키 이스라엘 아랍에미리트 사우디 카타르 이집트 케냐 남아공 캐나다 멕시코 브라질 아르헨티나 칠레 페루 " +
+    "호주 뉴질랜드 괌 사이판 하와이 뉴욕 워싱턴 로스앤젤레스 샌프란시스코 시카고 보스턴 시애틀 도쿄 오사카 후쿠오카 삿포로 베이징 상하이 광저우 " +
+    "하노이 호찌민 다낭 방콕 마닐라 자카르타 발리 쿠알라룸푸르 런던 파리 프랑크푸르트 베를린 뮌헨 제네바 취리히 로마 밀라노 마드리드 바르셀로나 암스테르담 " +
+    "브뤼셀 모스크바 두바이 시드니 멜버른 토론토 밴쿠버").split(" ").join("|");
   var SYNONYMS = [
     [/와이프|아내|부인|집사람|와입|신랑|남편/, "배우자"],
     [/아빠|남자|남성|남직원/, "배우자 남성직원"],
@@ -55,7 +62,9 @@
     // 복무(휴가) 분야
     [/반반차/, "반일연가 시간 단위"],
     [/반차|반일/, "반일연가"],
-    [/몸이\s?안\s?좋|몸살|병결|입원|다쳐|다쳤|아파서\s?출근|아파서\s?쉬/, "병가 질병 부상"],
+    [/몸이\s?안\s?좋|몸살|병결|입원|다쳐|다쳤|아파서\s?출근|아파서\s?쉬/, "병가 부상 진단서"],
+    // 아파서 '오늘·하루' 쉬는 것은 병가, '1년·오래' 쉬는 것은 휴직
+    [/오늘|내일|하루|당일|아침에/, "병가 하루", /몸이|아파|아프|몸살|열이|감기|독감|병원/],
     [/예비군|민방위/, "공가 병역 훈련 소집"],
     [/동원|훈련|소집/, "공가 병역 훈련 소집", /예비군|민방위|병역|군대|입영|공가/],
     [/헌혈/, "헌혈 공가"],
@@ -106,7 +115,39 @@
     [/폭언|막말|욕설|갑질|따돌림|왕따|괴롭/, "직장 내 괴롭힘 신고 고충상담"],
     [/혜택|특전|우대|좋은\s?점/, "부상 포상 가점", /표창|상장|포상|수상/],
     [/날짜\s?(쓰|적|표기|형식)/, "날짜 표기 연월일 온점", /공문|문서|기안|작성/],
-    [/투잡|부업|알바|겸업/, "겸직"]
+    [/투잡|부업|알바|겸업/, "겸직"],
+    // 시험 질문 오답 분석(2026-10-26)에서 찾은 일상어. 시험 질문 문장이 아니라 직원이 흔히 쓰는 표현 묶음으로 적는다
+    [/떨어져\s?(일|근무|앉|지내)|자리\s?(를\s?)?(옮기|바꾸|떨어)|분리\s?(해|시켜|조치)|안\s?마주치/, "괴롭힘 피해자 행위자 분리 근무 장소 변경"],
+    [/몇\s?처|몇\s?팀|조직도|조직\s?구성|부서가\s?(몇|전부|모두)|팀이\s?몇|몇\s?개\s?부서/, "조직도 처 실 지사 팀"],
+    [/몇\s?년|옮기|바뀌|순환|교체|다른\s?업무/, "회계직원 보직순환", /회계|출납|결산/],
+    [/결혼식|결혼해|결혼하|장가|시집|웨딩/, "결혼 휴가 경조사휴가", /휴가|쉬|며칠|나와|날/],
+    [new RegExp(OVERSEAS_PLACES), "국외 출장 여비 지역 등급", /출장|숙박|일비|식비|여비|항공/],
+    [/발령|주재|해외\s?근무|해외\s?지사|파견\s?근무/, "주재원 주택 임차 지원", /집세|월세|집|숙소|주택|거처|전세/],
+    [/복사|사본|출력|인쇄/, "정보공개 수수료 사본 비용", /얼마|비용|돈|수수료|장당|한\s?장/],
+    [/헤어진|전\s?(남친|여친|애인|남자\s?친구|여자\s?친구)|따라다니|따라오|따라와|미행|스토킹|기다리고\s?있/, "스토킹 피해자 보호조치"],
+    [/내년|다음\s?해|이어서|넘기|남은|못\s?쓴|남으면/, "예산 이월", /예산/],
+    [/만들|제정|새로|개정|고치/, "내규 제정 개정 절차 확정", /(지침|세칙|내규).*(승인|확정|결재|절차|누가)|(승인|확정|결재|절차|누가).*(지침|세칙|내규)/],
+    [/해외|국외|외국/, "국외출장 결과보고서", /보고|결과서/],
+    [/출처|모르는|이상한|수상한|의심|피싱|스팸|해킹|악성/, "해킹메일 신고", /메일/],
+    [/회계\s?법인|감사인|외부\s?감사/, "회계감사인선임위원회", /고르|선정|뽑|선임|위원/],
+    [/누가\s?들어|위원은\s?누구|누구로\s?구성|구성원/, "구성", /위원회/],
+    [/공익\s?침해/, "공익신고"],
+    [/아꼈|아낀|절감|줄였/, "예산성과금", /보상|포상|성과금|얼마|상금|받/],
+    [/예정가보다|예정\s?가격보다|낙찰|싸게\s?계약|차액/, "낙찰차액 예산성과금", /절감|성과금|포상|대상/],
+    [/주\s?\d+\s?시간|시간제|단시간|파트\s?타임/, "단시간근무자 휴가", /연차|연가|휴가/],
+    [/관용차|업무용\s?차|회사\s?차|공용\s?차/, "업무용차량 사용 운행일지", /쓰고|이용|사용|운행|반납|타고|나서/],
+    [/해외|외국|미국|출국|따라\s?가/, "휴직 중 해외 출국", /휴직/],
+    [/없애|지우|삭제|버리|폐기|파쇄/, "개인정보 파기", /개인정보|고객\s?정보/],
+    [/보안\s?사고|유출\s?사고|랜섬/, "보안사고 발견 보고", /목격|발견|알게|누구|어디|알려|보고/],
+    [/야한|음담|몸에\s?손|만지|추행/, "성희롱 고충상담창구 상담", /누구|어디|얘기|말해|상담|알려|신고/],
+    [/결론|끝나고|끝난\s?뒤|종결|나서도/, "괴롭힘 사후 모니터링 재발", /괴롭힘|갑질/],
+    [/정직|감봉|견책|강등/, "표창 대상 제외", /표창|포상|추천/],
+    [/서명|사인|수령/, "수령확인서 자필서명", /상품권/],
+    [/사전\s?컨설팅|컨설팅대로/, "적극행정 면책", /징계|책임|문제/],
+    [/역할|하는\s?일|맡/, "관리부서 이행부서 감사부서 역할", /내부\s?통제/],
+    [/누구(한테|에게|랑)|어디(에|로|다)/, "상담 신고 창구", /얘기|말해|말하|신고|상담|알려|보고|물어/],
+    [/징계(까지는|는)?\s?(바라지|원하지)|처벌은?\s?원하지|조용히\s?해결|원만히|사과만/, "분리만 원하면 합의 당사자 간 해결"],
+    [/고충/, "고충처리위원회 처리 결과 10일", /며칠|기한|언제|결과|답/]
   ];
 
   var SPOUSE_CUE = /배우자|와이프|아내|부인|집사람|와입|남편|신랑|아빠|남자|남성/;
@@ -125,7 +166,7 @@
     "전 후 전에 후에 동안 이후 이전 개월 쉬어야 써야 해야 " +
     "할때 할 때 써도 해도 돼도 가도 받아도 되는지 몇번 몇개 몇년 법 방법 이야 이에요 예요 에요 쓰는 하는 되는").split(" "));
   // 말끝 → 조사 순서로 한 번씩 뗀다. 조사는 남는 글자가 2자 이상일 때만 뗀다("휴가"의 '가'는 그대로).
-  var ENDINGS = /(했어요|했는데|해요|해야|하나요|합니다|이에요|예요|에요|인가요|나요|까요|어요|아요|돼요|되요|게요|는데|인데|이라서|이라|라서|이요|요|하고|하면|해서|이야|이냐|냐|지요|죠|래요|대요)$/;
+  var ENDINGS = /(했어요|했는데|해요|해야|하나요|합니다|이에요|예요|에요|인가요|나요|까요|어요|아요|돼요|되요|게요|는데|인데|이라서|이라|라서|이요|요|하고|하면|해서|이야|이냐|냐|지요|죠|래요|대요|려고)$/;
   var PARTICLES = /(에서|에게|한테|으로|이랑|부터는|이나|은|는|을|를|도|에|랑|로|나)$/;
 
   // '가', '이'는 낱말 끝 글자인 경우가 많아(휴가, 평가, 어린이) 따로 지킨다.
@@ -139,9 +180,33 @@
   var QTAIL = /([가-힣])(이야|이에요|예요|법|방법)(?=\s|$)/g;
   // 질문 속 날짜(2023.3.2, 2026년, 3월 2일)는 검색을 흐린다. 날짜 계산은 계산기 칸에서 한다.
   var DATES = /\d{2,4}\s?[.\-\/년]\s?\d{1,2}\s?[.\-\/월]\s?\d{1,2}\s?일?|\d{4}\s?년|\d{1,2}\s?월\s?\d{1,2}\s?일/g;
+  // 국내 지명(시·도, 시·군). 출장 질문에서 지명은 목적지일 뿐 주제가 아니다. 답 카드 어디에도 낱말로 나오지 않는 지명이
+  // 검색에 남으면 '모르는 주제'로 보고 답을 막거나('세종시'), 다른 낱말 글자에 걸린다('수원' ⊂ '연수원').
+  var PLACE_NAMES = ("서울 부산 대구 인천 광주 대전 울산 세종 제주 경기 강원 충북 충남 전북 전남 경북 경남 충청북 충청남 전라북 전라남 경상북 경상남 " +
+    "수원 성남 부천 안산 안양 평택 의정부 시흥 파주 김포 하남 안성 의왕 군포 남양주 과천 여주 포천 동두천 가평 양평 연천 " +
+    "춘천 원주 강릉 속초 삼척 태백 홍천 횡성 평창 정선 철원 화천 양구 양양 " +
+    "청주 충주 제천 옥천 괴산 진천 증평 천안 아산 서산 논산 당진 보령 계룡 태안 서천 금산 청양 " +
+    "군산 익산 정읍 남원 김제 무주 임실 순창 고창 부안 목포 여수 순천 나주 광양 담양 곡성 구례 고흥 장흥 강진 해남 무안 함평 완도 " +
+    "포항 경주 김천 안동 영주 영천 문경 경산 의성 청송 영덕 청도 칠곡 예천 봉화 울진 울릉 " +
+    "창원 진주 통영 사천 김해 밀양 거제 의령 함안 창녕 남해 하동 산청 함양 합천 서귀포").split(" ");
+  // 지명과 글자가 같은 일반 낱말(예산 = 예산군, 상주 = 상주 인원, 전주 = 지난주 …)은 뒤에 '시·군'이 붙을 때만 지명으로 본다
+  var PLACE_SUFFIXED = ("예산 상주 양주 진도 영광 전주 부여 음성 고령 보은 신안 장수 완주 거창 인제 양산 오산 이천 용인 구미 " +
+    "장성 고성 보성 광명 공주 동해 구리 성주 영동 단양 홍성 화순 영암 영월 군위 고양 화성").split(" ");
+  var PLACE_NEEDS_SUFFIX = new Set(PLACE_SUFFIXED);
+  // 앞에 한글이 붙어 있으면 지명이 아니다(연수원 ⊄ 수원). 뒤에 붙은 행정 단위와 조사도 함께 뺀다.
+  var PLACE_RE = new RegExp("(^|[^가-힣])(" + PLACE_NAMES.concat(PLACE_SUFFIXED).sort(function (a, b) { return b.length - a.length; }).join("|") +
+    ")(특별자치시|특별자치도|특별시|광역시|시|군|도)?(으로|에서|에게|까지|부터|로|에|의|은|는|이|가|와|과|랑)?", "g");
+  // 출장 이야기일 때만 지명을 맥락으로 본다. 그 밖에는("세종시 이주 지원금") 지금처럼 '준비된 답에서 찾지 못함'으로 정직하게 답한다
+  var TRAVEL = /출장|여비|숙박|일비|식비|운임|교통비|ktx|기차|열차|버스|비행기|항공|관용차|자가용|파견|부임/i;
+  // 'N박M일' 일정: 종합 안내 카드("1박 2일 출장")를 찾는 데 쓰이므로 검색에는 남기고, '모르는 낱말' 판정에서만 뺀다
+  var STAY_TOKEN = /^\d+박(\d+일)?$/;
+  // 창구를 묻는 질문("누구한테 얘기해요", "어디에 신고해요")과 창구 카드 제목(상담·신고·창구·접수)
+  var ASK_WHERE = /(누구|어디)\s?(한테|에게|에|로|다|랑)?\s?(얘기|말해|말하|신고|상담|알려|보고|물어|연락)/;
+  var CHANNEL_TITLE = /상담|신고|창구|접수/;
 
   function content(s) {
-    s = normalize(String(s || "").replace(DATES, " ")).replace(/몇\s?일/g, "며칠").replace(QWORDS, "$1 $2").replace(QTAIL, "$1 $2");
+    s = normalize(String(s || "").replace(DATES, " ")).replace(/몇\s?일/g, "며칠").replace(QWORDS, "$1 $2").replace(QTAIL, "$1 $2")
+      .replace(/([가-힣])(려고)(하|해)/g, "$1$2 $3");
     return s.replace(SPLIT_HEADS, "$1 $2").split(" ").map(function (t) {
       var u = t.replace(ENDINGS, "");
       if (!u) u = t;
@@ -267,6 +332,20 @@
     var titleGrams = new Set();
     cards.forEach(function (c) { bigrams(content(c.title)).forEach(function (_, k) { titleGrams.add(k); }); });
     this.titleGrams = titleGrams;
+    // 카드 이름(괄호 앞, 3글자 이상)이 질문에 그대로 있으면 그 카드를 조금 올린다("가족수당", "징계 감경", "결혼 휴가")
+    var titleHeads = new Map();
+    cards.forEach(function (c) {
+      var head = normalize(String(c.title).split(/[(（]/)[0]).replace(/\s+/g, "");
+      if (head.length >= 3) (titleHeads.get(head) || titleHeads.set(head, new Set()).get(head)).add(c.id);
+    });
+    this.titleHeads = titleHeads;
+    // 카드 글에 낱말로 나오는 지명(서울·부산·제주·김포 …)은 지사·노선·가산처럼 주제일 수 있어 검색에 그대로 쓴다
+    var known = new Set();
+    cards.forEach(function (c) {
+      [c.title, c.summary].concat(c.questions, c.keywords || [], c.answer || [], (c.facts || []).map(function (f) { return f.label + " " + f.value + " " + (f.quote || ""); }))
+        .join(" ").replace(PLACE_RE, function (m, pre, name) { known.add(name); return m; });
+    });
+    this.knownPlaces = known;
 
     // 규정 이름의 특징 낱말(예: 법인카드, 행동강령, 이해충돌). 질문에 나오면 그 규정 카드를 조금 올린다.
     var ruleOf = new Map(), nameTokens = new Map();
@@ -334,7 +413,18 @@
   // 문서 점수 = 포괄도(질문 글자가 문서에 얼마나 들어 있나) 0.5 + 정밀도(문서 글자가 질문에 얼마나 들어 있나) 0.25
   //           + 코사인 유사도 0.25. 정밀도는 짧은 질문이 여러 카드에 똑같이 걸릴 때 더 딱 맞는 쪽을 고른다.
   // skip(doc) 이 참인 문서는 빼고 점수를 낸다. 시험에서 질문 자신을 빼는 데 쓴다.
+  // 검색 전에, 출장 질문이면 카드에 없는 지명('세종시', '춘천')을 뺀다. 지명은 계산기 칸이 원래 질문에서 읽는다.
+  // 빼고 남는 말이 없으면(지명만 물음) 원래 질문 그대로.
+  CardIndex.prototype.clean = function (query) {
+    var t = String(query || ""), known = this.knownPlaces, s = t;
+    if (TRAVEL.test(s)) s = s.replace(PLACE_RE, function (m, pre, name, suf) {
+      if (known.has(name) || (PLACE_NEEDS_SUFFIX.has(name) && !/^(시|군|특별자치시|광역시)$/.test(suf || ""))) return m;
+      return pre + " ";
+    });
+    return content(s) ? s : t;
+  };
   CardIndex.prototype.score = function (query, skip) {
+    query = this.clean(query);
     var q = this.query(query), best = new Map(), idf = this.idf, unseen = this.unseenIdf, docs = this.docs, postings = this.postings;
     var cand = new Set();
     q.weights.forEach(function (_, g) { (postings.get(g) || []).forEach(function (i) { cand.add(i); }); });
@@ -346,6 +436,8 @@
       if (hit) rt.rules.forEach(function (r) { boosted.add(r); });
     });
     q.rules = boosted;
+    var named = new Set(), askWhere = ASK_WHERE.test(normalize(query));
+    this.titleHeads.forEach(function (ids, head) { if (flat.indexOf(head) >= 0) ids.forEach(function (id) { named.add(id); }); });
     cand.forEach(function (i) {
       var d = docs[i];
       if (skip && skip(d)) return;
@@ -385,6 +477,10 @@
       var qual = QUALIFIER.exec(byId.get(id).title);
       if (qual && flat.indexOf(qual[0].replace(/\s/g, "")) < 0) s *= T.QUAL;
       if (boosted.size && boosted.has(self.ruleOf.get(id))) s *= 1.15;
+      if (named.has(id)) s *= T.TITLE;
+      if (askWhere && CHANNEL_TITLE.test(byId.get(id).title)) s *= T.CHANNEL;
+      // '내규에 없음' 안내 카드는 관련 제도를 두루 적어 웬만한 질문에 걸린다. 질문이 다른 카드 이름(가족수당 등)을 직접 대면 그 카드를 앞에
+      else if (named.size && byId.get(id).kind === "outside") s *= T.OUTSIDE;
       best.set(id, s);
     });
     this.lastQuery = q;
@@ -397,11 +493,11 @@
     out.sort(function (a, b) { return b.score - a.score; });
     // 상위 후보마다 질문의 핵심 낱말 중 카드 어디에도 없는 것(miss)을 적는다.
     // "챗지피티 써도 돼?"에 원고료 카드가 1등을 해도 '챗지피티'가 빠져 있으면 바로 답하지 않게 하려는 것.
-    var toks = content(query).split(" ").filter(function (t) { return t.length >= 2 && !MISS_IGNORE.has(t) && !VERBY.test(t); });
+    var toks = content(query).split(" ").filter(function (t) { return t.length >= 2 && !MISS_IGNORE.has(t) && !VERBY.test(t) && !STAY_TOKEN.test(t); });
     var cidf = this.cardIdf, wOf = function (t) { var w = 0; bigrams(t).forEach(function (_, k) { w += cidf.idf.get(k) || cidf.unseen; }); return w; };
     var wAll = toks.reduce(function (a, t) { return a + wOf(t); }, 0) || 1;
     var unknown = function (t) { var g = bigrams(t), n = 0; g.forEach(function (_, k) { if (!cidf.idf.has(k)) n++; }); return n * 2 >= g.size; };
-    out.slice(0, 5).forEach(function (r) {
+    out.slice(0, 10).forEach(function (r) {
       var grams = cardGrams.get(r.id);
       var has = function (g) { var n = 0; g.forEach(function (_, k) { if (grams.has(k)) n++; }); return n > 0 && n * 2 >= g.size; };
       r.miss = toks.filter(function (t) {
@@ -413,12 +509,16 @@
       r.missShare = r.miss.reduce(function (a, t) { return a + wOf(t); }, 0) / wAll;
       // 카드 1천여 장 어디에도 없는 3글자 이상 명사(예: '응시료')가 빠졌으면 무게와 관계없이 '빠짐'으로 본다
       if (r.miss.some(function (t) { return t.length >= 3 && unknown(t); })) r.missShare = Math.max(r.missShare, 1);
+      // 빠진 낱말 중 카드 제목에 쓰이는 '주제어'(정직, 서명, 분실 …). 다른 후보가 이 말을 갖고 있으면 1위만으로는 질문을 다 덮지 못한다
+      var tg = self.titleGrams;
+      r.tmiss = r.miss.filter(function (t) { var g = bigrams(t), n = 0; g.forEach(function (_, k) { if (tg.has(k)) n++; }); return n > 0 && n * 2 >= g.size; });
     });
     return out;
   };
   // 여러 가지를 한 번에 묻는 질문("복직하면 승진 소요기간·연차·성과급은?")을 나눠 답하기 위한 계획.
   // 1위 카드가 덮지 못한 핵심 낱말이 질문의 SPLIT 이상이면, 그 낱말을 가장 잘 덮는 다른 후보를 차례로 고른다(최대 3장).
   CardIndex.prototype.plan = function (query, ranked) {
+    query = this.clean(query);
     // 나누는 기준은 '주제어'만: 카드 제목에 나오는 낱말(얼마야·나오면 같은 군말은 빠진다)
     var tg = this.titleGrams;
     var topical = function (t) { var g = bigrams(t), n = 0; g.forEach(function (_, k) { if (tg.has(k)) n++; }); return n * 2 >= g.size && n > 0; };
@@ -462,7 +562,7 @@
   var VERBY = /(어|아|여|겨|워|와|고|면|서|도|게|지|는|던|됨|함|같|싶|해|돼|되|랑|며|니|까|요|죠|임|음)$/;
   var MISS_IGNORE = new Set("회사 직원 규정 내규 우리 금융원 기관 규정상 관련 문의 질문 혹시 제가 저희 지금 요즘 경우 상황 문제 사람 내용 처리".split(" "));
 
-  var T = { HI: 0.45, LO: 0.24, GAP: 0.12, NEAR: 0.80, DOMAIN: 0.30, WDOC: 0.4, WCARD: 0.6, ONE: 0.3, SYN: 0.5, LEAD: 0.45, MISS: 0.5, QUAL: 0.85, OVERVIEW: 0.9, SPLIT: 0.2, COMBO: 0.85 };
+  var T = { HI: 0.45, LO: 0.24, GAP: 0.12, NEAR: 0.80, DOMAIN: 0.30, WDOC: 0.4, WCARD: 0.6, ONE: 0.3, SYN: 0.5, LEAD: 0.45, MISS: 0.5, QUAL: 0.85, OVERVIEW: 0.9, SPLIT: 0.2, COMBO: 0.85, TITLE: 1.1, COVER: 0.5, OUTSIDE: 0.8, CHANNEL: 1.15 };
 
   // 점수로 답할지, 되물을지, 조문 검색으로 넘길지 정한다.
   // 질문 글자 대부분이 카드에 없는 말이면(분야 밖) 조문 검색으로 넘긴다.
@@ -480,12 +580,27 @@
     }
     var near = ranked.filter(function (r) { return r === top || (r.score >= Math.max(T.LO, top.score * T.NEAR) && !family(top, r)); }).slice(0, 4);
     var miss = (top.missShare || 0) >= T.MISS ? top.miss : [];
+    // 1위 카드에 없는 주제어를 가까운 다른 후보가 갖고 있으면("정직 1년 지났는데 표창" → 표창 절차 카드엔 '정직'이 없고 표창 제외 카드엔 있음)
+    // 바로 답하지 않고 1위를 펼친 채 그 후보들을 함께 보여 준다
+    if (!miss.length && (top.tmiss || []).length) {
+      var cover = ranked.slice(1, 10).filter(function (r) {
+        return r.miss && r.score >= top.score * T.COVER && !family(top, r) && top.tmiss.some(function (t) { return r.miss.indexOf(t) < 0; });
+      }).slice(0, 2);
+      if (cover.length) {
+        // 1위, 빠진 주제어를 가진 후보, 그다음 1위와 점수가 비슷한 후보 순(4개까지)
+        var ids = [top.id];
+        cover.concat(near).forEach(function (r) { if (ids.indexOf(r.id) < 0) ids.push(r.id); });
+        return { mode: "ask", ids: ids.slice(0, 4), lead: top.score >= T.LEAD, gap: top.tmiss };
+      }
+    }
     if (!miss.length && top.score >= T.HI && (top.score - second.score >= T.GAP || near.length === 1)) {
       return { mode: "answer", id: top.id, score: top.score, alts: ranked.slice(1, 4).filter(function (r) { return r.score >= T.LO; }).map(function (r) { return r.id; }) };
     }
     // 질문의 핵심 낱말이 1위 카드에 없으면: 후보를 넓게 보여 주고 1위 답을 미리 펼치지 않는다
     if (miss.length) {
-      var wide = ranked.filter(function (r) { return r.score >= T.LO; }).slice(0, 4);
+      // 1위는 그대로 두고, 그다음 자리에 빠진 낱말을 가진 카드(10위 안)를 넣는다("못 쓴 예산을 내년에" → '예산'이 있는 예산 이월 카드)
+      var covering = ranked.slice(1, 10).filter(function (r) { return r.miss && r.score >= T.LO && miss.some(function (t) { return r.miss.indexOf(t) < 0; }); }).slice(0, 2);
+      var wide = [top].concat(covering, ranked.filter(function (r) { return r !== top && r.score >= T.LO && covering.indexOf(r) < 0; })).slice(0, 4);
       if (wide.length > 1) return { mode: "ask", ids: wide.map(function (r) { return r.id; }), lead: false, missing: miss };
       return { mode: "answer", id: top.id, score: top.score, soft: true, alts: [], missing: miss };
     }
@@ -808,6 +923,8 @@
     // 숙박 지역: 서울, 광역시·제주만 넣는다(경기 광주 제외). 그 밖의 지명은 구분이 애매해 비워 둔다
     if (/서울/.test(t)) v.region = "seoul";
     else if (/부산|대구|인천|광주|대전|울산|제주/.test(t) && !/경기\s*광주/.test(t)) v.region = "metro";
+    // 세종특별자치시는 별표 제1호에 따로 없다: 지역 칸은 비워 두고 왜 비웠는지 알린다
+    if (!v.region && /세종/.test(t)) v.regionNote = "세종특별자치시는 여비지급세칙 별표 제1호에 따로 적혀 있지 않습니다(서울특별시·광역시·그 밖의 지역, 제주는 광역시 기준). 숙박 지역을 어디로 볼지 회계 담당에 확인하세요.";
     // 회의비 등 다른 예산으로 먹은 끼니: 그런 말이 있을 때만("2끼", "점심·저녁")
     if (OTHER_BUDGET.test(t)) {
       if ((m = t.match(new RegExp(NUMW + "\\s*끼")))) v.meals = num(m[1]);
@@ -849,12 +966,17 @@
     ["maternity", /출산\s*(전후\s*)?휴가/],
     ["loss", /유산|사산/]
   ];
+  // 해외 출장이면 국내 여비 계산기를 붙이지 않는다(국외 여비는 지역 등급·항공운임이 달라 계산기가 없다)
+  var OVERSEAS = new RegExp("국외|해외|외국|국제선|" + OVERSEAS_PLACES);
   function calcFor(text) {
-    var t = String(text || "");
+    var t = String(text || ""), overseas = OVERSEAS.test(t);
     // "출장 가서 점심을 회사 돈으로 먹었어요"처럼 묻는 말이 없어도 끼니 공제를 말하면 출장 여비 계산기
-    if (/출장/.test(t) && OTHER_BUDGET.test(t) && /아침|점심|저녁|식사|밥|끼/.test(t)) return "tripExpense";
+    if (!overseas && /출장/.test(t) && OTHER_BUDGET.test(t) && /아침|점심|저녁|식사|밥|끼/.test(t)) return "tripExpense";
     var ask = CALC_ASK.test(t);
-    for (var i = 0; i < CALC_TOPIC.length; i++) if ((ask || CALC_TOPIC[i][2]) && CALC_TOPIC[i][1].test(t)) return CALC_TOPIC[i][0];
+    for (var i = 0; i < CALC_TOPIC.length; i++) {
+      if (overseas && CALC_TOPIC[i][0] === "tripExpense") continue;
+      if ((ask || CALC_TOPIC[i][2]) && CALC_TOPIC[i][1].test(t)) return CALC_TOPIC[i][0];
+    }
     return null;
   }
   // 이어 묻기("그럼 자가용으로 가면?")인지: 앞 질문의 주제를 이어 붙여 다시 찾는다

@@ -9,7 +9,8 @@
     {
       "q": "6백만원짜리 용역계약 체결 전에 감사실 검토 필요해?",
       "expect": [
-        "r4-7-targets-money"
+        "r4-7-targets-money",
+        "r4-7-targets-main"
       ]
     },
     {

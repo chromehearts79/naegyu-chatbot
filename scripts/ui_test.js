@@ -122,6 +122,37 @@ ok(lost.length === 0, `돈·기간 질문 ${reach.length}개 모두 계산기에
 const exWant = [/국내 출장 여비/, /연가\(연차\) 일수/, /복지포인트/, /가족수당/];
 const exBad = exs.filter((q, i) => { const x = ask(q); return !exWant[i].test(title(x)) || !x.querySelector(".calc"); });
 ok(exBad.length === 0, "예시 질문 4개 모두 맞는 답과 계산기" + (exBad.length ? ": " + exBad.join(", ") : ""));
+// 출장 질문의 지명: 카드에 없는 지명(세종·춘천 …)도 목적지로만 보고 출장 답을 찾는다. '수원'이 '연수원'에 걸리지 않는다
+{
+  const trip = new Set(w.DATA.cards.filter((c) => (c.domain === "service" && c.topics.includes("trip")) || c.id === "combo-domestic-trip" ||
+    (c.id.startsWith("r3-6-3-") && !/training|overseas/.test(c.id))).map((c) => c.id));
+  const places = ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종시", "제주도", "수원", "성남", "춘천", "강릉", "청주", "천안", "전주시", "목포", "여수", "포항", "경주", "창원", "진주", "원주", "안동", "서귀포", "나주"];
+  const forms = ["{p}로 시외출장을 가려고하는데 여비계산이 어떻게 됨?", "{p} 출장 여비 얼마예요?", "{p}에 1박2일 출장 가요. 숙박비 얼마까지 돼요?"];
+  const bad = [];
+  for (const p of places) for (const f of forms) {
+    const q = f.replace("{p}", p), r = w.cardIndex.score(q), dec = w.E.decide(r, q, w.cardIndex.lastQuery);
+    const top = dec.id || (dec.ids || [])[0], miss = (dec.missing || []).filter((m) => m.indexOf(p.replace(/(시|도)$/, "")) === 0 || /려고/.test(m));
+    if (!trip.has(top) || miss.length) bad.push(q + " → " + top + (miss.length ? " (찾지 못함: " + miss.join(", ") + ")" : ""));
+  }
+  ok(bad.length === 0, `지명 ${places.length}개 × 출장 질문 3가지 모두 출장 답, 지명·'가려고하는데'를 모르는 낱말로 보지 않음` + (bad.length ? ": " + bad.slice(0, 3).join(" / ") : ""));
+  // 지명이 곧 주제인 답, 헷갈리는 낱말, 출장 아닌 질문은 그대로(바꾸기 전과 같은 결과)
+  const keep = [["제주 출장 일비 더 받나요", "r3-6-3-survey-allowance"], ["김포에서 김해 비행기 타도 돼요", "r3-6-3-domestic-flight"], ["광주지사 어디야", "r3-8-1-org-teams-branch"],
+    ["연수원 교육 가면 여비 나와요?", "r3-6-3-training"], ["부산 1박2일 출장 여비", "combo-domestic-trip"]];
+  const moved = keep.filter(([q, id]) => { const r = w.cardIndex.score(q), dec = w.E.decide(r, q, w.cardIndex.lastQuery); return (dec.id || (dec.ids || [])[0]) !== id; }).map((x) => x[0]);
+  const dq = (q) => w.E.decide(w.cardIndex.score(q), q, w.cardIndex.lastQuery);
+  const sejongMove = dq("세종시 이주 지원금 있어요?"), budget = dq("예산 범위 안에서 출장 가도 되나요"), alone = dq("세종");
+  ok(moved.length === 0 && (sejongMove.missing || []).includes("세종시") && (budget.missing || []).includes("예산") && alone.mode === "fallback",
+    "지명이 주제인 답(제주 일비 가산·김포·김해 항공·지사), 연수원, '예산', 출장 아닌 '세종시 이주', 지명만 묻기는 그대로" + (moved.length ? ": " + moved.join(", ") : ""));
+  // 해외 출장에는 국내 여비 계산기를 붙이지 않는다
+  t = ask("베트남 출장 일비 얼마예요");
+  ok(!t.querySelector(".calc-link") && !t.querySelector(".calc"), "해외 출장 질문(베트남)에는 국내 여비 계산기를 붙이지 않음");
+  // 세종: 숙박 지역 칸은 비워 두고 왜 비웠는지 알린다
+  t = ask("세종시로 1박2일 출장 가면 여비 얼마예요?");
+  if (!t.querySelector(".calc") && t.querySelector(".calc-link button")) t.querySelector(".calc-link button").click();
+  const sc = t.querySelector(".calc");
+  ok(sc && /세종특별자치시는 여비지급세칙 별표 제1호에 따로 적혀 있지 않습니다/.test(sc.textContent) && sc.querySelector("[id$='-region']").value === "",
+    "세종 출장: 계산기에 '별표 제1호에 따로 없음, 회계 담당 확인' 안내, 숙박 지역 칸은 비워 둠");
+}
 t = ask("지하철비용은 일비에 포함됨?");
 ok(/지하철/.test(title(t)), "지하철비용 일비 질문 → 지하철·버스 요금과 일비");
 // 평가단 지적 반영 확인
