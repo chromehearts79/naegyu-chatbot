@@ -17,6 +17,8 @@
   --accent-soft: #e1f0ec;
   --mark: #ffe38f;
   --mark-ink: #16201c;
+  --sim: #cfe4ff;     /* 내규나침반: 같은 뜻의 다른 말·답 카드 근거 문구(넣은 낱말 그대로는 --mark) */
+  --sim-ink: #16201c;
   --hl: #eef7f4;
   --warn: #8a5300;
   --warn-soft: #fff1d1;
@@ -32,7 +34,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #8c9b96;
-    --line: #27322e; --line-strong: #5f6e69; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
+    --line: #27322e; --line-strong: #5f6e69; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc; --sim: #1f3d5e; --sim-ink: #e6f1ff;
     --hl: #17302b; --warn: #f2b54b; --warn-soft: #3a2c0e; --ok: #5bd08a; --ok-soft: #12301f; --danger: #f97066;
     color-scheme: dark;
   }
@@ -41,7 +43,7 @@
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] {
   --paper: #0e1412; --surface: #151d1a; --sunk: #1b2421; --ink: #e3ebe7; --ink-2: #a4b2ad; --ink-3: #8c9b96;
-  --line: #27322e; --line-strong: #5f6e69; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc;
+  --line: #27322e; --line-strong: #5f6e69; --accent: #5cc2ae; --accent-ink: #06211c; --accent-soft: #15332e; --mark: #6b5513; --mark-ink: #fff6dc; --sim: #1f3d5e; --sim-ink: #e6f1ff;
   --hl: #17302b; --warn: #f2b54b; --warn-soft: #3a2c0e; --ok: #5bd08a; --ok-soft: #12301f; --danger: #f97066;
   color-scheme: dark;
 }
@@ -121,7 +123,8 @@ button { cursor: pointer; }
 .pill { font-size: 12px; border-radius: 999px; padding: 2px 9px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
-.a p { margin: 0; max-width: 68ch; }
+/* 문단은 칸 끝까지 쓴다(글자 수로 폭을 묶으면 넓은 칸에서도 그 앞에서 줄이 바뀌어 끊겨 보인다). 마지막 줄에 한두 낱말만 남지 않게 */
+.a p { margin: 0; text-wrap: pretty; }
 .a strong { font-weight: 600; background: linear-gradient(transparent 62%, var(--accent-soft) 62%); }
 .facts { width: 100%; border-collapse: collapse; font-size: 14px; }
 .facts-box { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
@@ -163,6 +166,8 @@ details.box[open] summary { margin-bottom: 8px; }
 .calc td { padding: 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .calc td:first-child { color: var(--ink-2); width: 42%; padding-right: 10px; }
 .calc .err { color: var(--danger); font-size: 13px; }
+/* 고치는 도중에는 마지막 결과를 흐리게 남긴다(지웠다 다시 쓰는 사이 결과표가 사라졌다 나타나며 화면이 들썩이지 않게) */
+.calc .stale { opacity: 0.4; pointer-events: none; }
 
 /* 되묻기·주제 목록 */
 .cands { display: grid; gap: 8px; }
@@ -202,6 +207,71 @@ details.box[open] summary { margin-bottom: 8px; }
   .source[data-open="false"] { display: none; }
   .source-inner { position: static; max-height: 78vh; border-radius: 14px 14px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18); }
 }
+
+/* 내규나침반: 낱말이 나오는 곳을 내규별로 묶어(왼쪽) 보여 주고, 누르면 그 내규 원문 전체를 오른쪽 원문 칸에 연다 */
+.modes { justify-self: start; display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 999px; }
+.modes button { border: 0; background: transparent; color: var(--ink-2); border-radius: 999px; padding: 4px 16px; min-height: 36px; font-size: 14px; font-weight: 600; }
+.modes button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.compass-note { margin: 0; font-size: 14px; color: var(--ink-2); }
+/* 최근 단추 줄. 아래 .compass-only 보다 먼저 써야 질문하기 화면에서 '최근 찾은 낱말' 줄이 숨는다 */
+.recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.compass-only { display: none; }
+.compassing .compass-only { display: block; }
+.compassing .ask-only { display: none; }
+.compassing .recent.compass-only { display: flex; }
+.recent[hidden] { display: none !important; }
+.recent .chips { gap: 6px; }
+.named { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; background: var(--hl); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.linkish { border: 0; background: transparent; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
+.wrap.compassing { max-width: 1200px; }
+.wrap.compassing .layout { grid-template-columns: minmax(0, 1fr); }
+.compassing .source { display: none; }
+/* 왼쪽 내규 목록. 내규 이름은 강조색으로 원문 글씨(검은색)와 구분한다. 후보 카드의 규정 이름(.cand-rule)과 같은 색 */
+.cbody { display: grid; gap: 16px; margin-top: 14px; }
+.clist { display: grid; gap: 2px; align-content: start; min-width: 0; }
+.chead { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.rl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; text-align: left; border: 0; border-radius: 8px; background: transparent; padding: 7px 10px; color: var(--accent); font-size: 14.5px; }
+.rl b { font-weight: 600; }
+.rl span { color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.rl:hover { background: var(--hl); }
+.rl[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.rl[aria-pressed="true"] span { color: var(--accent-ink); }
+.rl[hidden] { display: none; }
+.clist .more { justify-self: start; border: 0; background: transparent; padding: 6px 10px; color: var(--ink-2); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+/* 오른쪽 원문 칸 */
+.cpane { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.cpane h3 { margin: 0; font-family: var(--font-display); font-size: 19px; color: var(--accent); }
+.cpane .meta { font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.back { justify-self: start; }
+.why { margin: 0; font-size: 13px; color: var(--ink-2); }
+.jump { display: flex; flex-wrap: wrap; gap: 4px; }
+.jump button { border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink-2); padding: 1px 9px; min-height: 28px; font-size: 12.5px; }
+.jump button:hover { border-color: var(--accent); color: var(--accent); }
+.jump button[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.law mark.sim, .legend mark.sim { background: var(--sim); color: var(--sim-ink); }
+.legend mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; padding: 0 1px; }
+.law mark.now { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cnav { position: sticky; top: -14px; z-index: 1; box-shadow: 0 -14px 0 var(--surface); display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px 4px 10px; }
+.cnav span { flex: 1; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cnav .btn.ghost { min-height: 32px; min-width: 40px; padding: 2px 8px; }
+.legend { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.chapter { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.02em; }
+.art { scroll-margin-top: 56px; }
+/* 넓은 화면: 목록과 원문을 나란히, 원문 칸은 화면에 붙어 그 안에서만 굴린다 */
+@media (min-width: 1000px) {
+  .cbody { grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); align-items: start; }
+  .cpane { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+  .back { display: none; }
+}
+/* 휴대폰 폭: 목록을 먼저 보이고, 내규를 누르면 원문을 화면 전체로. '← 내규 목록'으로 돌아간다 */
+@media (max-width: 999px) {
+  .cbody.picked .clist { display: none; }
+  .cbody:not(.picked) .cpane { display: none; }
+  .cnav { top: 0; box-shadow: none; }
+  .rl { min-height: 44px; align-items: center; }
+  .jump button { min-height: 36px; }
+}
+details.annex > summary { cursor: pointer; font-size: 14px; font-weight: 600; }
 
 /* 검증 정보 */
 .about { margin-top: 36px; border-top: 1px solid var(--line); padding-top: 18px; display: grid; gap: 12px; }
@@ -254,24 +324,33 @@ details.box[open] summary { margin-bottom: 8px; }
   <div class="layout">
     <main>
       <section class="composer" aria-label="질문하기">
+        <!-- 질문하기: 준비된 답을 찾는다. 내규나침반: 낱말이 어느 내규 어디에 나오는지 원문에서 찾는다 -->
+        <div class="modes" id="modes" role="group" aria-label="찾는 방법">
+          <button type="button" data-mode="ask" aria-pressed="true">질문하기</button>
+          <button type="button" data-mode="compass" aria-pressed="false">내규나침반</button>
+        </div>
         <form class="ask-row" id="ask-form" autocomplete="off" onsubmit="return false">
           <label for="q" class="label" hidden>질문</label>
           <input id="q" name="q" type="text" placeholder="궁금한 것을 평소 말하듯 적어 보세요" aria-label="질문">
-          <button class="btn" type="submit">묻기</button>
+          <button class="btn" type="submit" id="ask-btn">묻기</button>
         </form>
+        <div class="recent ask-only" id="recent-ask" hidden><span class="label">최근 질문</span><div class="chips"></div></div>
+        <div class="recent compass-only" id="recent-compass" hidden><span class="label">최근 찾은 낱말</span><div class="chips"></div></div>
         <p class="loading" id="loading" role="status">내규챗봇을 여는 중입니다. 규정 전체와 답이 이 파일 안에 들어 있어 사양이 낮은 PC에서는 몇 초 걸릴 수 있습니다.</p>
-        <div class="label">이렇게 물어보세요</div>
-        <div class="chips examples" id="examples"></div>
-        <div class="label">자주 찾는 분야</div>
-        <div class="chips featured" id="featured"></div>
-        <details class="all-topics"><summary>모든 분야 보기</summary><div class="topic-groups" id="topics"></div></details>
-        <ol class="howto" aria-label="쓰는 법">
+        <p class="compass-note compass-only" id="compass-help"></p>
+        <div class="label ask-only">이렇게 물어보세요</div>
+        <div class="chips examples ask-only" id="examples"></div>
+        <div class="label ask-only">자주 찾는 분야</div>
+        <div class="chips featured ask-only" id="featured"></div>
+        <details class="all-topics ask-only"><summary>모든 분야 보기</summary><div class="topic-groups" id="topics"></div></details>
+        <ol class="howto ask-only" aria-label="쓰는 법">
           <li><b>① 묻기</b> 평소 말하듯 적거나 분야를 고릅니다</li>
           <li><b>② 확인</b> 답 아래 연두색 근거 버튼을 누르면 내규 원문이 열립니다</li>
-          <li><b>③ 막히면</b> 답이 없거나 틀리면 담당부서에 확인하고 '오류 신고'를 눌러 주세요</li>
+          <li><b>③ 막히면</b> 답이 없거나 틀리면 관련 부서에 문의하고 '오류 신고'를 눌러 주세요</li>
         </ol>
       </section>
-      <div class="thread" id="thread" aria-live="polite"></div>
+      <div class="thread ask-only" id="thread" aria-live="polite"></div>
+      <div class="thread compass-only" id="compass-thread" aria-live="polite"></div>
       <section class="about" id="about" aria-label="검증 정보"></section>
     </main>
 
@@ -472,7 +551,7 @@ function renderCalc(kind, question) {
   var stale = (DATA.meta.calcStale || {})[kind], off = ((DATA.meta.site || {}).calcOff || []).indexOf(kind) >= 0;
   if (stale || off) {
     box.append(head, h("p", { class: "caution", text: (stale ? "근거 조문(" + stale.join(", ") + ")이 개정돼 계산기 숫자를 다시 확인하는 중이라 계산하지 않습니다."
-      : "이 계산기는 점검 중이라 계산하지 않습니다.") + " 위 답의 근거 조문 원문을 보고 담당부서에 확인하세요." }));
+      : "이 계산기는 점검 중이라 계산하지 않습니다.") + " 위 답의 근거 조문 원문을 보고 관련 부서에 문의하세요." }));
     return box;
   }
   // 결과 표는 바뀔 때마다 통째로 읽히지 않게 하고(aria-live off), 짧은 결과 한 줄만 화면 읽기 프로그램에 알린다(live)
@@ -494,42 +573,66 @@ function renderCalc(kind, question) {
     if (f[1] === "select" || f[1] === "yesno") {
       input = h("select", { id: id }, (f[1] === "yesno" ? [CHOOSE, ["y", "있음"], ["n", "없음"]] : f[4]).map(function (o) { return h("option", { value: o[0], text: o[1] }); }));
       input.value = val;
-    } else { input = h("input", { type: f[1], id: id, value: String(val), min: f[1] === "number" ? "0" : null }); }
+    } else { input = h("input", { type: f[1], id: id, value: String(val), min: f[1] === "number" ? "0" : null, step: f[1] === "number" ? "1" : null, inputmode: f[1] === "number" ? "numeric" : null }); }
     form.append(h("label", { for: id }, [h("span", { text: f[2] }), input]));
   });
+  // 칸 값이 계산에 쓸 만한지: 날짜는 연도까지 다 쳤는지(크롬 날짜 칸은 연도를 칠 때마다 0002 → 0020 → 0202 → 2021 로 바뀐다),
+  // 숫자는 0 이상의 정수인지. 고치는 도중의 값으로 계산하면 '근속 1824년' 같은 결과가 번쩍인다
+  function state(f, v) {
+    if (v === "") return "empty";
+    if (f[1] === "date") { var y = +(/^(\d{4})-\d{2}-\d{2}$/.exec(v) || [])[1]; return y >= 1900 && y <= 2100 ? "ok" : "partial"; }
+    if (f[1] === "number") return /^\d+$/.test(v) ? "ok" : "bad";
+    return "ok";
+  }
+  var last = null;  // 마지막으로 계산한 결과(고치는 도중에는 흐리게 남겨 화면이 들썩이지 않게)
+  function hold(msgEl) {
+    out.replaceChildren(msgEl);
+    if (last) out.append(h("div", { class: "stale", "aria-hidden": "true" }, [last.cloneNode(true)]));
+  }
   function run() {
-    var o = {}, miss = [];
+    var o = {}, miss = [], partial = [], bad = [];
     spec.fields.forEach(function (f) {
       var el = form.querySelector("#" + ids[f[0]]);
       o[f[0]] = f[1] === "check" ? el.checked : f[1] === "yesno" ? el.value === "y" : el.value;
     });
-    // 비어 있으면 안 되는 칸에 '확인 필요' 표시(눈에 보이는 배지 + 화면 읽기 프로그램용 필수·오류 표시)
+    // 비었거나 덜 쓴 칸에 '확인 필요' 표시(눈에 보이는 배지 + 화면 읽기 프로그램용 필수·오류 표시)
     spec.fields.forEach(function (f) {
       if (f[1] === "check") return;
-      var el = form.querySelector("#" + ids[f[0]]);
-      var required = f[5] !== "opt" && !(spec.optional && spec.optional[f[0]] && spec.optional[f[0]](o)), need = required && el.value === "";
+      var el = form.querySelector("#" + ids[f[0]]), st = state(f, el.value);
+      var required = f[5] !== "opt" && !(spec.optional && spec.optional[f[0]] && spec.optional[f[0]](o));
+      var need = (required && st === "empty") || st === "partial" || st === "bad";
       el.parentNode.classList.toggle("need", need);
       el.setAttribute("aria-required", required ? "true" : "false");
       el.setAttribute("aria-invalid", need ? "true" : "false");
-      if (need) { el.setAttribute("aria-describedby", msgId); miss.push(f[2]); } else el.removeAttribute("aria-describedby");
+      if (need) el.setAttribute("aria-describedby", msgId); else el.removeAttribute("aria-describedby");
+      if (need) (st === "partial" ? partial : st === "bad" ? bad : miss).push(f[2]);
     });
-    if (miss.length) {
-      var msg = "‘확인 필요’ 칸(" + miss.join(", ") + ")을 채우면 계산합니다.";
-      out.replaceChildren(h("p", { class: "need-msg", id: msgId, text: msg })); live.textContent = msg; return;
+    if (miss.length || partial.length || bad.length) {
+      var msg = [miss.length ? "‘확인 필요’ 칸(" + miss.join(", ") + ")을 채우면 계산합니다." : "",
+        partial.length ? "날짜를 끝까지(연도 4자리) 넣어 주세요: " + partial.join(", ") + "." : "",
+        bad.length ? "0 이상의 정수로 넣어 주세요: " + bad.join(", ") + "." : ""].filter(Boolean).join(" ");
+      hold(h("p", { class: "need-msg", id: msgId, text: msg })); live.textContent = msg; return;
     }
     var r = E.calc[kind](o);
-    if (r.error) { out.replaceChildren(h("p", { class: "err", text: r.error })); live.textContent = r.error; return; }
+    if (r.error) { hold(h("p", { class: "err", text: r.error })); live.textContent = r.error; return; }
     live.textContent = "계산 결과: " + r.rows.slice(0, 2).map(function (row) { return row[0] + " " + row[1]; }).join(", ");
-    out.replaceChildren(
+    last = h("div", null, [
       h("table", null, [h("tbody", null, r.rows.map(function (row) { return h("tr", null, [h("td", { text: row[0] }), h("td", { text: row[1] })]); }))]),
       h("div", null, (r.notes || []).map(function (n) { return h("p", { class: "soft", text: "· " + n }); }))
-    );
+    ]);
+    out.replaceChildren(last);
   }
-  form.addEventListener("input", run); form.addEventListener("change", run);
+  // 질문에서 읽어 넣은 값을 직원이 고치면 그 안내도 바꾼다(고친 뒤에도 '출장 일수 2'로 남아 있으면 헷갈린다)
+  var filledNote = filled.length ? h("p", { class: "soft", text: "질문에서 읽어 넣었습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }) : null;
+  function edited() {
+    if (filledNote && !filledNote.dataset.edited) { filledNote.dataset.edited = "1"; filledNote.textContent = "질문에서 읽은 값을 고쳤습니다. 지금 칸에 있는 고친 값으로 계산합니다."; }
+    run();
+  }
+  form.addEventListener("input", edited); form.addEventListener("change", edited);
   form.addEventListener("submit", function (e) { e.preventDefault(); run(); });
   // append 에 null 을 넘기면 글자 'null'이 찍히므로, 질문에서 읽어 채운 칸이 있을 때만 안내 문단을 넣는다
   box.append(head);
-  if (filled.length) box.append(h("p", { class: "soft", text: "질문에서 읽어 넣었습니다(" + filled.join(", ") + "). 맞는지 확인하세요." }));
+  if (filledNote) box.append(filledNote);
   if (kind === "tripExpense" && vals.regionNote) box.append(h("p", { class: "soft", text: vals.regionNote }));
   box.append(form, out, live);
   run();
@@ -612,7 +715,7 @@ function feedbackRow(question, card) {
 // 질문의 핵심 낱말이 준비된 답에 없을 때: 내규에 규정이 없을 수 있다고 분명히 알린다
 function missingNote(words) {
   return h("p", { class: "caution", text: "질문의 " + words.map(function (w) { return "‘" + w + "’"; }).join(", ") +
-    "에 맞는 내용은 준비된 답에서 찾지 못했습니다. 내규에 직접 정한 내용이 없을 수 있으니, 아래 내용이 맞지 않으면 담당부서에 확인하세요." });
+    "에 맞는 내용은 준비된 답에서 찾지 못했습니다. 내규에 직접 정한 내용이 없을 수 있으니, 아래 내용이 맞지 않으면 관련 부서에 문의하세요." });
 }
 function renderAnswer(c, opts) {
   opts = opts || {};
@@ -651,17 +754,33 @@ function renderAnswer(c, opts) {
   return a;
 }
 
+// 결과는 한 번에 하나만 보인다(새로 찾으면 이전 결과를 지운다). 나침반 결과는 챗봇 대화와 다른 칸에 둔다.
 function addTurn(qText, tag, node) {
   var t = h("div", { class: "turn" }, [h("div", { class: "q" }, [tag ? h("span", { class: "tag", text: tag }) : null, qText]), node]);
-  var thread = $("#thread");
-  thread.insertBefore(t, thread.firstChild);
+  $(tag === "나침반" ? "#compass-thread" : "#thread").replaceChildren(t);
   return t;
 }
-function pick(c) { addTurn(c.title, "선택", renderAnswer(c, {})); window.scrollTo({ top: $("#thread").offsetTop - 12, behavior: "smooth" }); }
+// 나침반에서 '챗봇 답 보기'를 누르면 질문하기로 넘어가 그 답을 보여 준다
+function pick(c) {
+  if (MODE === "compass") setMode("ask");
+  addTurn(c.title, "선택", renderAnswer(c, {}));
+  window.scrollTo({ top: $("#thread").offsetTop - 12, behavior: "smooth" });
+}
+// 최근 질문·최근 찾은 낱말(6개까지, 최근 것이 앞). 누르면 다시 찾는다. 화면을 닫으면 사라지고 어디에도 저장하지 않는다.
+var RECENT = { ask: [], compass: [] };
+function remember(kind, text) {
+  RECENT[kind] = [text].concat(RECENT[kind].filter(function (x) { return x !== text; })).slice(0, 6);
+  var box = $("#recent-" + kind);
+  box.querySelector(".chips").replaceChildren.apply(box.querySelector(".chips"), RECENT[kind].map(function (s) {
+    return h("button", { class: "chip", type: "button", text: s, onclick: function () { $("#q").value = s; if (kind === "compass") findWord(s); else ask(s); } });
+  }));
+  box.hidden = false;
+}
 
 var lastTopic = "";  // 바로 앞 질문(이어 묻기용). 화면을 닫으면 사라지고 어디에도 저장하지 않는다.
 function ask(question) {
   question = question.trim(); if (!question) return;
+  remember("ask", question);
   var ranked = cardIndex.score(question), dec = E.decide(ranked, question, cardIndex.lastQuery), node, joined = null;
   // "그럼 자가용으로 가면?"처럼 앞 질문에 이어 묻는 말이면 앞 질문의 주제를 붙여 다시 찾고, 더 잘 맞으면 그 결과를 쓴다
   if (lastTopic && E.isFollowUp(question)) {
@@ -680,7 +799,7 @@ function ask(question) {
     node = h("article", { class: "a" }, [
       h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: dec.vague ? "조금 더 알려주세요" : "어떤 내용을 찾으세요?" })]),
       h("p", { text: dec.vague ? "질문이 넓어서 여러 답이 해당됩니다. 상황에 맞는 것을 고르세요." : lead ? "질문과 비슷한 답이 여러 개 있습니다. 1번 답을 아래에 펼쳤습니다. 상황이 다르면 다른 후보를 고르세요." : "딱 맞는 답을 찾지 못했습니다. 비슷한 후보 중에 고르시거나, 아래 관련 조문을 보세요." }),
-      dec.missing && dec.missing.length ? missingNote(dec.missing) : (!dec.vague && !lead ? h("p", { class: "caution", text: "내규에 직접 정한 내용이 없을 수도 있습니다. 후보와 조문에서 찾지 못하면 담당부서에 확인하세요." }) : null),
+      dec.missing && dec.missing.length ? missingNote(dec.missing) : (!dec.vague && !lead ? h("p", { class: "caution", text: "내규에 직접 정한 내용이 없을 수도 있습니다. 후보와 조문에서 찾지 못하면 관련 부서에 문의하세요." }) : null),
       // "가족수당 얼마"처럼 넓지만 계산을 원하는 질문이면 후보를 고르기 전에 계산기부터 열 수 있게
       !lead && E.calcFor(question) ? calcButton(E.calcFor(question), question) : null,
       h("div", { class: "cands" }, dec.ids.map(function (id) { return cardButton(id, pick); })),
@@ -691,7 +810,7 @@ function ask(question) {
     node = h("article", { class: "a" }, [
       h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: "준비된 답이 없습니다" }), h("span", { class: "pill warn", text: "맞는 답을 못 찾음" })]),
       h("p", { text: "준비된 답 중에서 질문에 맞는 것을 찾지 못했습니다. 대신 규정 " + DATA.rules.length + "개 전체에서 관련 조문을 찾았습니다. 조문을 누르면 원문이 열립니다. 다른 말로 다시 물어보셔도 됩니다." }),
-      h("p", { class: "caution", text: "아래 조문에도 없다면 내규에 직접 정한 내용이 없는 것일 수 있습니다. 담당부서에 확인하세요." }),
+      h("p", { class: "caution", text: "아래 조문에도 없다면 내규에 직접 정한 내용이 없는 것일 수 있습니다. 관련 부서에 문의하세요." }),
       hits.length ? h("div", { class: "hits" }, hits.map(hitButton.bind(null, question))) : h("p", { class: "soft", text: "관련 조문도 찾지 못했습니다." })
     ]);
     feedbackRow(question, null).forEach(function (x) { node.append(x); });
@@ -713,6 +832,206 @@ function ask(question) {
   addTurn(question, null, node);
 }
 
+/* ── 내규나침반 ─────────────────────────────── */
+// 낱말이 어느 내규 어디에 나오는지 원문에서 찾는다. 글자 그대로 나오는 곳은 빠짐없이, 없으면 비슷한 말·답 카드로(참고용).
+var compassIndex = null;
+function compass() { return compassIndex || (compassIndex = new E.Compass(DATA.rules, cardIndex, DATA.cards)); }
+function docText(rule, no) {
+  var r = rulesByName.get(rule); if (!r) return "";
+  var a = r.articles.filter(function (x) { return x.no === no; })[0];
+  if (a) return a.text;
+  var x = r.annexes.filter(function (y) { return y.title === no; })[0];
+  return x ? x.title + " " + (x.text || "") : "";
+}
+function flatKey(s) { return String(s).replace(/\s+/g, "").replace(/[·‧ㆍ∙･・]/g, "·"); }
+// 원문 안의 낱말을 표시한다(띄어쓰기가 달라도). sim 에 든 말은 파란색(같은 뜻의 다른 말)
+function markWords(root, hit, sim) {
+  if (!hit.length && !sim.length) return;
+  var re = E.wordRe(hit.concat(sim)), simSet = new Set(sim.map(flatKey)), nodes = [];
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) if (walker.currentNode.parentNode.nodeName !== "MARK") nodes.push(walker.currentNode);
+  nodes.forEach(function (n) {
+    var t = n.nodeValue, m, last = 0, frag = null;
+    re.lastIndex = 0;
+    while ((m = re.exec(t))) {
+      frag = frag || document.createDocumentFragment();
+      frag.append(t.slice(last, m.index), h("mark", { class: simSet.has(flatKey(m[0])) ? "sim" : "", text: m[0] }));
+      last = m.index + m[0].length;
+    }
+    if (frag) { frag.append(t.slice(last)); n.parentNode.replaceChild(frag, n); }
+  });
+}
+// 조문 원문을 그리고, 답 카드의 근거 문구(quote)는 파란색으로 낱말은 노란색·파란색으로 표시한다
+function compassLaw(text, quote, hit, sim) {
+  var law = renderLaw(text, 0, quote || null);
+  law.box.querySelectorAll("mark").forEach(function (m) { m.className = "sim"; });
+  markWords(law.box, hit, sim);
+  return law.box;
+}
+// 오른쪽 원문 칸: 고른 내규의 원문 전체를 그리고 찾은 곳을 표시한다.
+// e: { rule, n, hits: [{ no, kind }], hit: 넣은 낱말(노란색), sim: 비슷한 말·줄인 말(파란색), quotes: {조문: 답 카드 근거 문구}, whys: [이 내규를 보여 주는 이유] }
+function rulePane(e, onBack) {
+  var r = rulesByName.get(e.rule), hit = e.hit || [], sim = e.sim || [], quotes = e.quotes || {}, test = E.wordRe(hit.concat(sim));
+  var listed = new Set(e.hits.map(function (x) { return x.no; }));
+  var pane = h("section", { class: "cpane", "aria-label": e.rule + " 원문" }), body = h("div", { class: "law-all" }), chapter = "";
+  r.articles.forEach(function (a) {
+    if (a.chapter && a.chapter !== chapter) { chapter = a.chapter; body.append(h("p", { class: "chapter", text: chapter })); }
+    body.append(h("section", { class: "art", "data-no": a.no }, [compassLaw(a.text, quotes[a.no], hit, sim)]));
+  });
+  // 별표는 표가 커서 접어 둔다. 찾은 별표만 펼친다(접힌 별표는 펼칠 때 그린다)
+  r.annexes.forEach(function (x) {
+    test.lastIndex = 0;
+    var open = listed.has(x.title) || !!quotes[x.title] || test.test(String(x.text || "").replace(/<[^>]+>/g, " "));
+    var d = h("details", { class: "annex art", "data-no": x.title, open: open ? "" : null }, [h("summary", { text: x.title })]);
+    var fill = function () { if (!d.dataset.filled) { d.dataset.filled = "1"; d.append(compassLaw(x.text || "", quotes[x.title], hit, sim)); } };
+    if (open) fill(); else d.addEventListener("toggle", fill);
+    body.append(d);
+  });
+  // 표시한 곳 사이를 Ctrl+F 처럼 오가고, 찾은 조문 바로가기 단추로 건너뛴다
+  var marks = [].slice.call(body.querySelectorAll("mark")), cur = -1, label = h("span");
+  // 원문 칸을 굴리면 맨 위 내규 이름이 사라져, 늘 보이는 이 줄에 내규 이름도 적는다
+  var word = e.rule + " · " + (hit.concat(sim).length ? "‘" + hit.concat(sim).join("·") + "’" : "근거 문구");
+  label.textContent = marks.length ? word + " " + marks.length + "곳" : e.rule + " · 표시한 낱말 없음";
+  var chips = e.hits.map(function (x) {
+    var ex = E.excerpt(docText(e.rule, x.no), hit.concat(sim), 30);
+    return h("button", { type: "button", "data-no": x.no, "aria-current": "false", title: ex.pre + ex.hit + ex.post,
+      text: x.kind === "annex" ? (/^별표\s*\S+/.exec(x.no) || [x.no])[0] : x.no, onclick: function () { goTo(x.no); } });
+  });
+  function artOf(no) { return [].slice.call(body.querySelectorAll(".art")).filter(function (a) { return a.dataset.no === no; })[0]; }
+  function current(art) { var no = art && art.dataset.no; chips.forEach(function (b) { b.setAttribute("aria-current", b.dataset.no === no ? "true" : "false"); }); }
+  // 넓은 화면: 원문 칸 안에서만 굴린다(페이지는 그대로). 휴대폰 폭: 원문 칸이 페이지에 붙어 있어 페이지를 굴린다
+  function reveal(el, jump) {
+    if (window.matchMedia("(min-width: 1000px)").matches) {
+      var t = pane.scrollTop + el.getBoundingClientRect().top - pane.getBoundingClientRect().top - pane.clientHeight / 2;
+      if (pane.scrollTo) pane.scrollTo({ top: t, behavior: jump ? "auto" : "smooth" }); else pane.scrollTop = t;
+    } else if (pane.offsetParent) el.scrollIntoView({ block: "center", behavior: jump ? "auto" : "smooth" });
+  }
+  // jump: 처음 열 때는 바로 그 자리로(긴 내규를 천천히 굴러 내려가면 사양 낮은 PC에서 오래 걸린다), ▲▼는 부드럽게
+  function go(i, jump) {
+    if (!marks.length) return;
+    if (cur >= 0) marks[cur].classList.remove("now");
+    cur = (i + marks.length) % marks.length;
+    marks[cur].classList.add("now");
+    label.textContent = word + " " + (cur + 1) + "/" + marks.length;
+    current(marks[cur].closest(".art"));
+    reveal(marks[cur], jump);
+  }
+  function goTo(no) {
+    for (var i = 0; i < marks.length; i++) if (marks[i].closest(".art").dataset.no === no) return go(i);
+    var art = artOf(no);
+    if (art) { current(art); reveal(art); }
+  }
+  [h("button", { class: "btn ghost back", type: "button", text: "← 내규 목록", onclick: onBack }),
+    h("h3", { text: e.rule }),
+    h("div", { class: "meta", text: [r.effective ? "현행 시행 " + r.effective : "", "조문 " + r.articles.length + "개", "찾은 곳 " + e.n + "곳"].filter(Boolean).join(" · ") }),
+    e.whys && e.whys.length ? h("p", { class: "why", text: "이 내규를 보여 주는 이유: " + e.whys.join(" / ") }) : null,
+    h("div", { class: "cnav" }, [label,
+      marks.length ? h("button", { class: "btn ghost", type: "button", "aria-label": "이전 표시로", text: "▲", onclick: function () { go(cur - 1); } }) : null,
+      marks.length ? h("button", { class: "btn ghost", type: "button", "aria-label": "다음 표시로", text: "▼", onclick: function () { go(cur + 1); } }) : null]),
+    h("div", { class: "jump", role: "group", "aria-label": "찾은 조문 바로가기" }, chips),
+    body.querySelector("mark.sim") ? h("p", { class: "legend" }, [h("mark", { text: "노란색" }), " 넣은 낱말 그대로 · ", h("mark", { class: "sim", text: "파란색" }), " 같은 뜻의 다른 말, 답 카드의 근거 문구"]) : null,
+    body
+  ].forEach(function (x) { if (x) pane.append(x); });
+  return { el: pane, start: function () { if (marks.length) go(0, true); else if (e.hits[0]) current(artOf(e.hits[0].no)); } };
+}
+// 왼쪽 내규 목록과 오른쪽 원문 칸. 넓은 화면은 나란히, 휴대폰 폭은 목록 → 원문 → '← 내규 목록'으로 번갈아
+function compassBody(entries, title) {
+  var box = h("div", { class: "cbody" }), slot = h("div", { class: "cslot" }), SHOW = 8, pending = null;
+  var btns = entries.map(function (e, i) {
+    return h("button", { class: "rl", type: "button", "aria-pressed": "false", hidden: i >= SHOW ? "" : null, onclick: function () { show(i, true); } },
+      [h("b", { text: e.rule }), h("span", { text: String(e.n) })]);
+  });
+  var list = h("nav", { class: "clist", "aria-label": "낱말이 나오는 내규" }, [h("p", { class: "chead", text: title })].concat(btns));
+  if (entries.length > SHOW) {
+    var more = h("button", { class: "more", type: "button", text: "나머지 내규 " + (entries.length - SHOW) + "개 더 보기", onclick: function () {
+      btns.forEach(function (b) { b.hidden = false; }); more.remove();
+    } });
+    list.append(more);
+  }
+  function show(i, picked) {
+    btns.forEach(function (b, j) { b.setAttribute("aria-pressed", j === i ? "true" : "false"); });
+    var p = rulePane(entries[i], function () { box.classList.remove("picked"); btns[i].focus(); });
+    slot.replaceChildren(p.el);
+    if (picked) { box.classList.add("picked"); if (!window.matchMedia("(min-width: 1000px)").matches) window.scrollTo({ top: box.offsetTop - 8 }); }
+    // 화면에 붙기 전에는 굴릴 수 없어(처음 찾았을 때) 붙인 뒤 ready() 에서 첫 표시로 간다
+    if (box.isConnected) p.start(); else pending = p.start;
+  }
+  box.append(list, slot);
+  show(0, false);
+  return { el: box, ready: function () { if (pending) { pending(); pending = null; } }, pick: function (rule) { var i = entries.map(function (e) { return e.rule; }).indexOf(rule); if (i >= 0) { btns[i].hidden = false; show(i, true); } } };
+}
+function findWord(text) {
+  text = text.trim(); if (!text) return;
+  var res = compass().find(text), words = res.words, head = h("article", { class: "a" }), entries = [], listTitle = "", body = null;
+  if (!res.short) remember("compass", text);
+  var shown = res.mode === "all" ? words.map(function (w) { return "‘" + w + "’"; }).join("·") : "‘" + res.query + "’";
+  var nExact = res.exact.reduce(function (s, g) { return s + g.n; }, 0);
+  if (res.short) {
+    head.append(h("div", { class: "a-head" }, [h("h3", { class: "a-title", text: shown + " 나오는 곳" })]),
+      h("p", { class: "caution", text: "두 글자 이상 넣어 주세요. 한 글자는 거의 모든 조문에 나옵니다." }));
+    addTurn(text, "나침반", head);
+    return;
+  }
+  head.append(h("div", { class: "a-head" }, [
+    h("h3", { class: "a-title", text: shown + (res.mode === "all" ? " 함께 나오는 곳" : " 나오는 곳") }),
+    nExact ? h("span", { class: "pill ok", text: "글자 그대로 " + nExact + "곳 · 내규 " + res.exact.length + "개" }) : h("span", { class: "pill warn", text: "글자 그대로는 없음" })
+  ]));
+  if (res.named.length) head.append(h("p", { class: "named" }, [h("span", { class: "soft", text: "이름에 들어간 내규" })].concat(res.named.map(function (n) {
+    return h("button", { class: "linkish", type: "button", text: n.rule + " (" + n.articles + "개 조)", onclick: function () { if (body) body.pick(n.rule); } });
+  }))));
+  if (nExact || res.aliases.length) {
+    // 줄여 부르는 말: 내규가 둘 이하면 어디서 정했는지까지, 많으면("우체국금융개발원" → 거의 모든 내규의 ‘금융원’) 한 줄로
+    if (res.aliases.length) {
+      var aw = res.aliases.map(function (a) { return a.alias; }).filter(function (x, i, arr) { return arr.indexOf(x) === i; });
+      head.append(h("p", { class: "soft", text: "줄여 부르는 말 " + aw.map(function (x) { return "‘" + x + "’"; }).join(", ") + "도 함께 찾았습니다(" +
+        (res.aliases.length <= 2 ? res.aliases.map(function (a) { return a.rule + " " + a.at; }).join(", ") + "에서 정함" : "내규 " + res.aliases.length + "개가 각각 정함") + ")." }));
+    }
+    if (nExact > 100) head.append(h("p", { class: "soft", text: "많이 나오는 낱말입니다. 띄어 쓰고 낱말을 하나 더 넣으면 둘 다 나오는 곳만 보여 줍니다." }));
+    // 목록은 많이 나오는 순(줄인 말 포함). 한 내규 안의 찾은 조문은 원문 순서대로
+    entries = res.order.map(function (rule) {
+      var r = rulesByName.get(rule), ord = {}, g = res.exact.filter(function (x) { return x.rule === rule; })[0], al = res.aliases.filter(function (a) { return a.rule === rule; });
+      r.articles.forEach(function (a, i) { ord[a.no] = i; });
+      r.annexes.forEach(function (x, i) { ord[x.title] = 10000 + i; });
+      var hits = (g ? g.hits : []).slice();
+      al.forEach(function (a) { hits = hits.concat(a.hits); });
+      hits.sort(function (a, b) { return ord[a.no] - ord[b.no]; });
+      return { rule: rule, n: hits.length, hits: hits, hit: words, sim: al.map(function (a) { return a.alias; }) };
+    });
+    listTitle = shown + " 나오는 내규 · " + entries.length + "개 · 많이 나오는 순";
+  } else {
+    head.append(h("p", { class: "caution", text: "내규 " + DATA.rules.length + "개 원문에 글자 그대로 나오는 곳이 없습니다: " + shown }));
+    if (res.simWords.length) head.append(h("p", { text: "원문에서 쓰는 말로 바꿔 찾았습니다: " + res.simWords.map(function (s) { return "‘" + s.word + "’"; }).join(", ") }));
+    res.outside.forEach(function (o) {
+      head.append(h("p", { class: "caution" }, ["‘" + o.title.replace(/\s*\(내규에 없음\)$/, "") + "’: 내규에 정한 내용이 없습니다(챗봇 답 기준). ",
+        h("button", { class: "linkish", type: "button", text: "챗봇 답 보기", onclick: function () { pick(byId.get(o.id)); } })]));
+    });
+    var simAll = res.simWords.map(function (s) { return s.word; });
+    if (res.similar.length) {
+      entries = res.similar.map(function (g) {
+        var quotes = {}, whys = [];
+        g.hits.forEach(function (x) {
+          // 근거 문구는 답 카드로만 찾은 조문에 표시한다(바꿔 찾은 말이 있는 조문은 그 말을 표시)
+          if (x.quotes.length && !x.words.length) quotes[x.no] = x.quotes[0];
+          if (whys.indexOf(x.why) < 0) whys.push(x.why);
+        });
+        return { rule: g.rule, n: g.n, hits: g.hits, hit: [], sim: simAll, quotes: quotes, whys: whys };
+      });
+      listTitle = "비슷한 말·관련 답으로 찾은 내규 · " + entries.length + "개 · 참고용";
+    } else if (res.related.length) {
+      var byR = {};
+      res.related.forEach(function (x) { (byR[x.rule] = byR[x.rule] || []).push(x); });
+      entries = Object.keys(byR).map(function (rule) { return { rule: rule, n: byR[rule].length, hits: byR[rule], hit: [], sim: [], whys: ["글자가 비슷한 조문(참고)"] }; });
+      listTitle = "글자가 비슷한 조문이 있는 내규 · 참고용";
+    }
+    if (!entries.length && !res.outside.length) head.append(h("p", { class: "soft", text: "비슷한 곳도 찾지 못했습니다. 내규에 정한 내용이 없을 수 있으니 관련 부서에 문의하세요. 다른 낱말로 찾아보셔도 됩니다." }));
+  }
+  head.append(h("p", { class: "soft", text: "글자 그대로 나오는 곳은 빠짐없이 찾습니다(띄어쓰기 차이는 무시). 비슷한 말로 찾은 곳은 참고용이니 원문을 읽고 판단하세요." }));
+  var node = h("div", { class: "compass" }, [head]);
+  if (entries.length) { body = compassBody(entries, listTitle); node.append(body.el); }
+  addTurn(text, "나침반", node);
+  if (body) body.ready();
+}
+
 /* ── 처음 화면 ─────────────────────────────── */
 // 판 번호와 만든 날: 게시판·공유폴더에서 받은 옛 사본과 구별하려고 맨 위에 보인다(knowledge/site.json 의 release)
 var REL = (DATA.meta.site || {}).release || {};
@@ -726,13 +1045,13 @@ $("#basis").textContent = (REL.no ? "제" + REL.no + "판 · " : "") + DATA.meta
   var old = days > maxAge ? "<b>이 화면은 만든 지 " + days + "일이 지났습니다.</b> 그 사이 규정이 바뀌었을 수 있으니 최신판인지 확인하세요. " : "";
   var stale = DATA.meta.stale ? "규정 개정 뒤 다시 확인하지 못한 답이 " + DATA.meta.stale + "개 있습니다(답에 표시). " : "";
   var fb = (DATA.meta.site || {}).feedback || {};
-  var askWhere = fb.dept ? esc(fb.dept) + (fb.channel ? "(" + esc(fb.channel) + ")" : "") : "해당 업무 담당부서";
+  var askWhere = fb.dept ? esc(fb.dept) + (fb.channel ? "(" + esc(fb.channel) + ")" : "") : "관련 부서";
   // 한 문장만 보이고, 표시의 뜻·틀렸을 때·판 번호는 '자세히'를 눌러야 펼친다
-  $("#notice").innerHTML = old + where + stale + "<b>AI가 쓴 답</b>입니다. 중요한 결정 전에는 근거 원문과 담당부서에 확인하세요. " +
+  $("#notice").innerHTML = old + where + stale + "<b>AI가 쓴 답</b>입니다. 중요한 결정 전에는 근거 원문을 보고 관련 부서에 문의하세요. " +
     "<details><summary>자세히</summary><ul>" +
     "<li><b>AI 작성 · 담당부서 검수 전</b>: 답과 근거는 AI가 썼고, 인용 문구는 프로그램으로 내규 원문과 대조했으며 다른 AI로 다시 확인했습니다. 소관부서 확인을 마친 답에는 '담당부서 검수 완료'가 붙습니다.</li>" +
-    "<li><b>계산기(참고용)</b>: 규정의 기준대로 계산한 값입니다. 실제 지급·승인은 담당부서 기준을 따릅니다.</li>" +
-    "<li><b>틀린 답을 찾으면</b>: 답 아래 '오류 신고'를 눌러 알려 주세요. 급한 일은 " + askWhere + "에 확인하세요.</li>" +
+    "<li><b>계산기(참고용)</b>: 규정의 기준대로 계산한 값입니다. 실제 지급·승인은 관련 부서 기준을 따릅니다.</li>" +
+    "<li><b>틀린 답을 찾으면</b>: 답 아래 '오류 신고'를 눌러 알려 주세요. 급한 일은 " + askWhere + "에 문의하세요.</li>" +
     "<li><b>판 번호</b>: 맨 위 '제N판'과 만든 날로 최신판인지 확인하세요." + (REL.where ? " 최신본은 " + esc(REL.where) + "에서 받습니다." : "") + "</li></ul></details>";
 })();
 // 분야 버튼: 누르면 그 분야의 답 목록을 보여 준다. refs 는 "분야id:주제id", extra 는 함께 보여 줄 카드 id
@@ -778,7 +1097,22 @@ var EXAMPLES = (DATA.meta.site || {}).examples || [];  // knowledge/site.json �
 EXAMPLES.forEach(function (s) {
   $("#examples").append(h("button", { class: "chip", type: "button", text: s, onclick: function () { $("#q").value = s; ask(s); } }));
 });
-$("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask($("#q").value); $("#q").select(); });
+// 질문하기 ↔ 내규나침반: 같은 입력칸을 쓰고, 고른 쪽에 따라 준비된 답을 찾거나 원문에서 낱말을 찾는다
+var MODE = "ask";
+function setMode(m) {
+  MODE = m;
+  var c = m === "compass";
+  $(".wrap").classList.toggle("compassing", c);
+  document.querySelectorAll("#modes button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.mode === m ? "true" : "false"); });
+  $("#q").placeholder = c ? "찾을 낱말을 넣으세요 (띄어 쓰면 낱말이 모두 나오는 곳)" : "궁금한 것을 평소 말하듯 적어 보세요";
+  $("#q").setAttribute("aria-label", c ? "찾을 낱말" : "질문");
+  $("#ask-btn").textContent = c ? "찾기" : "묻기";
+  $(".composer").setAttribute("aria-label", c ? "내규나침반" : "질문하기");
+  $("#q").focus();
+}
+document.querySelectorAll("#modes button").forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+$("#compass-help").textContent = "낱말을 넣으면 내규 " + DATA.rules.length + "개 원문에서 그 낱말이 나오는 곳을 내규별로 모아 보여 줍니다. 원문에 없는 말이면 원문에서 쓰는 비슷한 말로 찾습니다.";
+$("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); if (MODE === "compass") findWord($("#q").value); else ask($("#q").value); $("#q").select(); });
 
 (function about() {
   var m = DATA.meta, v = m.verify, s = m.search;
@@ -804,7 +1138,7 @@ $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); ask
       h("li", { text: "1단계 프로그램 검사: 인용한 조·항·호가 실제로 있는지, 인용 문구와 숫자가 원문과 같은지 확인했습니다." }),
       h("li", { text: "2단계 AI 재확인: 다른 AI 모델에 답을 숨긴 채 조문만 주고 같은 항목을 다시 찾게 해 비교했습니다. 결재권자 표는 프로그램으로 칸마다 대조했습니다." }),
       h("li", { text: "외부 법령 대조: 내규가 인용하거나 내규와 다른 법령 조문(남녀고용평등법, 근로기준법, 개인정보 보호법 등)을 국가법령정보로 확인했습니다(" + m.lawChecked + ")." }),
-      h("li", { text: "3단계 담당부서 검수는 아직입니다. 검수를 마친 답에는 '담당부서 검수 완료'가 표시됩니다. 그 전까지는 중요한 결정 전에 원문과 담당부서에 확인하세요." }),
+      h("li", { text: "3단계 담당부서 검수는 아직입니다. 검수를 마친 답에는 '담당부서 검수 완료'가 표시됩니다. 그 전까지는 중요한 결정 전에 원문을 보고 관련 부서에 문의하세요." }),
       h("li", { text: "시험 질문 정확도는 검색 기준값을 고를 때 같은 질문을 써서 실제보다 높게 나왔을 수 있습니다. 담당부서가 만든 질문으로 다시 재야 합니다." })
     ])
   );

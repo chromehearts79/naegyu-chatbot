@@ -6,6 +6,7 @@
 - 답변 문단의 숫자가 카드가 인용한 조문들 안에 있는지
 - 관련 카드·주제 id, 중복 질문
 - 계산기 숫자 근거표(knowledge/calc_basis.json)의 문구가 그 조문 원문에 있는지
+- 카드·계산기의 '○○에 확인하세요' 안내에 확인 안 된 부서 이름이 없는지('관련 부서에 문의하세요'로 쓴다)
 
 결과는 reports/check_report.md 에 쓴다. 실패가 있으면 종료 코드 1.
 """
@@ -19,6 +20,14 @@ ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE = ROOT / "knowledge"
 RULES = ROOT / "data" / "rules.json"
 REPORT = ROOT / "reports" / "check_report.md"
+ENGINE = ROOT / "web" / "engine.js"
+# 문의처 안내 문장(직원에게 누구에게 확인·문의하라고 권하는 말)과 AI가 짐작해 적은 부서 이름.
+# '정보보안담당관'처럼 내규가 정한 역할 이름은 뒤에 '관'이 붙어 걸리지 않는다
+ASK_VERB = re.compile(r"확인하세요|확인해\s?보세요|확인하시기|확인이 필요|확인 필요|확인\)|문의|물어보세요|상의하세요|상담하세요|얘기하세요|말씀하세요|연락하세요|안내를 따르세요")
+GUESSED_DEPT = re.compile(r"인사팀|[가-힣]{2,}팀(?=에|이나|과|와)|(?:인사|회계|복무|총무|보수|급여|복리후생|정보보안|노무|재무|예산|자산|교육)(?:·[가-힣]+)?\s?담당(?!관)(?:\s?부서|자)?"
+                          r"|(?:담당|관련)\s?부서?\([^)]*\)|\((?:경영지원실|전략기획실|감사실|AX금융기획실)\)"
+                          # 부서를 정하지 않은 안내도 한 가지 말('관련 부서에 문의하세요')로 쓴다. '회계업무담당부서'처럼 앞에 글자가 붙은 내규 용어는 뺀다
+                          r"|(?<![가-힣])담당\s?부서")
 
 
 def domain_dirs():
@@ -221,6 +230,21 @@ def main():
                     n_has_ok += 1
                 else:
                     errors.append(f"[계산기 {kind}] {x['cite']} 원문에 \"{has}\" 가 없음 → 계산기 숫자(web/engine.js)를 새 원문대로 고치고 근거표도 고칠 것")
+
+    # 문의처 안내: 담당 부서를 확인하기 전까지 '○○에 확인하세요'에 부서 이름을 쓰지 않고 '관련 부서에 문의하세요'로 쓴다.
+    # AI가 고른 부서가 틀린 경우가 많았다(예: 국내 출장인데 '인사·회계 담당', 내규에 없는 '인사팀').
+    # 내규가 정한 역할 이름(행동강령책임관·카드관리담당자·관리부서 등)과 외부 기관(고용센터 등)은 괜찮다.
+    for c in cards:
+        texts = [c.get("summary", "")] + list(c["answer"]) + list(c.get("notes", [])) + [f["value"] for f in c["facts"]]
+        for t in texts:
+            for s in re.split(r"(?<=[.?!])\s+", t.replace("**", "")):  # 굵게(**)가 '확인**이 필요'처럼 말을 끊어 뺀다
+                m = ASK_VERB.search(s) and GUESSED_DEPT.search(s)
+                if m:
+                    err(c, f"문의처 안내에 '{m.group(0)}' → '관련 부서에 문의하세요'로: {s.strip()}")
+    for i, line in enumerate(ENGINE.read_text().splitlines(), 1):
+        m = ASK_VERB.search(line) and GUESSED_DEPT.search(line)
+        if m:
+            errors.append(f"[계산기 안내] web/engine.js {i}행: '{m.group(0)}' → '관련 부서에 문의하세요'로")
 
     # 첫 화면 '자주 찾는 분야'(site.json featured)가 있는 주제·카드를 가리키는지
     site = json.loads((KNOWLEDGE / "site.json").read_text())

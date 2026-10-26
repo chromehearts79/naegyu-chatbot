@@ -107,7 +107,7 @@ const meals = t.querySelector(".calc input[id$='-meals']");
 meals.value = "3"; meals.dispatchEvent(new w.Event("input", { bubbles: true }));
 ok(/3끼 × 8,330원 = 25,010원/.test(t.querySelector(".calc table").textContent) && /10원이 남습니다/.test(t.querySelector(".calc").textContent), "여비 계산기: 다른 예산으로 먹은 3끼 → 식비 25,010원(10원 남는 이유 안내)");
 tf("days").value = "1"; tf("nights").value = "0"; meals.value = "1"; meals.dispatchEvent(new w.Event("input", { bubbles: true }));
-ok(/빼는 방법이 정해져 있지 않음/.test(t.querySelector(".calc table").textContent) && !/8,330원 =/.test(t.querySelector(".calc table").textContent), "당일 출장 끼니 공제는 계산하지 않고 회계 담당 확인 안내");
+ok(/빼는 방법이 정해져 있지 않음/.test(t.querySelector(".calc table").textContent) && !/8,330원 =/.test(t.querySelector(".calc table").textContent), "당일 출장 끼니 공제는 계산하지 않고 관련 부서 문의 안내");
 t = ask("부산 1박2일 출장 여비");
 ok(t.querySelector(".calc-link button"), "계산기 없는 답(국내 출장 종합 안내)에 '계산기 열기' 버튼");
 t.querySelector(".calc-link button").click();
@@ -118,6 +118,15 @@ const reach = ["출장비 얼마 받아요", "부산 1박2일 출장 여비", "�
   "연차 며칠이에요", "가족수당 얼마", "복지포인트 얼마 나와요", "아이 7살인데 육아휴직 돼요?", "출산휴가 언제부터 쓸 수 있어요", "장기재직휴가 언제 받아요", "가족돌봄휴가 유급 며칠"];
 const lost = reach.filter((q) => { const x = ask(q); return !(x.querySelector(".calc") || x.querySelector(".calc-link")); });
 ok(lost.length === 0, `돈·기간 질문 ${reach.length}개 모두 계산기에 닿음` + (lost.length ? ": " + lost.join(", ") : ""));
+// 관련 조문 미리보기(규정 전체에서 찾은 조문)에 별표 표 태그·굵게 표시·표 칸막이가 날것으로 찍히지 않는지
+{
+  const RAWQ = /<\/?(?:td|tr|th|br|table)\b|\*\*|\|\s*---/;
+  const rawBad = reach.concat(["서울 2박3일 출장 여비 얼마예요", "회사 근처 맛집 추천해줘", "오늘 날씨 어때", "경조사 휴가 며칠", "출장 숙박비 상한"]).filter((q) => {
+    const x = ask(q); x.querySelectorAll("details").forEach((dd) => { dd.open = true; });
+    return RAWQ.test(x.textContent);
+  });
+  ok(rawBad.length === 0, "답·관련 조문 미리보기에 표 태그(<td>)·굵게 표시(**)·표 칸막이가 날것으로 안 찍힘" + (rawBad.length ? ": " + rawBad.join(", ") : ""));
+}
 // 첫 화면 예시 질문은 맞는 카드와 계산기로 간다
 const exWant = [/국내 출장 여비/, /연가\(연차\) 일수/, /복지포인트/, /가족수당/];
 const exBad = exs.filter((q, i) => { const x = ask(q); return !exWant[i].test(title(x)) || !x.querySelector(".calc"); });
@@ -151,7 +160,7 @@ ok(exBad.length === 0, "예시 질문 4개 모두 맞는 답과 계산기" + (ex
   if (!t.querySelector(".calc") && t.querySelector(".calc-link button")) t.querySelector(".calc-link button").click();
   const sc = t.querySelector(".calc");
   ok(sc && /세종특별자치시는 여비지급세칙 별표 제1호에 따로 적혀 있지 않습니다/.test(sc.textContent) && sc.querySelector("[id$='-region']").value === "",
-    "세종 출장: 계산기에 '별표 제1호에 따로 없음, 회계 담당 확인' 안내, 숙박 지역 칸은 비워 둠");
+    "세종 출장: 계산기에 '별표 제1호에 따로 없음, 관련 부서 문의' 안내, 숙박 지역 칸은 비워 둠");
 }
 t = ask("지하철비용은 일비에 포함됨?");
 ok(/지하철/.test(title(t)), "지하철비용 일비 질문 → 지하철·버스 요금과 일비");
@@ -170,6 +179,9 @@ ok(themes.length === 3 && themes.every((t) => Math.min(...t.ink3) >= 4.5 && t.li
   themes.map((t) => Math.min(...t.ink3).toFixed(2) + "/" + t.line.toFixed(2)).join(" "));
 const sizes = [...css.matchAll(/font-size:\s*([\d.]+)px/g)].map((m) => +m[1]);
 ok(sizes.length > 20 && Math.min(...sizes) >= 12 && /body \{[^}]*font-size: 16px/.test(css), "본문 16px, 12px보다 작은 글씨 없음(가장 작은 글씨 " + Math.min(...sizes) + "px)");
+// 줄바꿈: 문단 폭을 글자 수(ch)로 묶으면 칸이 넓어도 그 앞에서 줄이 바뀐다(계산기 안내가 '세칙 금액 / 그대로 계산).'처럼 끊겨 보였다).
+// 글은 칸 끝까지 쓰고, 마지막 줄에 한두 낱말만 남지 않게 한다
+ok(![...css.matchAll(/max-width:\s*[\d.]+ch/g)].length && /\.a p \{[^}]*text-wrap: pretty/.test(css), "문단 폭을 글자 수로 묶지 않음(칸 끝까지 쓰고 줄 끝을 고르게)");
 ok(/\.cite \{[^}]*min-height: 24px/.test(css) && /@media \(max-width: 999px\) \{\s*\.chip, \.btn\.ghost[^}]*min-height: 44px/.test(css), "누르는 크기: 근거 조문 24px 이상, 휴대폰에서 버튼 44px 이상");
 ok(!d.querySelector("#loading") && /여는 중/.test(html) && d.querySelector("#ask-form").getAttribute("onsubmit") === "return false", "여는 동안 안내가 있고 다 열리면 사라짐, 열리기 전 '묻기'로 화면이 다시 열리지 않음");
 {
@@ -187,7 +199,8 @@ ok(/연가\(연차\) 일수/.test(title(t)), "붙여 쓴 '연차몇일이야' �
 t = ask("챗지피티 업무에 써도돼요?");
 ok(/AI|인공지능/.test(title(t)) || /인공지능|AI/.test(t.querySelector(".cand").textContent), "'챗지피티' → AI 세칙 카드");
 t = ask("자격증 따면 응시료나 교육비 지원해 주나요");
-ok(t.querySelector(".caution") && /담당부서에 확인/.test(t.querySelector(".caution").textContent), "내규에 없을 수 있는 질문 → 담당부서 확인 안내");
+ok(t.querySelector(".caution") && /관련 부서에 문의/.test(t.querySelector(".caution").textContent), "내규에 없을 수 있는 질문 → 관련 부서 문의 안내");
+ok(!/담당부서에 확인|담당부서 기준/.test(d.querySelector("#notice").textContent + d.querySelector(".howto").textContent), "맨 위 안내·쓰는 법도 ‘관련 부서에 문의’로 같은 말");
 w.pick(w.DATA.cards.find((c) => c.check && c.check.length));
 ok(!/검수 메모/.test(top().textContent), "검수 메모는 직원 화면에서 숨김");
 ok(/담당부서 검수 전/.test(top().querySelector(".pill").textContent), "검수 전 표시");
@@ -208,6 +221,7 @@ ok(![...d.querySelectorAll("button")].some((b) => /도움이 됐어요/.test(b.t
 
 // 모든 계산기: 질문에서 못 읽은 칸은 비워 두고 계산하지 않는지, 칸마다 여러 값을 넣어도 'null' 같은 글자 없이 결과·안내가 나오는지
 const BAD = /null|undefined|NaN|Invalid|Infinity|\[object/;
+const RAW = /<\/?(?:td|tr|th|br|table)\b|\*\*|\|\s*---/;
 const VALS = { number: ["", "0", "1", "-3", "2.7", "30", "400"], date: ["", "1950-01-01", "2000-02-29", "2026-10-22", "2045-12-31"], yesno: ["", "y", "n"] };
 // 필수 칸을 채운 기준값(이 값에서 한 칸씩 바꿔 본다)
 const BASE = { spouseBirth: { due: "2026-12-01" }, maternity: { due: "2026-12-01" }, loss: { who: "self", date: "2026-10-01", weeks: "12" },
@@ -237,6 +251,36 @@ for (const kind of Object.keys(w.CALCS)) {
 }
 ok(emptyBad.length === 0, "질문에서 못 읽은 칸은 '확인 필요'로 비워 두고 금액·기간을 계산하지 않음" + (emptyBad.length ? ": " + emptyBad.join(", ") : ""));
 ok(calcBad.length === 0, `계산기 ${Object.keys(w.CALCS).length}종, ${calcRuns}가지 입력에 이상한 글자·빈 결과 없음` + (calcBad.length ? ": " + calcBad.slice(0, 5).join(", ") : ""));
+// 계산기 조작감: 고치는 도중의 값(연도를 치는 중, 지운 칸, 음수·소수)으로는 계산하지 않고, 마지막 결과를 흐리게 남겨 화면이 들썩이지 않게
+{
+  const put = (el, v) => { el.value = v; el.dispatchEvent(new w.Event("input", { bubbles: true })); };
+  let box = w.renderCalc("annualLeave", "");
+  const out = () => box.querySelector(".calc-out"), hire = box.querySelector("[id$='-hire']");
+  put(hire, "2021-10-21");
+  const fresh = out().querySelector("table") && !out().querySelector(".stale");
+  put(hire, "0202-10-21");  // 크롬 날짜 칸은 연도를 한 글자씩 칠 때마다 0002 → 0020 → 0202 → 2021 로 바뀐다
+  ok(fresh && !/1824년/.test(out().textContent) && /날짜를 끝까지/.test((out().querySelector(".need-msg") || {}).textContent) && out().querySelector(".stale table") &&
+    hire.parentNode.classList.contains("need"), "날짜 연도를 치는 도중(0202년)에는 계산하지 않고 이전 결과를 흐리게 남김");
+  put(hire, "2021-10-21");
+  ok(out().querySelector("table") && !out().querySelector(".stale") && !out().querySelector(".need-msg"), "연도를 다 치면 바로 다시 계산");
+  box = w.renderCalc("allowance", "");
+  const kids = box.querySelector("[id$='-children']");
+  ok(kids.getAttribute("step") === "1" && kids.getAttribute("inputmode") === "numeric", "숫자 칸은 정수만(step 1, 휴대폰은 숫자 자판)");
+  box.querySelector("[id$='-spouse']").value = "y"; put(kids, "2");
+  put(kids, "");
+  const keptOnEmpty = out().querySelector(".stale table") && /확인 필요/.test((out().querySelector(".need-msg") || {}).textContent);
+  put(kids, "1.5"); const dec = out().textContent;
+  put(kids, "-1"); const neg = out().textContent;
+  ok(keptOnEmpty && /0 이상의 정수/.test(dec) && /0 이상의 정수/.test(neg) && out().querySelector(".stale table"), "칸을 지우거나 음수·소수를 넣으면 계산하지 않고 알림(이전 결과는 흐리게 남김)");
+  put(kids, "3");
+  ok(/셋째부터 자녀 1명/.test(out().textContent) && !out().querySelector(".stale"), "다시 바른 값을 넣으면 그 값으로 바로 계산");
+  box = w.renderCalc("tripExpense", "부산 1박2일 출장");
+  const note = [...box.querySelectorAll("p.soft")].find((p) => /질문에서 읽/.test(p.textContent));
+  put(box.querySelector("[id$='-days']"), "3");
+  ok(note && !/출장 일수 2/.test(note.textContent) && /고친 값/.test(note.textContent), "질문에서 읽어 넣은 값을 고치면 '질문에서 읽어 넣었습니다(…)' 안내도 바뀜");
+  put(box.querySelector("[id$='-days']"), "1");
+  ok(out().querySelector(".err") && out().querySelector(".stale table"), "숙박이 출장 일수보다 많아지면 오류를 알리되 이전 결과는 흐리게 남김");
+}
 // 근거 조문이 개정된 계산기, 운영부서가 끈 계산기는 계산하지 않는다
 w.DATA.meta.calcStale = { tripExpense: ["여비지급세칙 별표 제1호"] };
 let cb = w.renderCalc("tripExpense", "부산 1박2일 출장");
@@ -246,6 +290,95 @@ cb = w.renderCalc("allowance", "");
 ok(!cb.querySelector("form") && /점검 중/.test(cb.textContent), "운영부서가 끈 계산기(calcOff)는 '점검 중'");
 w.DATA.meta.site.calcOff = [];
 
+// 내규나침반: 같은 입력칸에서 고르면 왼쪽에 낱말이 나오는 내규 목록, 오른쪽에 고른 내규의 원문 전체(찾은 곳 표시)를 보여 준다
+{
+  const wrap = d.querySelector(".wrap"), btn = (m) => d.querySelector(`#modes button[data-mode=${m}]`);
+  btn("compass").click();
+  ok(wrap.classList.contains("compassing") && btn("compass").getAttribute("aria-pressed") === "true" && d.querySelector("#ask-btn").textContent === "찾기" &&
+    /내규 71개 원문/.test(d.querySelector("#compass-help").textContent) && d.querySelector("#examples").classList.contains("ask-only"),
+    "나침반 고르면 '찾기' 단추와 안내가 나오고 예시 질문은 숨김");
+  ok(/\.compassing \.source \{ display: none; \}/.test(html) && /\.wrap\.compassing \{ max-width: 1200px; \}/.test(html), "나침반은 화면 너비를 다 쓰고 챗봇 근거 원문 칸은 숨김");
+  // 같은 입력칸·같은 단추. 나침반 결과는 챗봇 대화와 다른 칸(#compass-thread)에 하나만
+  const compassBad = [];
+  const find = (q) => {
+    d.querySelector("#q").value = q; d.querySelector("#ask-form").dispatchEvent(new w.Event("submit", { cancelable: true }));
+    const x = d.querySelector("#compass-thread .turn"); if (x && BAD.test(x.textContent)) compassBad.push(q); return x;
+  };
+  const rules = (c) => [...c.querySelectorAll(".clist .rl")];
+  const pane = (c) => c.querySelector(".cpane"), lab = (c) => pane(c).querySelector(".cnav span").textContent;
+  const now = (c) => pane(c).querySelector("mark.now"), chips = (c) => [...pane(c).querySelectorAll(".jump button")];
+  let c = find("법인카드");
+  ok(c.querySelector(".q .tag").textContent === "나침반" && /글자 그대로 7곳 · 내규 5개/.test(c.querySelector(".pill").textContent) && rules(c).length === 5,
+    "‘법인카드’ → 왼쪽에 내규 5개");
+  ok(/법인카드 관리 및 사용지침/.test(c.querySelector(".named").textContent) && /^법인카드 관리 및 사용지침\s*12$/.test(rules(c)[0].textContent.trim()) &&
+    rules(c)[0].getAttribute("aria-pressed") === "true", "이름에 든 내규는 위 칸에, 목록은 많이 나오는 순(2곳 + 줄인 말 10곳 = 12)이고 첫 내규를 골라 둠");
+  ok(pane(c).querySelector("h3").textContent === "법인카드 관리 및 사용지침" && pane(c).querySelectorAll("section.art").length === 12 && /‘법인카드·카드’ 1\/\d+/.test(lab(c)) &&
+    [...pane(c).querySelectorAll("mark.sim")].some((m) => m.textContent === "카드") && pane(c).querySelector(".legend"),
+    "오른쪽에 그 내규 원문 전체, 넣은 낱말은 노란색·줄인 말 ‘카드’는 파란색");
+  ok(chips(c).map((b) => b.textContent).join(",") === "제1조,제2조,제3조,제4조,제5조,제6조,제7조,제8조,제9조,제10조,제11조,제12조", "찾은 조문 바로가기 단추(조문 순서)");
+  rules(c).find((b) => /^해외사무소운영세칙/.test(b.textContent)).click();
+  ok(pane(c).querySelector("h3").textContent === "해외사무소운영세칙" && /‘법인카드’ 1\/3/.test(lab(c)) && now(c).closest("section").dataset.no === "제27조" &&
+    chips(c).map((b) => b.textContent).join(",") === "제27조,제28조" && c.querySelector(".cbody").classList.contains("picked"),
+    "왼쪽에서 다른 내규를 누르면 오른쪽이 그 내규로 바뀌고 첫 번째 낱말에 가 있음(1/3)");
+  chips(c)[1].click();
+  const atChip = lab(c), chipOn = chips(c)[1].getAttribute("aria-current");
+  const [up, down] = pane(c).querySelectorAll(".cnav button");
+  down.click(); const third = lab(c); up.click(); up.click(); up.click();
+  ok(/2\/3/.test(atChip) && now(c).closest("section").dataset.no === "제28조" && chipOn === "true" && /3\/3/.test(third) && /3\/3/.test(lab(c)) && pane(c).querySelectorAll("mark.now").length === 1,
+    "바로가기 단추로 그 조문의 낱말로 건너뛰고, ▲▼로 하나씩(처음에서 ▲면 마지막으로)");
+  ok([...pane(c).querySelectorAll(".cnav button, .back")].some((x) => /내규 목록/.test(x.textContent)), "휴대폰 폭에서 목록으로 돌아가는 단추");
+  pane(c).querySelector(".back").click();
+  ok(!c.querySelector(".cbody").classList.contains("picked") && /\.cbody:not\(\.picked\) \.cpane \{ display: none; \}/.test(html), "‘← 내규 목록’을 누르면 목록으로(휴대폰 폭에서는 목록과 원문을 번갈아 보임)");
+  c = find("출장");
+  const more = c.querySelector(".clist .more");
+  ok(/공무국외출장세부지침/.test(c.querySelector(".named").textContent) && /^여비지급세칙\s*17$/.test(rules(c)[0].textContent.trim()) &&
+    rules(c).filter((b) => !b.hidden).length === 8 && more && /10개/.test(more.textContent), "‘출장’: 여비지급세칙(17)부터, 9번째부터는 접어 둠");
+  more.click();
+  ok(rules(c).filter((b) => !b.hidden).length === 18 && !c.querySelector(".clist .more"), "‘더 보기’를 누르면 18개 모두");
+  c = find("반차");
+  ok(/글자 그대로 나오는 곳이 없습니다/.test(c.textContent) && /‘반일연가’/.test(c.textContent) && /반반차/.test(c.textContent) && /^복무세칙/.test(rules(c)[0].textContent.trim()),
+    "‘반차’ → 원문에 없다고 먼저 알리고, ‘반일연가’로 찾은 복무세칙을 맨 앞에, 반반차는 내규에 없음");
+  ok(pane(c).querySelector("h3").textContent === "복무세칙" && [...pane(c).querySelectorAll("mark.sim")].some((m) => m.textContent === "반일연가") && /반일연가/.test(pane(c).querySelector(".why").textContent),
+    "비슷한 말은 파란색, 이 내규를 보여 주는 이유도 씀");
+  c = find("장");
+  ok(/두 글자 이상/.test(c.textContent) && !c.querySelector(".cbody"), "한 글자는 찾지 않고 안내");
+  c = find("직원");
+  ok(/많이 나오는 낱말/.test(c.textContent) && rules(c).length > 50 && rules(c).filter((b) => !b.hidden).length === 8, "넓은 낱말은 8개만 보이고 좁히는 법 안내");
+  c = find("직원 징계");
+  ok(/‘직원’·‘징계’ 함께 나오는 곳/.test(c.querySelector(".a-title").textContent) && /‘직원·징계’/.test(lab(c)), "두 낱말이면 함께 나오는 곳");
+  c = find("유니폼");
+  ok(/찾지 못했습니다/.test(c.textContent) && !c.querySelector(".cbody"), "아무것도 못 찾으면 목록 없이 안내");
+  ok(compassBad.length === 0, "나침반 결과에 'null' 같은 글자 없음" + (compassBad.length ? ": " + compassBad.join(", ") : ""));
+  // 결과는 하나만, 지난 낱말은 '최근 찾은 낱말' 단추로
+  const recentC = () => [...d.querySelectorAll("#recent-compass .chip")].map((b) => b.textContent);
+  ok(d.querySelectorAll("#compass-thread .turn").length === 1 && /유니폼/.test(d.querySelector("#compass-thread .q").textContent) &&
+    ![...d.querySelectorAll("#thread .tag")].some((x) => x.textContent === "나침반"),
+    "나침반 결과는 하나만 보이고(새로 찾으면 이전 결과를 지움) 챗봇 대화 칸에 섞이지 않음");
+  ok(!d.querySelector("#recent-compass").hidden && recentC()[0] === "유니폼" && recentC().includes("직원 징계") && recentC().length === 6,
+    "최근 찾은 낱말이 단추로 보임(최근 것이 맨 앞, 6개까지)");
+  find("법인카드");
+  [...d.querySelectorAll("#recent-compass .chip")].find((b) => b.textContent === "반차").click();
+  ok(/‘반차’ 나오는 곳/.test(d.querySelector("#compass-thread .a-title").textContent) && d.querySelectorAll("#compass-thread .turn").length === 1 && recentC()[0] === "반차",
+    "최근 찾은 낱말 단추를 누르면 그 낱말로 다시 찾음");
+  ok(/\.rl \{[^}]*color: var\(--accent\)/.test(html), "내규 이름은 강조색(청록)으로 조문 글씨와 구분");
+  btn("ask").click();
+  ok(!wrap.classList.contains("compassing") && d.querySelector("#ask-btn").textContent === "묻기" && /배우자 출산전후휴가/.test(title(ask("배우자 출산휴가 며칠이에요?"))),
+    "질문하기로 돌아오면 다시 준비된 답을 찾음");
+  // 내규챗봇도 결과는 하나만, 지난 질문은 '최근 질문' 단추로
+  const t2 = ask("가족수당 얼마예요");
+  const recentA = () => [...d.querySelectorAll("#recent-ask .chip")].map((b) => b.textContent);
+  ok(d.querySelectorAll("#thread .turn").length === 1 && t2 === top() && !d.querySelector("#recent-ask").hidden && recentA()[0] === "가족수당 얼마예요" && recentA().includes("배우자 출산휴가 며칠이에요?"),
+    "챗봇 답도 하나만 보이고 최근 질문이 단추로 보임");
+  [...d.querySelectorAll("#recent-ask .chip")].find((b) => b.textContent === "배우자 출산휴가 며칠이에요?").click();
+  ok(/배우자 출산전후휴가/.test(title(top())) && d.querySelectorAll("#thread .turn").length === 1, "최근 질문 단추를 누르면 그 질문으로 다시 찾음");
+  btn("compass").click();
+  ok(d.querySelector("#compass-thread .turn") && /반차/.test(d.querySelector("#compass-thread .a-title").textContent) && d.querySelector("#recent-compass").classList.contains("compass-only"),
+    "나침반으로 돌아가면 하던 나침반 결과가 그대로");
+  d.querySelector("#compass-thread .caution .linkish").click();
+  ok(!wrap.classList.contains("compassing") && /반반차/.test(title(top())), "‘내규에 없음’의 ‘챗봇 답 보기’는 질문하기로 넘어가 그 답을 보여 줌");
+  d.querySelectorAll("#thread .turn, #compass-thread .turn").forEach((x) => x.remove());
+}
+
 // 모든 카드를 열고, 모든 근거 버튼을 눌러 원문과 인용 표시를 확인
 const cards = w.DATA.cards;
 let cites = 0, marked = 0, missing = [];
@@ -254,6 +387,8 @@ for (const c of cards) {
   const a = top();
   if (!a.querySelector(".a-title")) { missing.push(c.id + " 답변 없음"); continue; }
   if (BAD.test(a.textContent)) missing.push(c.id + " 화면에 '" + a.textContent.match(BAD)[0] + "' 글자");
+  // 날것 기호: 별표 표 태그(<td> 등)·굵게 표시(**)·마크다운 표 칸막이가 화면 글자로 찍히면 안 된다(관련 조문 미리보기 포함)
+  if (RAW.test(a.textContent)) missing.push(c.id + " 화면에 날것 기호 '" + a.textContent.match(RAW)[0] + "'");
   a.querySelectorAll(".cite").forEach((b) => {
     cites++;
     b.click();

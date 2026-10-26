@@ -129,3 +129,62 @@ r = rows(C.tripExpense({ days: 2, nights: 1, region: "seoul" }));
 assert.match(r["합계(운임 제외)"], /최대 200,000원/);
 assert.match(rows(C.tripExpense({ days: 1, nights: 0, region: "other", car: true }))["합계(운임 제외)"], /최대 25,000원/);
 console.log("[3] 계산기 시험 통과");
+
+// 4) 내규나침반: 낱말이 어느 내규 어디에 나오는지. 글자 그대로 나오는 곳은 하나도 빠뜨리면 안 된다
+const rules = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "rules.json"), "utf8")).rules;
+const compass = new E.Compass(rules, idx, cards);
+// 시험 쪽 정답: 띄어쓰기·표 태그를 빼고 모든 조문·별표에서 글자 그대로 찾는다
+const flatTxt = (s) => String(s || "").normalize("NFC").replace(/<[^>]+>/g, "").replace(/\s+/g, "");
+function literal(words) {
+  const out = new Set();
+  rules.forEach((rl) => {
+    rl.articles.forEach((a) => { if (words.every((wd) => flatTxt(a.text).includes(wd))) out.add(rl.name + "|" + a.no); });
+    rl.annexes.forEach((x) => { if (words.every((wd) => flatTxt(x.title + " " + (x.text || "")).includes(wd))) out.add(rl.name + "|" + x.title); });
+  });
+  return out;
+}
+const found = (res) => new Set(res.exact.flatMap((g) => g.hits.map((x) => g.rule + "|" + x.no)));
+const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+for (const wd of ["법인카드", "육아휴직", "겸직", "재택근무", "반일연가", "복지포인트"]) {
+  assert.ok(sameSet(found(compass.find(wd)), literal([wd])), `나침반 '${wd}': 글자 그대로 나오는 조문·별표를 빠짐없이, 더하지도 않고 찾음`);
+}
+let cp = compass.find("법인카드");
+assert.deepStrictEqual(cp.named.map((x) => x.rule), ["법인카드 관리 및 사용지침"], "이름에 낱말이 든 내규");
+assert.strictEqual(cp.order[0], "법인카드 관리 및 사용지침", "목록은 많이 나오는 순(줄인 말 포함): 지침이 2곳 + 줄인 말 ‘카드’ 10곳으로 맨 앞");
+assert.strictEqual(cp.exact.length, 5);
+{
+  // 이름에 낱말이 든 내규는 named 로 따로 알리고, 목록 순서는 나오는 곳 수로만 정한다
+  const tr = compass.find("출장"), cnt = (rl) => (tr.exact.find((g) => g.rule === rl) || { n: 0 }).n + tr.aliases.filter((a) => a.rule === rl).reduce((x, a) => x + a.hits.length, 0);
+  assert.deepStrictEqual(tr.named.map((x) => x.rule), ["공무국외출장세부지침"]);
+  assert.deepStrictEqual(tr.order.slice(0, 2), ["여비지급세칙", "공무국외출장세부지침"], "‘출장’: 17곳인 여비지급세칙이 이름에 ‘출장’이 든 지침(11곳)보다 앞");
+  assert.ok(tr.order.every((rl, i) => i === 0 || cnt(tr.order[i - 1]) >= cnt(rl)) && tr.exact.every((g, i) => tr.order[i] === g.rule), "목록 순서는 나오는 곳이 많은 순");
+}
+const al = cp.aliases.find((x) => x.rule === "법인카드 관리 및 사용지침");
+assert.ok(al && al.alias === "카드" && al.at === "제1조" && al.hits.some((x) => x.no === "제5조"), "‘법인카드(이하 “카드”라 한다)’처럼 줄여 부르는 말도 그 내규 안에서 찾음");
+assert.strictEqual(cp.similar.length, 0, "글자 그대로 나오면 비슷한 말은 찾지 않음");
+cp = compass.find("직원 징계");
+assert.ok(cp.mode === "all" && cp.exact.length && sameSet(found(cp), literal(["직원", "징계"])), "두 낱말이면 둘 다 나오는 곳");
+cp = compass.find("반차");
+assert.strictEqual(cp.exact.length, 0, "‘반차’는 원문에 없음");
+assert.ok(cp.simWords.some((x) => x.word === "반일연가"), "원문에서 쓰는 말 ‘반일연가’로 바꿔 찾음");
+const bok = cp.similar.find((g) => g.rule === "복무세칙");
+assert.ok(bok && ["제15조", "제16조"].every((no) => bok.hits.some((x) => x.no === no)) && bok.hits.every((x) => x.why), "비슷한 말로 찾은 곳에 이유를 붙임");
+assert.ok(compass.find("장").short && !compass.find("장").exact.length, "한 글자는 찾지 않음(거의 모든 조문에 나옴)");
+assert.ok(cp.outside.length && cp.outside.every((o) => /반차/.test(o.title)), "‘내규에 없음’ 안내는 찾은 낱말이 이름에 든 것만(생일 휴가 같은 곁가지 빼고)");
+assert.ok(!compass.find("직원").aliases.some((x) => x.alias === "행동강령책임관"), "‘직원(이하 “행동강령책임관”)’은 직원의 줄임말이 아님(줄인 말 글자가 모두 원래 말에 있어야)");
+cp = compass.find("야근");
+assert.ok(cp.simWords.some((x) => x.word === "시간외") && !cp.simWords.some((x) => x.word === "근로"), "바꿔 찾는 말이 너무 흔하면(‘근로’) 빼고 찾음");
+assert.strictEqual(compass.find("장례").similar[0].rule, "복무세칙", "그 낱말을 묻는 답 카드의 근거 내규(경조사휴가)를 맨 앞에, 바꿔 찾은 말(‘사망’)로만 나온 곳은 뒤에");
+const inCard = (id, wd) => { const cd = byId.get(id); return [cd.title].concat(cd.questions).some((x) => flatTxt(x).includes(wd)); };
+for (const wd of ["휴가비", "회식", "택시"]) {
+  const viaCard = compass.find(wd).similar.flatMap((g) => g.hits).filter((x) => x.card);
+  assert.ok(viaCard.every((x) => inCard(x.card, wd)), `‘${wd}’: 답 카드로 찾은 곳은 그 낱말을 실제로 묻는 카드에서만`);
+}
+// 원문 표시용: 띄어쓰기가 달라도 낱말을 표시하고, 미리보기는 낱말 앞뒤만 잘라 낸다
+assert.deepStrictEqual("법인 카드와 법인카드".match(E.wordRe(["법인카드"])), ["법인 카드", "법인카드"]);
+assert.deepStrictEqual("반일연가 2회".match(E.wordRe(["연가", "반일연가"])), ["반일연가"], "긴 낱말을 먼저");
+const ex = E.excerpt(rules.find((rl) => rl.name === "해외사무소운영세칙").articles.find((a) => a.no === "제27조").text, ["법인카드"], 30);
+assert.ok(!/[<>|]|---/.test(E.snippet("<table><tr><td>실비<br>(상한액: 서울특별시 100,000)</td></tr></table> | 구분 | 대상 |\n| --- | --- |", "실비 상한액")), "관련 조문 미리보기에 표 태그·칸막이를 그대로 찍지 않음");
+assert.ok(!/\||---/.test(JSON.stringify(E.excerpt("| 구분 | 대상 |\n| --- | --- |\n| 사망 | 배우자 |", ["사망"], 30))), "미리보기에 표 칸막이(| ---) 기호를 빼고 보여 줌");
+assert.ok(ex.hit === "법인카드" && ex.pre.length <= 31 && /법인수표, $/.test(ex.pre) && ex.post.length <= 31, "미리보기: 낱말 앞뒤 30자");
+console.log("[4] 내규나침반 시험 통과");

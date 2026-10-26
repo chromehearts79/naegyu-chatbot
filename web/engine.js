@@ -647,10 +647,15 @@
     return scored.slice(0, k || 5).filter(function (r) { return r.score > 0; });
   };
 
+  // 미리보기용 글자만: 별표의 표 태그(<td> 등)와 마크다운 표 칸막이(| --- |)를 빼고 띄어쓰기를 하나로
+  function plainText(text) {
+    return String(text || "").replace(/<[^>]+>/g, " ").replace(/\|?\s*:?-{3,}:?\s*(?=\|)/g, " ").replace(/\|/g, " ").replace(/\s+/g, " ").trim();
+  }
+
   // 검색어 글자가 가장 많이 몰린 구간을 미리보기로 잘라낸다.
   function snippet(text, query, width) {
     width = width || 140;
-    var q = bigrams(normalize(query)), flat = text.replace(/\s+/g, " "), best = 0, bestAt = 0;
+    var q = bigrams(normalize(query)), flat = plainText(text), best = 0, bestAt = 0;
     for (var i = 0; i < flat.length; i += 10) {
       var win = flat.slice(i, i + width), s = 0;
       q.forEach(function (_, g) { if (win.indexOf(g) >= 0) s++; });
@@ -659,6 +664,158 @@
     var out = flat.slice(bestAt, bestAt + width);
     return (bestAt > 0 ? "…" : "") + out + (bestAt + width < flat.length ? "…" : "");
   }
+
+  // ── 내규나침반: 낱말이 어느 내규 어디에 나오는지 ─────────────────────
+  // 글자 그대로 찾기는 Ctrl+F 와 같아 하나도 빠뜨리지 않는다(띄어쓰기·표 태그·가운뎃점 차이만 무시).
+  // 원문에 없는 말이면 규정어 짝(SYNONYMS)과 그 말을 묻는 답 카드가 가리키는 조문으로 비슷한 곳을 찾는다(참고용).
+  var DOTS = /[·‧ㆍ∙･・]/g;
+  function flatText(s) { return String(s || "").normalize("NFC").replace(/<[^>]+>/g, "").replace(/\s+/g, "").replace(DOTS, "·"); }
+  function countIn(hay, needle) { var n = 0, i = hay.indexOf(needle); while (i >= 0) { n++; i = hay.indexOf(needle, i + needle.length); } return n; }
+  // 낱말 글자 사이에 띄어쓰기가 끼어도 맞는 정규식(원문 표시용). 긴 낱말을 먼저 맞춘다("반일연가"를 "연가"보다 먼저).
+  function wordRe(words) {
+    var src = words.map(flatText).filter(Boolean).sort(function (a, b) { return b.length - a.length; }).map(function (w) {
+      return w.split("").map(function (ch) { return ch === "·" ? "[·‧ㆍ∙･・]" : ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("\\s*");
+    });
+    return new RegExp(src.join("|") || "(?!)", "g");
+  }
+  // 미리보기: 처음 나오는 낱말과 그 앞뒤 width 글자
+  function excerpt(text, words, width) {
+    width = width || 40;
+    var t = plainText(text), m = wordRe(words).exec(t);
+    if (!m) return { pre: "", hit: "", post: t.slice(0, width * 2) + (t.length > width * 2 ? "…" : "") };
+    var a = Math.max(0, m.index - width), b = m.index + m[0].length;
+    return { pre: (a > 0 ? "…" : "") + t.slice(a, m.index), hit: m[0], post: t.slice(b, b + width) + (b + width < t.length ? "…" : "") };
+  }
+
+  function Compass(rules, index, cards) {
+    var docs = [];
+    rules.forEach(function (r) {
+      r.articles.forEach(function (a) { docs.push({ rule: r.name, no: a.no, title: a.title, kind: "article", flat: flatText(a.text) }); });
+      (r.annexes || []).forEach(function (x) { docs.push({ rule: r.name, no: x.title, title: "", kind: "annex", flat: flatText(x.title + " " + (x.text || "")) }); });
+    });
+    // 줄여 부르는 말: "법인카드(이하 “카드”라 한다)" → 그 내규 안에서는 '카드'도 같은 말
+    var defs = [];
+    docs.forEach(function (d) {
+      var re = /\(이하[“"‘']([^”"’']{2,15})[”"’'](?:이?라|로)한다\)/g, m;
+      while ((m = re.exec(d.flat))) defs.push({ rule: d.rule, at: d.no, alias: m[1], before: d.flat.slice(Math.max(0, m.index - 30), m.index) });
+    });
+    this.docs = docs;
+    this.defs = defs;
+    this.rules = rules;
+    this.index = index;
+    this.cards = new Map((cards || []).map(function (c) { return [c.id, c]; }));
+  }
+
+  // 카드 인용("복무세칙 제15조제2항", "여비지급세칙 별표 제1호")이 가리키는 조문·별표
+  Compass.prototype.docOf = function (cite) {
+    var m = /^(.+?) (제\d+조(?:의\d+)?)/.exec(cite), docs = this.docs;
+    if (m) return docs.filter(function (d) { return d.kind === "article" && d.rule === m[1] && d.no === m[2]; })[0] || null;
+    m = /^(.+?) (별표.*)$/.exec(cite);
+    if (!m || m[2].indexOf("조") >= 0) return null;
+    var head = flatText(m[2]);
+    return docs.filter(function (d) { return d.kind === "annex" && d.rule === m[1] && flatText(d.no).indexOf(head) === 0; })[0] || null;
+  };
+
+  // 같은 내규끼리 묶는다(순서는 부르는 쪽에서 정한다)
+  function byRule(list) {
+    var groups = new Map();
+    list.forEach(function (x) {
+      var g = groups.get(x.rule);
+      if (!g) groups.set(x.rule, g = { rule: x.rule, hits: [] });
+      g.hits.push(x.hit);
+    });
+    var out = Array.from(groups.values());
+    out.forEach(function (g) { g.n = g.hits.length; });
+    return out;
+  }
+
+  Compass.prototype.find = function (query) {
+    var q = String(query || "").normalize("NFC").replace(DOTS, "·").replace(/\s+/g, " ").trim();
+    var whole = flatText(q), parts = q.split(" ").map(flatText).filter(function (w) { return w.length >= 2; });
+    var res = { query: q, mode: "phrase", words: [], named: [], exact: [], order: [], aliases: [], similar: [], simWords: [], outside: [], related: [] };
+    if (whole.length < 2) { res.short = true; return res; }
+    // 두 낱말 이상이면 모두 나오는 곳("직원 징계"), 한 낱말이면 그 낱말이 나오는 곳
+    var words = parts.length >= 2 ? parts : [whole], self = this;
+    if (parts.length >= 2) res.mode = "all";
+    res.words = words;
+    var has = function (d) { return words.every(function (w) { return d.flat.indexOf(w) >= 0; }); };
+    res.named = this.rules.filter(function (r) { return words.every(function (w) { return flatText(r.name).indexOf(w) >= 0; }); })
+      .map(function (r) { return { rule: r.name, articles: r.articles.length }; });
+    var hits = this.docs.filter(has);
+    res.exact = byRule(hits.map(function (d) {
+      return { rule: d.rule, hit: { no: d.no, title: d.title, kind: d.kind, count: words.reduce(function (s, w) { return s + countIn(d.flat, w); }, 0) } };
+    }));
+    // 그 내규가 낱말을 줄여 부르면, 줄인 말이 나오는 조문도 그 내규 안에서 찾는다
+    if (res.mode === "phrase") {
+      var seen = {};
+      this.defs.forEach(function (df) {
+        var key = df.rule + "|" + df.alias;
+        // 줄인 말의 글자가 모두 원래 말에 있어야 한다("법인카드"→"카드"). "직원(이하 “행동강령책임관”)"은 줄임말이 아니라 다른 말
+        if (seen[key] || df.alias === whole || df.before.slice(-whole.length) !== whole ||
+          !df.alias.split("").every(function (ch) { return whole.indexOf(ch) >= 0; })) return;
+        seen[key] = 1;
+        var inExact = new Set(hits.filter(function (d) { return d.rule === df.rule; }).map(function (d) { return d.no; }));
+        var ah = self.docs.filter(function (d) { return d.rule === df.rule && !inExact.has(d.no) && d.flat.indexOf(df.alias) >= 0; })
+          .map(function (d) { return { no: d.no, title: d.title, kind: d.kind, count: countIn(d.flat, df.alias) }; });
+        if (ah.length) res.aliases.push({ rule: df.rule, alias: df.alias, at: df.at, hits: ah });
+      });
+    }
+    // 목록 순서(order): 나오는 곳이 많은 내규부터(줄인 말로 나오는 곳 포함), 같으면 내규 목록 순.
+    // 이름에 낱말이 든 내규는 named 로 따로 알리므로 순서에서 앞세우지 않는다("출장" → 여비지급세칙 17곳이 공무국외출장세부지침 11곳보다 앞)
+    var total = {}, at0 = {};
+    this.rules.forEach(function (r, i) { at0[r.name] = i; });
+    res.exact.forEach(function (g) { total[g.rule] = g.n; });
+    res.aliases.forEach(function (a) { total[a.rule] = (total[a.rule] || 0) + a.hits.length; });
+    res.order = Object.keys(total).sort(function (a, b) { return total[b] - total[a] || at0[a] - at0[b]; });
+    res.exact.sort(function (a, b) { return res.order.indexOf(a.rule) - res.order.indexOf(b.rule); });
+    if (hits.length) return res;
+
+    // 글자 그대로 없을 때: ① 원문에서 쓰는 말로 바꿔 찾기 ② 그 말을 묻는 답 카드가 가리키는 조문
+    // rank: 내규 묶음 순서. 그 낱말을 묻는 답 카드의 근거(0~3)가 바꿔 찾은 말로만 나온 곳(100~)보다 앞
+    var sim = [], at = new Map(), rankOf = new Map();
+    function add(d, why, w, quote, rank) {
+      rankOf.set(d.rule, Math.min(rankOf.has(d.rule) ? rankOf.get(d.rule) : rank, rank));
+      var x = at.get(d);
+      if (!x) { at.set(d, x = { no: d.no, title: d.title, kind: d.kind, why: why, words: [], quotes: [] }); sim.push({ rule: d.rule, hit: x }); }
+      if (w && x.words.indexOf(w) < 0) x.words.push(w);
+      if (quote && x.quotes.indexOf(quote) < 0) x.quotes.push(quote);
+    }
+    synonymsOf(q).split(" ").map(flatText).forEach(function (w) {
+      if (w.length < 2 || w === whole || res.simWords.length >= 3 || res.simWords.some(function (s) { return s.word === w; })) return;
+      var ds = self.docs.filter(function (d) { return d.flat.indexOf(w) >= 0; });
+      // 조문 60곳 넘게 나오는 말('근로')은 너무 흔해 길잡이가 안 된다
+      if (!ds.length || ds.length > 60) return;
+      res.simWords.push({ from: q, word: w });
+      var rank = 100 + res.simWords.length;
+      ds.forEach(function (d) { add(d, "‘" + q + "’ → 원문에서 쓰는 말 ‘" + w + "’", w, null, rank); });
+    });
+    if (this.index) {
+      // 그 낱말을 실제로 묻는 답 카드(제목·예상 질문에 글자 그대로 있음)만 쓴다. 점수만 비슷한 카드는 곁가지가 많다
+      var asks = function (c) { return [c.title].concat(c.questions || []).some(function (x) { return flatText(x).indexOf(whole) >= 0; }); };
+      var picked = 0;
+      this.index.score(q).forEach(function (r) {
+        var c = self.cards.get(r.id);
+        if (!c || picked >= 4 || !asks(c)) return;
+        picked++;
+        // '내규에 없음' 카드는 찾은 낱말이 그 이름에 들어 있을 때만 알린다("반차" → "반반차·시간 단위 연가")
+        if (c.kind === "outside") { if (flatText(c.title).indexOf(whole) >= 0) res.outside.push({ id: c.id, title: c.title }); return; }
+        var n = 0;
+        (c.facts || []).forEach(function (f) {
+          var d = self.docOf(f.cite);
+          if (!d || (n >= 3 && !at.has(d))) return;
+          if (!at.has(d)) n++;
+          add(d, "‘" + c.title + "’ 답의 근거", null, f.quote, picked);
+          if (!at.get(d).card) at.get(d).card = c.id;
+        });
+      });
+    }
+    res.similar = byRule(sim).sort(function (a, b) { return rankOf.get(a.rule) - rankOf.get(b.rule) || b.n - a.n; });
+    if (!sim.length) {
+      this.art = this.art || new ArticleIndex(this.rules);
+      res.related = this.art.search(q, 5).map(function (r) { return { rule: r.doc.rule, no: r.doc.no, title: r.doc.title, kind: r.doc.kind }; });
+    }
+    return res;
+  };
 
   // ── 날짜 계산 ─────────────────────────────────────────────────
   // 시간대 문제를 피하려고 날짜를 UTC 자정으로만 다룬다.
@@ -706,7 +863,7 @@
       var due = parseDate(o.due), birth = parseDate(o.birth) || null;
       if (!due) return { error: "출산예정일을 입력하세요." };
       var base = birth || due;
-      if (base < SPOUSE_RULE_FROM) return { error: "출산(예정)일이 지금 복무세칙 시행일(2026.8.12.)보다 앞섭니다. 그때 기준은 인사팀에 확인하세요." };
+      if (base < SPOUSE_RULE_FROM) return { error: "출산(예정)일이 지금 복무세칙 시행일(2026.8.12.)보다 앞섭니다. 그때 기준은 관련 부서에 문의하세요." };
       var days = o.multiple ? 25 : 20, start = addDays(due, -50), startWhy = " (출산예정일 50일 전)", notes = [];
       if (start < CUT_SPOUSE_PREBIRTH) {
         notes.push("출산 전 사용은 2026.9.18.부터 적용되므로, 그 전 날짜에는 쓸 수 없습니다.");
@@ -725,7 +882,7 @@
         ],
         notes: notes.concat([
           "토요일·공휴일은 휴가일수 " + days + "일에 넣지 않습니다.",
-          "'출산한 날부터 120일이 지나면' 쓸 수 없습니다. 마지막 날을 출산일 포함으로 세는지는 인사팀에 확인하세요."
+          "'출산한 날부터 120일이 지나면' 쓸 수 없습니다. 마지막 날을 출산일 포함으로 세는지는 관련 부서에 문의하세요."
         ])
       };
     },
@@ -760,7 +917,7 @@
             ["적용 기준", after ? "유산·사산일이 2026.9.18. 이후" : "유산·사산일이 2026.9.17. 이전"],
             ["신청 기한", fmt(addDays(d, 20)) + " 무렵 (유산·사산한 날부터 20일 이내)"]
           ],
-          notes: ["신청 기한의 마지막 날을 유산일 포함으로 세는지는 인사팀에 확인하세요."]
+          notes: ["신청 기한의 마지막 날을 유산일 포함으로 세는지는 관련 부서에 문의하세요."]
         };
       }
       var w = +o.weeks;
@@ -773,7 +930,7 @@
           ["끝나는 날", fmt(addDays(d, days - 1)) + " (유산·사산일을 1일째로 셀 때)"],
           ["급여", days === 90 ? "최초 60일까지 유급" : "유급"]
         ],
-        notes: ["임신 15주와 16주 사이처럼 경계에 걸리면 인사팀에 확인하세요."]
+        notes: ["임신 15주와 16주 사이처럼 경계에 걸리면 관련 부서에 문의하세요."]
       };
     },
     // 자녀 나이로 쓸 수 있는 제도
@@ -825,7 +982,7 @@
         } else rows.push(["상한", "25일에 도달"]);
       }
       notes.push("1년간 출근율 80% 이상일 때 기준입니다. 휴직 기간이 있으면 그해 연가가 비례해서 줄어듭니다.");
-      notes.push("연가를 언제 기준으로 부여하는지(입사일 또는 회계연도)는 인사팀에 확인하세요.");
+      notes.push("연가를 언제 기준으로 부여하는지(입사일 또는 회계연도)는 관련 부서에 문의하세요.");
       return { rows: rows, notes: notes };
     },
     // 장기재직휴가: 근속 10년·20년이 되는 날
@@ -852,23 +1009,23 @@
       var meals = Math.max(0, Math.floor(+o.meals || 0));
       if (meals > days * 3) return { error: "다른 예산으로 먹은 끼니가 " + days + "일 × 3끼(" + days * 3 + "끼)보다 많습니다." };
       var perDay = o.car ? 12500 : 25000, meal = days === 1 && nights === 0 ? 12500 : 25000;
-      // 당일 출장은 식비가 이미 절반이라, 거기서 끼니를 빼는 방법이 세칙에 없다 → 계산하지 않고 회계 담당 확인 안내만
+      // 당일 출장은 식비가 이미 절반이라, 거기서 끼니를 빼는 방법이 세칙에 없다 → 계산하지 않고 관련 부서 문의 안내만
       var sameDayCut = meals && meal === 12500;
       var dayPay = perDay * days, mealFull = meal * days, mealPay = sameDayCut ? mealFull : Math.max(0, mealFull - 8330 * meals), lodge = cap * nights, won = function (n) { return n.toLocaleString("ko-KR") + "원"; };
       var notes = [];
       if (days > 15) notes.push("같은 곳에 15일 넘게 머무르면 일비가 10~30% 줄어듭니다(제22조). 계산기는 반영하지 않았습니다.");
-      if (sameDayCut) notes.push("당일 출장(식비 절반)에서 다른 예산으로 먹은 끼니를 얼마나 빼는지는 세칙에 정한 방법이 없어 계산하지 않았습니다. 회계 담당에 확인하세요.");
+      if (sameDayCut) notes.push("당일 출장(식비 절반)에서 다른 예산으로 먹은 끼니를 얼마나 빼는지는 세칙에 정한 방법이 없어 계산하지 않았습니다. 관련 부서에 문의하세요.");
       if (meals && !sameDayCut && meals % 3 === 0) notes.push("1끼 8,330원 × 3끼 = 24,990원이라, 하루 세 끼를 모두 빼도 하루 10원이 남습니다(세칙 금액 그대로 계산).");
       return {
         rows: [
           ["일비", won(perDay) + " × " + days + "일 = " + won(dayPay) + (o.car ? " (업무용 차량: 절반)" : "")],
           ["식비", won(meal) + " × " + days + "일 = " + won(mealFull) + (meal === 12500 ? " (당일 출장: 절반)" : "") +
-            (sameDayCut ? " · 다른 예산 " + meals + "끼는 빼는 방법이 정해져 있지 않음(회계 담당 확인)" : meals ? " − 다른 예산 " + meals + "끼 × 8,330원 = " + won(mealPay) : "")],
+            (sameDayCut ? " · 다른 예산 " + meals + "끼는 빼는 방법이 정해져 있지 않음(관련 부서 문의)" : meals ? " − 다른 예산 " + meals + "끼 × 8,330원 = " + won(mealPay) : "")],
           ["숙박비", nights ? "실비, 상한 " + won(cap) + " × " + nights + "박 = 최대 " + won(lodge) : "숙박 없음"],
-          ["합계(운임 제외)", "최대 " + won(dayPay + mealPay + lodge) + (sameDayCut ? " (끼니 공제 전, 회계 담당 확인)" : "")],
+          ["합계(운임 제외)", "최대 " + won(dayPay + mealPay + lodge) + (sameDayCut ? " (끼니 공제 전, 관련 부서 문의)" : "")],
           ["운임", "실비 (철도 일반실·고속열차 한도, 항공·선박 2등석)"]
         ],
-        notes: notes.concat(["회의비·업무추진비 등 다른 예산으로 먹은 끼니는 1끼 8,330원씩 빼고 받습니다(1일 3끼 기준).", "운임과 숙박비는 다녀온 다음 날부터 2주 안에 증거서류로 정산합니다.", "출장지가 '근무지 외'인지는 공무원 여비 규정 기준이라 인사·회계 담당에 확인하세요.", "조사업무 담당자의 제주·기획조사 출장 일비 가산은 반영하지 않았습니다."])
+        notes: notes.concat(["회의비·업무추진비 등 다른 예산으로 먹은 끼니는 1끼 8,330원씩 빼고 받습니다(1일 3끼 기준).", "운임과 숙박비는 다녀온 다음 날부터 2주 안에 증거서류로 정산합니다.", "출장지가 '근무지 외'인지는 공무원 여비 규정 기준이라 관련 부서에 문의하세요.", "조사업무 담당자의 제주·기획조사 출장 일비 가산은 반영하지 않았습니다."])
       };
     },
     // 연간 복지포인트(기본 + 근속 + 가족 + 우대). 출산포인트는 따로.
@@ -924,7 +1081,7 @@
     if (/서울/.test(t)) v.region = "seoul";
     else if (/부산|대구|인천|광주|대전|울산|제주/.test(t) && !/경기\s*광주/.test(t)) v.region = "metro";
     // 세종특별자치시는 별표 제1호에 따로 없다: 지역 칸은 비워 두고 왜 비웠는지 알린다
-    if (!v.region && /세종/.test(t)) v.regionNote = "세종특별자치시는 여비지급세칙 별표 제1호에 따로 적혀 있지 않습니다(서울특별시·광역시·그 밖의 지역, 제주는 광역시 기준). 숙박 지역을 어디로 볼지 회계 담당에 확인하세요.";
+    if (!v.region && /세종/.test(t)) v.regionNote = "세종특별자치시는 여비지급세칙 별표 제1호에 따로 적혀 있지 않습니다(서울특별시·광역시·그 밖의 지역, 제주는 광역시 기준). 숙박 지역을 어디로 볼지 관련 부서에 문의하세요.";
     // 회의비 등 다른 예산으로 먹은 끼니: 그런 말이 있을 때만("2끼", "점심·저녁")
     if (OTHER_BUDGET.test(t)) {
       if ((m = t.match(new RegExp(NUMW + "\\s*끼")))) v.meals = num(m[1]);
@@ -988,7 +1145,7 @@
     return FOLLOW.test(t) || shortTail;
   }
 
-  var api = { datesIn: datesIn, valuesIn: valuesIn, calcFor: calcFor, isFollowUp: isFollowUp, ruleOfCard: ruleOfCard, normalize: normalize, content: content, expand: expand, CardIndex: CardIndex, decide: decide, ArticleIndex: ArticleIndex, snippet: snippet, calc: calc, thresholds: T, parseDate: parseDate, iso: iso };
+  var api = { datesIn: datesIn, valuesIn: valuesIn, calcFor: calcFor, isFollowUp: isFollowUp, ruleOfCard: ruleOfCard, normalize: normalize, content: content, expand: expand, CardIndex: CardIndex, decide: decide, ArticleIndex: ArticleIndex, snippet: snippet, Compass: Compass, wordRe: wordRe, excerpt: excerpt, calc: calc, thresholds: T, parseDate: parseDate, iso: iso };
   root.NaegyuEngine = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
