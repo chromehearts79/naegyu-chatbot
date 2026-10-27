@@ -43,7 +43,9 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
 
 ## 4단계 — 승인하고 시범본 다시 만들기
 
-1. `python3 scripts/update_rules.py finish <이번에 바뀐 규정명들>` — 개정 지문 갱신, 판 번호 +1, 시범본(dist/index.html)·GPTs 묶음·검수표 다시 만들기, 원본 파일 기록 갱신.
+1. `python3 scripts/update_rules.py finish <이번에 바뀐 규정명들>` — 개정 지문 갱신, 판 번호 +1, 내규나침반 낱말 경계(`knowledge/word_bounds.json`) 다시 만들기, 시범본(dist/index.html)·GPTs 묶음·검수표 다시 만들기, 원본 파일 기록 갱신.
+   - "형태소 분석기가 없습니다"로 멈추면: 분석기(약 100MB)를 받아도 되는지 사용자에게 먼저 묻고, 승낙하면 저장소에서 `python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements-bounds.txt` 후 finish 를 다시 돌린다. 버전은 고정이다(바뀌면 낱말 나누기가 달라져 나침반 시험이 잡는다).
+   - 나침반 시험(test_engine.js [4])이 실패하면 낱말 경계가 이미 고친 경우를 되살린 것이다. 실패한 낱말을 보고 `knowledge/word_splits.json`(한 글자 머리 말·고유 이름 확인 목록)을 고치거나 사용자에게 알린다.
 2. 화면 점검을 돌린다(`node --max-old-space-size=8192 scripts/ui_test.js dist/index.html`, jsdom 이 없으면 `npm i --no-save jsdom@24.1.3` 후). 계산기·예시 질문 항목까지 모두 통과해야 한다.
 3. claude.ai 시범본을 쓰고 있으면 `dist/artifact.html` 로 같은 주소에 다시 올린다(사용자에게 먼저 물어본다).
 4. 결과: 판 번호, 카드 수 변화, 검색 시험 점수, "재검수 전" 카드 0장·멈춘 계산기 0종 확인, 배포 파일 위치.

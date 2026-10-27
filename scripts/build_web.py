@@ -4,7 +4,7 @@
 - dist/artifact.html : claude.ai 아티팩트 게시용(문서 머리 태그 없이 본문만)
 
 검사(check_knowledge.py), 독립 검증(reports/blind_check.json), 검색 시험(test_engine.js) 결과를
-화면의 '검증 정보'에 넣는다.
+화면의 '검증 정보'에 넣는다. 내규나침반 낱말 경계(knowledge/word_bounds.json)는 원문과 맞을 때만 묶는다.
 """
 import base64
 import datetime
@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_knowledge import load_domains  # noqa: E402
 import check_changes  # noqa: E402
 from review_workbook import card_hash  # noqa: E402
+import build_bounds  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
@@ -43,6 +44,16 @@ def main():
     ap.add_argument("--out", default=str(DIST))
     args = ap.parse_args()
     dist = Path(args.out)
+    # 낱말 경계가 원문과 맞는지 먼저 본다. 내규가 바뀌었는데 다시 만들지 않으면 그 조문만 예전처럼(다른 낱말 속도 본 결과로) 보여서 막는다
+    rules = json.loads(Path(args.rules).read_text())["rules"]
+    bounds = json.loads(build_bounds.OUT.read_text())["docs"] if build_bounds.OUT.exists() else {}
+    off = build_bounds.stale(rules, bounds)
+    if off:
+        print(f"낱말 경계 표시가 없거나 원문과 맞지 않는 조문 {len(off)}개: {', '.join(off[:5])}{' …' if len(off) > 5 else ''}")
+        if Path(args.rules).resolve() == (ROOT / "data" / "rules.json").resolve():
+            sys.exit("내규 원문이 바뀌었습니다. 먼저 낱말 경계를 다시 만들어 주세요: python3 scripts/build_bounds.py "
+                     "(형태소 분석기 필요: pip install -r scripts/requirements-bounds.txt)")
+    keys = {k for k, _ in build_bounds.docs_of(rules)} - set(off)
     check = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_knowledge.py")], capture_output=True, text=True)
     if check.returncode != 0:
         print(check.stdout)
@@ -53,7 +64,6 @@ def main():
     domains, cards = load_domains()
     for c in cards:
         c.pop("_file", None)
-    rules = json.loads(Path(args.rules).read_text())["rules"]
     laws = json.loads((ROOT / "knowledge" / "external_laws.json").read_text())["laws"]
     blind = json.loads((ROOT / "reports" / "blind_check.json").read_text())
     decisions = json.loads((ROOT / "reports" / "review_decisions.json").read_text())["decisions"]
@@ -121,6 +131,7 @@ def main():
                    "articles": [{"no": a["no"], "title": a["title"], "chapter": a["chapter"], "text": a["text"]} for a in r["articles"]],
                    "annexes": [{"title": x["title"], "text": x.get("text", "")} for x in r["annexes"]]} for r in rules],
         "buchik": buchik,
+        "bounds": {k: v for k, v in bounds.items() if k in keys},
     }
     blob = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     page = (ROOT / "web" / "app.template").read_text()

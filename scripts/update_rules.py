@@ -38,6 +38,14 @@ def run(*cmd, check=True):
     return r.stdout
 
 
+def kiwi_python():
+    """형태소 분석기(kiwipiepy)가 깔린 파이썬: 저장소 .venv 먼저, 없으면 지금 파이썬. 둘 다 없으면 None"""
+    for p in (ROOT / ".venv" / "bin" / "python", Path(sys.executable)):
+        if p.exists() and subprocess.run([str(p), "-c", "import kiwipiepy"], capture_output=True).returncode == 0:
+            return str(p)
+    return None
+
+
 def sources():
     """원본 폴더의 내규 파일(지난판·참고 파일 제외) → {파일명: 경로}"""
     out = {}
@@ -163,6 +171,11 @@ def finish(accept):
     print(f"판 번호: 제{site['release']['no']}판")
     print(run(sys.executable, "scripts/check_changes.py").strip())
     print(run(sys.executable, "scripts/check_approval_table.py").strip())
+    # 내규나침반 낱말 경계: 바뀐 원문에 맞춰 다시 만든다(없으면 build_web.py 가 묶지 않는다)
+    py = kiwi_python()
+    if not py:
+        sys.exit("형태소 분석기가 없습니다. 한 번만 설치해 주세요: python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements-bounds.txt")
+    print(run(py, "scripts/build_bounds.py").strip())
     print(run(sys.executable, "scripts/build_web.py").strip())
     print(run(sys.executable, "scripts/export_gpts.py").strip())
     print(run(sys.executable, "scripts/review_workbook.py", "export").strip().splitlines()[-1])

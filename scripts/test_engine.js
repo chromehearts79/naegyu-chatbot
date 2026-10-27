@@ -132,7 +132,9 @@ console.log("[3] 계산기 시험 통과");
 
 // 4) 내규나침반: 낱말이 어느 내규 어디에 나오는지. 글자 그대로 나오는 곳은 하나도 빠뜨리면 안 된다
 const rules = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "rules.json"), "utf8")).rules;
-const compass = new E.Compass(rules, idx, cards);
+// 낱말 경계(scripts/build_bounds.py): 다른 낱말 속에서 걸린 곳(개인정보의 '인정')을 접는 데 쓴다
+const bounds = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "knowledge", "word_bounds.json"), "utf8")).docs;
+const compass = new E.Compass(rules, idx, cards, bounds);
 // 시험 쪽 정답: 띄어쓰기·표 태그를 빼고 모든 조문·별표에서 글자 그대로 찾는다
 const flatTxt = (s) => String(s || "").normalize("NFC").replace(/<[^>]+>/g, "").replace(/\s+/g, "");
 function literal(words) {
@@ -143,7 +145,8 @@ function literal(words) {
   });
   return out;
 }
-const found = (res) => new Set(res.exact.flatMap((g) => g.hits.map((x) => g.rule + "|" + x.no)));
+// 본 결과와 접힌 곳을 합치면 글자 그대로 찾은 곳과 같아야 한다(접기만 하고 지우지 않음)
+const found = (res) => new Set(res.exact.concat(res.folded || []).flatMap((g) => g.hits.map((x) => g.rule + "|" + x.no)));
 const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
 for (const wd of ["법인카드", "육아휴직", "겸직", "재택근무", "반일연가", "복지포인트"]) {
   assert.ok(sameSet(found(compass.find(wd)), literal([wd])), `나침반 '${wd}': 글자 그대로 나오는 조문·별표를 빠짐없이, 더하지도 않고 찾음`);
@@ -187,4 +190,58 @@ const ex = E.excerpt(rules.find((rl) => rl.name === "해외사무소운영세칙
 assert.ok(!/[<>|]|---/.test(E.snippet("<table><tr><td>실비<br>(상한액: 서울특별시 100,000)</td></tr></table> | 구분 | 대상 |\n| --- | --- |", "실비 상한액")), "관련 조문 미리보기에 표 태그·칸막이를 그대로 찍지 않음");
 assert.ok(!/\||---/.test(JSON.stringify(E.excerpt("| 구분 | 대상 |\n| --- | --- |\n| 사망 | 배우자 |", ["사망"], 30))), "미리보기에 표 칸막이(| ---) 기호를 빼고 보여 줌");
 assert.ok(ex.hit === "법인카드" && ex.pre.length <= 31 && /법인수표, $/.test(ex.pre) && ex.post.length <= 31, "미리보기: 낱말 앞뒤 30자");
+// 4-2) 낱말 경계: 다른 낱말 속·반대말 머리 뒤·엉뚱하게 띄어 걸린 곳은 접고, 맞는 곳은 본 결과로. 이미 고친 문제가 되살아나지 않는지 대조한다
+{
+  assert.deepStrictEqual(compass.unbounded, [], "모든 조문·별표에 낱말 경계 표시가 있고 원문과 맞음(내규가 바뀌면 build_bounds.py 를 다시 돌린다)");
+  const occs = (w) => { const r = compass.find(w); return r.exact.concat(r.folded).flatMap((g) => g.hits.flatMap((x) => x.occ.map((o) => ({ ...o, rule: g.rule, no: x.no })))); };
+  const mainN = (xs) => xs.filter((o) => o.main).length;
+  const inGroup = (w, re) => occs(w).filter((o) => re.test(o.group));
+  // ① 붙여 쓴 곳의 엉뚱한 결과
+  for (const [w, re, allow] of [["인정", /개인정보/, 0], ["전보", /안전보건/, 0], ["원장", /위원장|정보원장/, 0], ["회의", /(위원|이사|심의|동호|협의)회의/, 11], ["정직", /행정직/, 0], ["직급", /퇴직급/, 0], ["장비", /출장비/, 0], ["비자", /소비자/, 0], ["조사", /경조사/, 0], ["개발", /금융개발원/, 0], ["사업", /우정사업본부/, 0]]) {
+    const xs = inGroup(w, re);
+    assert.ok(xs.length && mainN(xs) <= allow, `‘${w}’ ← ${re.source}: ${xs.length}곳 중 본 결과 ${mainN(xs)}(허용 ${allow})`);
+  }
+  for (const [w, re] of [["이익", /^불이익/], ["공개", /^(비|미)공개/], ["정규직", /^비정규직/], ["가능", /^불가능/], ["지급", /^부지급/]]) {
+    const xs = inGroup(w, re);
+    assert.ok(xs.length && mainN(xs) === 0 && xs.every((o) => o.why === "fold-neg"), `반대말 머리 ‘${w}’ ← ${re.source}: 모두 접힘`);
+  }
+  // ② 처음 문제: 엉뚱하게 띄어 걸린 곳("위하여 비상임"의 '여비')
+  for (const w of ["여비", "의장", "의결", "시작"]) {
+    const xs = occs(w).filter((o) => o.spaced);
+    assert.ok(xs.length && mainN(xs) === 0, `‘${w}’: 띄어 걸린 ${xs.length}곳은 모두 접힘`);
+  }
+  const yb = compass.find("여비");
+  assert.ok(yb.exact.reduce((n, g) => n + g.hits.length, 0) < literal(["여비"]).size, "‘여비’: 엉뚱하게 띄어 걸린 조문은 본 결과에서 빠짐");
+  // ③ 띄어 걸렸지만 뜻이 다른 곳
+  for (const [w, re] of [["회의운영", /(위원|이사|심의|협의)회의 운영/], ["회의소집", /(위원|이사)회의 소집/], ["정규직채용", /비정규직 채용/], ["지급대상", /부지급 대상/], ["중징계", /중 징계/]]) {
+    const xs = inGroup(w, re);
+    assert.ok(xs.length && mainN(xs) === 0, `‘${w}’ ← ${re.source}: ${xs.length}곳 모두 접힘`);
+  }
+  // ④ 맞는 곳은 본 결과(형태소 경계, 낱말 쪼개기, 확인 목록, 다시 보기)
+  for (const [w, re] of [["여비", /출장여비|국내여비|국외여비/], ["수당", /가족수당|초과근무수당|연차수당|제수당/], ["휴가", /특별휴가|출산전후휴가/], ["근무", /재택근무|초과근무|원격근무/], ["출장", /공무국외출장|출장비/], ["시간", /근무시간|근로시간|단시간/], ["정보", /개인정보/], ["연가", /반일연가|저축연가/], ["이사", /비상임이사|사외이사|이사회/], ["휴직", /육아휴직/], ["직원", /임직원/], ["징계", /중징계|경징계/], ["근로", /근로자/], ["퇴직", /명예퇴직/], ["가족", /부양가족/], ["사고", /안전사고|보험사고/], ["휴일", /공휴일/], ["개정", /제·개정/], ["윤리", /공직자윤리법/], ["분류표", /내규분류표/]]) {
+    const xs = inGroup(w, re);
+    assert.ok(xs.length && mainN(xs) / xs.length >= 0.9, `‘${w}’ ← ${re.source}: ${xs.length}곳 중 본 결과 ${mainN(xs)}`);
+  }
+  for (const [w, re] of [["평가결과", /성과평가 결과/], ["고득점순", /고득점 순/], ["수사중", /수사 중/], ["퇴직전", /퇴직 전/], ["시간외", /^시 간 외$/], ["시간외근무", /시 간 외 근무/], ["전직원", /^전 직원/], ["타기관", /^타 기관/]]) {
+    const xs = inGroup(w, re);
+    assert.ok(xs.length && mainN(xs) === xs.length, `띄어 쓴 맞는 곳 ‘${w}’ ← ${re.source}: ${xs.length}곳 모두 본 결과`);
+  }
+  // ⑤ 접기만 하고 지우지 않음: 본 결과 + 접힌 곳 = 글자 그대로
+  for (const wd of ["인정", "회의", "여비", "직원", "이사", "공개"]) {
+    assert.ok(sameSet(found(compass.find(wd)), literal([wd])), `‘${wd}’: 본 결과와 접힌 곳을 합치면 글자 그대로 찾은 곳과 같음`);
+  }
+  // ⑥ 걸린 말별 묶음: 같은 글자 다른 뜻이 따로 묶인다
+  const isa = compass.find("이사").groups;
+  assert.ok(isa.some((g) => /이사화물/.test(g.key)) && isa.some((g) => /^이사회$/.test(g.key)), "‘이사’: 이사회와 이사화물(이사 가기)이 다른 묶음");
+  assert.ok(!compass.find("인정").named.length && compass.find("출장").named.length === 1, "‘이름에 들어간 내규’도 같은 기준: ‘인정’ → 개인정보보호세칙은 아님, ‘출장’ → 공무국외출장세부지침");
+  const ij = compass.find("인정").groups;
+  assert.ok(ij.some((g) => /개인정보/.test(g.key) && !g.main) && ij.some((g) => g.main), "‘인정’: 개인정보 묶음은 접힌 묶음, 실제 ‘인정’은 본 묶음");
+  assert.ok(isa.every((g, i) => i === 0 || isa[i - 1].main > g.main || (isa[i - 1].main === g.main && isa[i - 1].n >= g.n)), "묶음 순서: 본 묶음 먼저, 많은 순");
+  // ⑦ 미리보기는 접힌 곳 말고 본 결과를 보여 준다
+  const ins = compass.find("인정"), d0 = ins.exact.flatMap((g) => g.hits.map((x) => ({ g, x }))).find(({ x }) => x.occ.some((o) => !o.main) && x.occ.some((o) => o.main));
+  assert.ok(d0, "본 결과와 접힌 곳이 함께 있는 조문");
+  const ok = new Set(d0.x.occ.filter((o) => o.main).map((o) => o.at));
+  const txt = (rules.find((rl) => rl.name === d0.g.rule).articles.find((a) => a.no === d0.x.no) || {}).text || "";
+  assert.ok(E.excerpt(txt, ["인정"], 30, (at) => ok.has(at)).post !== undefined && !/개$/.test(E.excerpt(txt, ["인정"], 30, (at) => ok.has(at)).pre), "미리보기: ‘개인정보’의 ‘인정’을 건너뛰고 본 결과를 보여 줌");
+}
 console.log("[4] 내규나침반 시험 통과");

@@ -678,21 +678,136 @@
     });
     return new RegExp(src.join("|") || "(?!)", "g");
   }
-  // 미리보기: 처음 나오는 낱말과 그 앞뒤 width 글자
-  function excerpt(text, words, width) {
+  // 보이는 글(표 태그·칸막이를 뺀 글, 화면에 그린 원문)의 글자마다 flatText 안 위치. 보이는 글은 flatText 에서 글자(표 칸막이 등)를 뺀 것이라 앞에서부터 맞춘다.
+  // dom: 화면에 그린 글이면 &amp; 같은 글자는 풀려 있고, "<삭제, 2019. 7. 31.>"처럼 태그 모양인 글(flatText 가 지움)이 보인다
+  var DOT1 = /[·‧ㆍ∙･・]/, ENT = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
+  function alignTo(flat, t, dom) {
+    var src = flat, at = null, skip = null, k, m;
+    if (dom) {
+      src = ""; at = [];
+      for (k = 0; k < flat.length;) {
+        var ch = null;
+        m = flat[k] === "&" ? /^&(#\d+|#x[0-9a-f]+|[a-z]+);/i.exec(flat.slice(k, k + 12)) : null;
+        if (m) ch = m[1][0] === "#" ? String.fromCharCode(/^#x/i.test(m[1]) ? parseInt(m[1].slice(2), 16) : +m[1].slice(1)) : ENT[m[1].toLowerCase()] || null;
+        if (ch !== null) { if (!/\s/.test(ch)) { src += ch; at.push(k); } k += m[0].length; }
+        else { src += flat[k]; at.push(k); k++; }
+      }
+      skip = new Uint8Array(t.length);
+      var re = /<[^>]+>/g;
+      while ((m = re.exec(t))) for (k = m.index; k < m.index + m[0].length; k++) skip[k] = 1;
+    }
+    var map = new Array(t.length), j = 0;
+    for (var i = 0; i < t.length; i++) {
+      var c = t[i];
+      if ((skip && skip[i]) || /\s/.test(c)) { map[i] = -1; continue; }
+      if (DOT1.test(c)) c = "·";
+      var j2 = j;
+      while (j2 < src.length && src[j2] !== c) j2++;
+      if (j2 < src.length) { map[i] = at ? at[j2] : j2; j = j2 + 1; } else map[i] = -1;
+    }
+    return map;
+  }
+  // 미리보기: 처음 나오는 낱말과 그 앞뒤 width 글자. ok(위치)가 있으면 그것이 맞다는 곳만(다른 낱말 속에서 걸린 곳은 건너뜀)
+  function excerpt(text, words, width, ok) {
     width = width || 40;
-    var t = plainText(text), m = wordRe(words).exec(t);
-    if (!m) return { pre: "", hit: "", post: t.slice(0, width * 2) + (t.length > width * 2 ? "…" : "") };
-    var a = Math.max(0, m.index - width), b = m.index + m[0].length;
-    return { pre: (a > 0 ? "…" : "") + t.slice(a, m.index), hit: m[0], post: t.slice(b, b + width) + (b + width < t.length ? "…" : "") };
+    var t = plainText(text), re = wordRe(words), m, pick = null, map = ok ? alignTo(flatText(text), t) : null;
+    while ((m = re.exec(t))) {
+      if (!pick) pick = m;
+      if (!ok || ok(map[m.index])) { pick = m; break; }
+    }
+    if (!pick) return { pre: "", hit: "", post: t.slice(0, width * 2) + (t.length > width * 2 ? "…" : "") };
+    var a = Math.max(0, pick.index - width), b = pick.index + pick[0].length;
+    return { pre: (a > 0 ? "…" : "") + t.slice(a, pick.index), hit: pick[0], post: t.slice(b, b + width) + (b + width < t.length ? "…" : "") };
   }
 
-  function Compass(rules, index, cards) {
-    var docs = [];
+  // ── 낱말 경계(knowledge/word_bounds.json, scripts/build_bounds.py 가 형태소 분석기로 만듦) ──
+  // 조문마다 낱말 표시: 낱말 하나 = 종류·길이를 담은 글자 하나, " " = 띄어쓰기(표 칸 경계 포함). 종류 번호는 build_bounds.py 와 같다
+  var W_N = 0, W_B = 2, W_S = 3, W_P = 4, W_Q = 5, W_R = 6, W_K = 7, W_M = 8, W_C = 9; // 명사류·조사어미·접미사·접두사·반대말 접두사·반대말 한 글자·한 글자 의존명사·한 글자 관형사·이어짐
+  var W_SYM = {};
+  (function () { var k = 0; for (var c = 35; c < 127; c++) if (c !== 92) W_SYM[String.fromCharCode(c)] = k++; })();
+  var NOUNISH = [true, false, false, false, true, true, true, true, false, false];
+  function fnv(s) { var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return ("0000000" + h.toString(16)).slice(-8); }
+  // st[p]/en[p]: p에서 시작/끝나는 낱말 종류+1, sp[p]: p 앞에 띄어쓰기, cut[p]: 낱말 속이지만 원문 낱말로 나뉘는 자리(공직자|윤리|법)
+  function decodeBounds(flat, e) {
+    var n = flat.length, st = new Uint8Array(n + 1), en = new Uint8Array(n + 1), sp = new Uint8Array(n + 1), cut = new Uint8Array(n + 1);
+    var pos = 0, w = false, last = 0, t = e[1];
+    for (var i = 0; i < t.length; i++) {
+      if (t[i] === " ") { w = true; continue; }
+      var k = W_SYM[t[i]]; if (k === undefined) return null;
+      var c = Math.floor(k / 9), L = k % 9 + 1;
+      if (c === W_C) { en[pos] = 0; pos += L; if (pos > n) return null; en[pos] = last; continue; }
+      st[pos] = c + 1; if (w) sp[pos] = 1; w = false;
+      pos += L; if (pos > n) return null; en[pos] = last = c + 1;
+    }
+    if (pos !== n) return null;
+    (e[2] ? e[2].split(",") : []).forEach(function (x) { var p = parseInt(x, 16); if (p > 0 && p < n) cut[p] = 1; });
+    return { st: st, en: en, sp: sp, cut: cut };
+  }
+  var HCH = /[가-힣A-Za-z0-9]/;
+  // 찾은 곳 [a, b) 판정. 본 결과(main): 낱말 경계에 맞게 걸린 곳. 접힌 곳: 다른 낱말 속(fold-inside), 반대말 머리 뒤(fold-neg),
+  // 띄어 걸려 뒤 낱말 앞부분에서 끝남(fold-span-prefix), 앞이 '중·시' 같은 한 글자 의존명사(fold-nnb)
+  function judgeAt(d, a, b) {
+    var f = d.fl, cuts = [];
+    if (!f) return { main: true, why: "exact", spaced: false };
+    for (var k = a + 1; k < b; k++) if (f.sp[k]) cuts.push(k);
+    var spaced = cuts.length > 0, first = spaced ? cuts[0] - a : b - a, lastLen = spaced ? b - cuts[cuts.length - 1] : b - a;
+    var second = spaced ? (cuts.length > 1 ? cuts[1] : b) - cuts[0] : 0, c0 = f.st[a] - 1, why;
+    if (c0 < 0 || c0 === W_B || c0 === W_S) why = "fold-inside";
+    else if (f.en[a] && !f.sp[a] && (f.en[a] - 1 === W_Q || f.en[a] - 1 === W_R)) why = "fold-neg";
+    // 띄어 걸린 곳의 앞 조각이 한 글자인데 앞 낱말에 붙어 있으면("위하여 비상임"의 '여') 낱말 첫머리가 아님
+    else if (spaced && first === 1 && a > 0 && !f.sp[a] && HCH.test(d.flat[a - 1])) why = "fold-inside";
+    else {
+      var e = f.en[b] - 1;
+      if (e === W_P || e === W_Q) why = "fold-inside";
+      else if (e >= 0) why = "exact";
+      else if (!spaced) why = "prefix";
+      // 띄어 걸려 뒤 낱말 앞부분에서 끝남("지급 대상자"): 끝 조각이 두 글자 이상이고 앞이 '등·시' 같은 한 글자 의존명사·관형사가 아닐 때만
+      else why = lastLen >= 2 && !(first === 1 && (c0 === W_K || c0 === W_M)) ? "span-prefix" : "fold-span-prefix";
+    }
+    // 다시 보기: 낱말 속이어도 그 낱말이 원문 낱말들로 나뉘고 찾은 말이 그 자리에 딱 맞으면 본 결과("공직자윤리법"의 '윤리')
+    if (why === "fold-inside" && !spaced && f.cut[a] && (f.cut[b] || f.en[b])) {
+      var inOne = true;
+      for (k = a + 1; k < b; k++) if (f.st[k]) { inOne = false; break; }
+      if (inOne) why = "rescued";
+    }
+    // 띄어 걸린 곳의 앞이 '중·시' 같은 한 글자 의존명사이고 바로 뒤 조각이 두 글자 이상이면 접는다("재직 중 징계로" ≠ 중징계). "시 간 외"는 그대로
+    if ((why === "exact" || why === "span-prefix") && spaced && first === 1 && c0 === W_K && second >= 2) why = "fold-nnb";
+    return { main: why === "exact" || why === "prefix" || why === "span-prefix" || why === "rescued", why: why, spaced: spaced };
+  }
+  // 걸린 곳을 감싼 낱말 덩어리(띄어쓰기 없이 이어진 명사들, 띄어 걸렸으면 그 앞뒤까지): 걸린 말별 묶음의 이름
+  function hostOf(d, a, b) {
+    var f = d.fl, flat = d.flat, n = flat.length;
+    if (!f) return flat.slice(a, b);
+    var x = a; while (x > 0 && !f.st[x]) x--;
+    // 가운뎃점으로 이은 말("제·개정", "위·변조")도 한 덩어리로
+    while (x > 0 && !f.sp[x] && f.en[x] && (NOUNISH[f.en[x] - 1] || flat[x - 1] === "·")) { x--; while (x > 0 && !f.st[x]) x--; }
+    var y = b; while (y < n && !f.en[y]) y++;
+    while (y < n && !f.sp[y] && f.st[y] && (NOUNISH[f.st[y] - 1] || f.st[y] - 1 === W_S || flat[y] === "·")) { y++; while (y < n && !f.en[y]) y++; }
+    var out = "";
+    for (var k = x; k < y; k++) out += (k > x && f.sp[k] ? " " : "") + flat[k];
+    return out;
+  }
+
+  function Compass(rules, index, cards, bounds) {
+    var docs = [], unbounded = [];
     rules.forEach(function (r) {
       r.articles.forEach(function (a) { docs.push({ rule: r.name, no: a.no, title: a.title, kind: "article", flat: flatText(a.text) }); });
       (r.annexes || []).forEach(function (x) { docs.push({ rule: r.name, no: x.title, title: "", kind: "annex", flat: flatText(x.title + " " + (x.text || "")) }); });
     });
+    // 낱말 경계: 원문 지문이 맞는 조문만 쓴다. 없거나 원문이 바뀐 조문은 예전처럼 걸린 곳을 모두 본 결과로(빠뜨리지는 않는다)
+    docs.forEach(function (d) {
+      var e = bounds && bounds[d.rule + "|" + d.no];
+      d.bounds = e && e[0] === fnv(d.flat) ? e : null;
+      if (!d.bounds) unbounded.push(d.rule + "|" + d.no);
+    });
+    // 내규 이름도 같은 기준으로: '이름에 들어간 내규' 칸에 ‘인정’ → 개인정보보호세칙을 넣지 않는다
+    this.names = rules.map(function (r) {
+      var d = { rule: r.name, flat: flatText(r.name) }, e = bounds && bounds["@이름|" + r.name];
+      d.bounds = e && e[0] === fnv(d.flat) ? e : null;
+      if (!d.bounds) unbounded.push("@이름|" + r.name);
+      return d;
+    });
+    this.unbounded = unbounded;
     // 줄여 부르는 말: "법인카드(이하 “카드”라 한다)" → 그 내규 안에서는 '카드'도 같은 말
     var defs = [];
     docs.forEach(function (d) {
@@ -732,19 +847,49 @@
   Compass.prototype.find = function (query) {
     var q = String(query || "").normalize("NFC").replace(DOTS, "·").replace(/\s+/g, " ").trim();
     var whole = flatText(q), parts = q.split(" ").map(flatText).filter(function (w) { return w.length >= 2; });
-    var res = { query: q, mode: "phrase", words: [], named: [], exact: [], order: [], aliases: [], similar: [], simWords: [], outside: [], related: [] };
+    var res = { query: q, mode: "phrase", words: [], named: [], exact: [], folded: [], groups: [], mainN: 0, foldN: 0, order: [], aliases: [], similar: [], simWords: [], outside: [], related: [] };
     if (whole.length < 2) { res.short = true; return res; }
     // 두 낱말 이상이면 모두 나오는 곳("직원 징계"), 한 낱말이면 그 낱말이 나오는 곳
     var words = parts.length >= 2 ? parts : [whole], self = this;
     if (parts.length >= 2) res.mode = "all";
     res.words = words;
     var has = function (d) { return words.every(function (w) { return d.flat.indexOf(w) >= 0; }); };
-    res.named = this.rules.filter(function (r) { return words.every(function (w) { return flatText(r.name).indexOf(w) >= 0; }); })
+    var inName = function (d, w) {
+      if (d.bounds && !d.fl) d.fl = decodeBounds(d.flat, d.bounds);
+      for (var i = d.flat.indexOf(w); i >= 0; i = d.flat.indexOf(w, i + 1)) if (judgeAt(d, i, i + w.length).main) return true;
+      return false;
+    };
+    res.named = this.rules.filter(function (r, k) { return words.every(function (w) { return inName(self.names[k], w); }); })
       .map(function (r) { return { rule: r.name, articles: r.articles.length }; });
-    var hits = this.docs.filter(has);
-    res.exact = byRule(hits.map(function (d) {
-      return { rule: d.rule, hit: { no: d.no, title: d.title, kind: d.kind, count: words.reduce(function (s, w) { return s + countIn(d.flat, w); }, 0) } };
-    }));
+    // 걸린 곳마다 낱말 경계로 판정한다. 낱말마다 본 결과가 하나라도 있어야 본 결과 조문, 아니면 접힌 조문(지우지 않음)
+    var groups = new Map(), main = [], folded = [];
+    this.docs.filter(has).forEach(function (d) {
+      if (d.bounds && !d.fl) d.fl = decodeBounds(d.flat, d.bounds);
+      var occ = [], allMain = true;
+      words.forEach(function (w) {
+        var any = false, i = d.flat.indexOf(w);
+        while (i >= 0) {
+          var j = judgeAt(d, i, i + w.length), g = hostOf(d, i, i + w.length);
+          occ.push({ at: i, end: i + w.length, word: w, main: j.main, why: j.why, spaced: j.spaced, group: g });
+          if (j.main) any = true;
+          if (res.mode === "phrase") {
+            var key = g + (j.main ? "" : "\u0000"), gr = groups.get(key);
+            if (!gr) groups.set(key, gr = { key: g, main: j.main, why: j.why, n: 0 });
+            gr.n++;
+          }
+          i = d.flat.indexOf(w, i + w.length);
+        }
+        if (!any) allMain = false;
+      });
+      var n = occ.filter(function (o) { return o.main; }).length;
+      res.mainN += n; res.foldN += occ.length - n;
+      var hit = { rule: d.rule, hit: { no: d.no, title: d.title, kind: d.kind, count: allMain ? n : 0, fold: occ.length - n, occ: occ } };
+      (allMain ? main : folded).push(hit);
+    });
+    var hits = main.map(function (x) { return x.hit; });
+    res.exact = byRule(main);
+    res.folded = byRule(folded);
+    res.groups = Array.from(groups.values()).sort(function (a, b) { return (b.main - a.main) || (b.n - a.n); });
     // 그 내규가 낱말을 줄여 부르면, 줄인 말이 나오는 조문도 그 내규 안에서 찾는다
     if (res.mode === "phrase") {
       var seen = {};
@@ -754,7 +899,7 @@
         if (seen[key] || df.alias === whole || df.before.slice(-whole.length) !== whole ||
           !df.alias.split("").every(function (ch) { return whole.indexOf(ch) >= 0; })) return;
         seen[key] = 1;
-        var inExact = new Set(hits.filter(function (d) { return d.rule === df.rule; }).map(function (d) { return d.no; }));
+        var inExact = new Set(main.filter(function (x) { return x.rule === df.rule; }).map(function (x) { return x.hit.no; }));
         var ah = self.docs.filter(function (d) { return d.rule === df.rule && !inExact.has(d.no) && d.flat.indexOf(df.alias) >= 0; })
           .map(function (d) { return { no: d.no, title: d.title, kind: d.kind, count: countIn(d.flat, df.alias) }; });
         if (ah.length) res.aliases.push({ rule: df.rule, alias: df.alias, at: df.at, hits: ah });
@@ -769,6 +914,7 @@
     res.order = Object.keys(total).sort(function (a, b) { return total[b] - total[a] || at0[a] - at0[b]; });
     res.exact.sort(function (a, b) { return res.order.indexOf(a.rule) - res.order.indexOf(b.rule); });
     if (hits.length) return res;
+    // 본 결과가 없으면(다른 낱말 속에서만 걸림) 비슷한 말도 찾는다. 접힌 곳은 res.folded 에 그대로 둔다
 
     // 글자 그대로 없을 때: ① 원문에서 쓰는 말로 바꿔 찾기 ② 그 말을 묻는 답 카드가 가리키는 조문
     // rank: 내규 묶음 순서. 그 낱말을 묻는 답 카드의 근거(0~3)가 바꿔 찾은 말로만 나온 곳(100~)보다 앞
@@ -1145,7 +1291,7 @@
     return FOLLOW.test(t) || shortTail;
   }
 
-  var api = { datesIn: datesIn, valuesIn: valuesIn, calcFor: calcFor, isFollowUp: isFollowUp, ruleOfCard: ruleOfCard, normalize: normalize, content: content, expand: expand, CardIndex: CardIndex, decide: decide, ArticleIndex: ArticleIndex, snippet: snippet, Compass: Compass, wordRe: wordRe, excerpt: excerpt, calc: calc, thresholds: T, parseDate: parseDate, iso: iso };
+  var api = { datesIn: datesIn, valuesIn: valuesIn, calcFor: calcFor, isFollowUp: isFollowUp, ruleOfCard: ruleOfCard, normalize: normalize, content: content, expand: expand, CardIndex: CardIndex, decide: decide, ArticleIndex: ArticleIndex, snippet: snippet, Compass: Compass, wordRe: wordRe, excerpt: excerpt, alignTo: alignTo, flatText: flatText, calc: calc, thresholds: T, parseDate: parseDate, iso: iso };
   root.NaegyuEngine = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

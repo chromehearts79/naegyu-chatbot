@@ -376,6 +376,35 @@ w.DATA.meta.site.calcOff = [];
     "나침반으로 돌아가면 하던 나침반 결과가 그대로");
   d.querySelector("#compass-thread .caution .linkish").click();
   ok(!wrap.classList.contains("compassing") && /반반차/.test(title(top())), "‘내규에 없음’의 ‘챗봇 답 보기’는 질문하기로 넘어가 그 답을 보여 줌");
+  // 낱말 경계: 다른 낱말 속·엉뚱하게 띄어 걸린 곳은 접고(원문에서 점선, 세지 않음), 걸린 말별 단추로 켜고 끈다
+  btn("compass").click();
+  const gchips = (x) => [...x.querySelectorAll(".groups .gchip")], gchip = (x, re) => gchips(x).find((b) => re.test(b.firstChild.textContent));
+  c = find("여비");
+  ok(/^여비지급세칙/.test(rules(c)[0].textContent.trim()) && !rules(c).some((b) => /^(정관|보안업무처리세칙|정보보안지침)\s*\d/.test(b.textContent.trim())),
+    "‘여비’: ‘위하여 비상임’처럼 엉뚱하게 띄어 걸린 곳만 있는 내규(정관·정보보안지침 등)는 목록에 없음");
+  c = find("인정");
+  const pi = gchip(c, /^개인정보$/);
+  ok(pi && pi.getAttribute("aria-pressed") === "false" && pi.classList.contains("fold") && gchip(c, /^인정$/).getAttribute("aria-pressed") === "true" && /다른 낱말 속에서 걸린 \d+곳/.test(c.textContent),
+    "‘인정’: 걸린 말별 단추, ‘개인정보’ 묶음은 ‘다른 낱말 속’으로 꺼 두고 몇 곳인지 알림");
+  const pps = () => rules(c).find((b) => /^개인정보보호세칙/.test(b.textContent.trim())), nPps = +pps().lastChild.textContent;
+  pps().click();
+  const offs = pane(c).querySelectorAll(".law-all mark.off").length, ons = pane(c).querySelectorAll(".law-all mark:not(.off)").length;
+  ok(offs > 0 && ons > 0 && new RegExp("/" + ons + "$").test(lab(c)) && /점선/.test(pane(c).querySelector(".legend").textContent),
+    "원문에서 ‘개인정보’ 속 ‘인정’은 점선(세지 않음), 실제 ‘인정’만 노란색으로 세고 ▲▼로 오감");
+  ok(chips(c).every((b) => !/개$/.test(b.title.split("인정")[0] || "")), "바로가기 단추의 미리보기도 실제 ‘인정’을 보여 줌");
+  pi.click();
+  ok(pi.getAttribute("aria-pressed") === "true" && +pps().lastChild.textContent > nPps, "‘개인정보’ 단추를 누르면 그 묶음도 목록에 들어옴(개인정보보호세칙 " + nPps + " → " + pps().lastChild.textContent + "곳)");
+  pps().click();
+  ok(pane(c).querySelectorAll(".law-all mark.off").length < offs, "켠 묶음은 원문에서도 노란색으로 세어짐");
+  c = find("이사");
+  const hw = gchip(c, /^이사화물$/);
+  ok(hw && hw.getAttribute("aria-pressed") === "true" && gchip(c, /^이사회$/), "‘이사’: 이사회(임원)와 이사화물(이사 가기)이 다른 단추");
+  const yb = () => ((rules(c).find((b) => /^여비지급세칙/.test(b.textContent.trim())) || { textContent: "없음" }).textContent.trim());
+  const yb0 = yb();
+  hw.click();
+  ok(hw.getAttribute("aria-pressed") === "false" && yb() !== yb0, "‘이사화물’ 단추를 끄면 그 말로만 걸린 조문이 목록에서 빠짐(" + yb0 + " → " + yb() + ")");
+  ok(/\.law mark\.off \{/.test(html) && /\.gchip\[aria-pressed="true"\]/.test(html), "점선 표시·묶음 단추 모양");
+  btn("ask").click();
   d.querySelectorAll("#thread .turn, #compass-thread .turn").forEach((x) => x.remove());
 }
 
