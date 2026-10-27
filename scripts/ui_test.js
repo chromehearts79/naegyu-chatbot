@@ -217,12 +217,15 @@ ok(cpaneGap > 0 && cnavUp <= cpaneGap, "나침반 원문 칸: ▲▼ 줄이 위 
     return { m, elTop: p.elTop - shift - dy, elBottom: p.elBottom - shift - dy, top: 16 + p.navH, bottom: Math.min(p.paneBottom - shift, p.viewH) }; };
   const k1 = typeof f === "function" && after({ scrollTop: 0, paneTop: 642, paneBottom: 1260, elTop: 3809, elBottom: 3826, viewH: 650, navH: NAV, keepPage: true });
   const k2 = typeof f === "function" && after({ scrollTop: 0, paneTop: 596, paneBottom: 1214, elTop: 920, elBottom: 937, viewH: 650, navH: NAV, keepPage: true });
-  const k3 = typeof f === "function" && land({ scrollTop: 0, paneTop: 596, paneBottom: 1424, elTop: 920, elBottom: 937, viewH: 860, navH: NAV, keepPage: true });
-  // 틈이 그 줄을 담을 만큼은 되면(1000×760: 칸 617~, 틈 101px) 지금 화면에 보이게 하고, 내려도 ▲▼ 줄 아래에 남는다
-  const p4 = { scrollTop: 0, paneTop: 617, paneBottom: 1345, elTop: 900, elBottom: 917, viewH: 760, navH: NAV, keepPage: true };
-  const k4 = typeof f === "function" && land(p4), k4b = typeof f === "function" && after(p4);
-  ok(k1 && k1.m.page === 0 && seen(k1) && k2.m.page === 0 && seen(k2) && k3.m.page === 0 && seen(k3) && k4.m.page === 0 && seen(k4) && seen(k4b),
-    "나침반 처음 자리: 페이지는 그대로 두고, 칸이 화면에 거의 안 보이는 낮은 화면이면 내렸을 때 ▲▼ 줄 아래에 보임");
+  // 찾은 곳이 칸 위쪽에 있으면(1280×860 '출장', 칸 안 324px) 칸을 굴리지 않는다. 화면 아래 좁은 틈에 맞춰 굴리면
+  // 칸 머리(내규 이름·현행 시행 줄·조문 바로가기)가 밀려 올라가 처음 화면에서 안 보인다
+  const p3 = { scrollTop: 0, paneTop: 596, paneBottom: 1424, elTop: 920, elBottom: 937, viewH: 860, navH: NAV, keepPage: true };
+  const k3 = typeof f === "function" && after(p3);
+  const k4 = typeof f === "function" && after({ scrollTop: 0, paneTop: 617, paneBottom: 1345, elTop: 900, elBottom: 917, viewH: 760, navH: NAV, keepPage: true });
+  // 낮은 화면(1366×650 '이사', 칸 안 371px)도 내렸을 때 이미 보이는 곳이면 가운데로 맞추려고 굴리지 않는다(48px 굴리면 내규 이름이 가려짐)
+  const k5 = typeof f === "function" && after({ scrollTop: 0, paneTop: 596, paneBottom: 1214, elTop: 967, elBottom: 984, viewH: 650, navH: NAV, keepPage: true });
+  ok(k1 && k1.m.page === 0 && seen(k1) && k2.m.page === 0 && seen(k2) && k3.m.page === 0 && seen(k3) && k3.m.pane === 0 && k4.m.page === 0 && seen(k4) && seen(k5) && k5.m.pane === 0,
+    "나침반 처음 자리: 페이지와 칸 머리(내규 이름·바로가기)는 그대로 두고, 페이지를 내리면 ▲▼ 줄 아래에 보임");
 }
 // 근거 원문 칸: 인용이 긴 별표(표) 안에 있으면 표 전체가 아니라 표시한 글자로 굴린다
 // (위임전결기준 표 2300px: 표 가운데로 굴리면 표시한 줄이 칸 위로 지나가 숨는다)
