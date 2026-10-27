@@ -38,12 +38,20 @@ def form_payload(rules, led, index):
     # 물은 말·찾은 말에 양식 이름이 들어 있으면 띄우는데, 서식 대장 전체에서 이름이 하나뿐인 양식만(신고서·확인서처럼 겹치는 이름은 하나로 단정하지 않는다)
     flat = lambda s: re.sub(r"\s+", "", s)  # noqa: E731
     names = [flat(f["title"]) for e in led["rules"] for f in e["forms"]]
+    # 부르는 항의 글(나침반에서 찾은 낱말이 그 항에 나오면 그 항이 부르는 양식도 맨 위에 띄운다)
+    def para_text(rule, art, para):
+        a = next((x for x in rules[rule]["articles"] if x["no"] == art), None) if rule in rules else None
+        if not a:
+            return ""
+        return "\n".join(p["text"] for p in a.get("paras", []) if p["no"] == para) or a["text"]
+
     for e in led["rules"]:
         for f in [x for x in e["forms"] if x.get("download")]:
             name = f"{e['rule']} 별지 제{f['no']}호({f['title']})"
             cut = index.get(f"{e['rule']}/{f['no']}")
             # 양식 칸을 다는 조문: 법령·다른 규정의 별지를 부르는 곳, 부르는 이름이 서식 제목과 다른 곳(원문 번호가 틀렸을 수 있음)은 뺀다
-            calls = [{"art": c["art"], "para": c["para"], "phrase": c["phrase"]} for c in f["calls"] if not c.get("outside") and not c.get("mismatch")]
+            calls = [{"art": c["art"], "para": c["para"], "phrase": c["phrase"], "text": para_text(e["rule"], c["art"], c["para"])}
+                     for c in f["calls"] if not c.get("outside") and not c.get("mismatch")]
             by_name = names.count(flat(f["title"])) == 1
             if e["rule"] in bad:
                 warn.append(f"{name}: " + " / ".join(bad[e["rule"]]) + " → python3 scripts/build_forms.py " + e["rule"])

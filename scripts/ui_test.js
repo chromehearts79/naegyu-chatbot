@@ -472,7 +472,8 @@ w.DATA.meta.site.calcOff = [];
   ok(forms.length >= 200 && badInflate.length === 0, `양식 ${forms.length}개 모두 화면 안 압축 풀기가 원래 파일과 똑같음` + (badInflate.length ? ": " + badInflate.map((f) => f.rule + " " + f.no).join(", ") : ""));
   ok(forms.every((f) => f.calls.length || f.byName) && w.formsAt("정보공개운영세칙", "제19조").length === 0 && w.formsAt("인사관리세칙", "제31조").length === 1,
     "양식은 조문이 부르거나 이름이 하나뿐인 것만, 부르는 이름이 서식 제목과 다른 조문(정보공개운영세칙 제19조)에는 달지 않음");
-  ok(/\.form-box \{/.test(html) && /\.form-dl \{/.test(html) && /\.form-note \{/.test(html), "양식 칸·받기 단추·안내 모양");
+  ok(/\.form-box \{/.test(html) && /\.form-dl \{/.test(html) && /\.form-note \{/.test(html) && /\.form-item\[hidden\] \{ display: none; \}/.test(html),
+    "양식 칸·받기 단추·안내 모양, 접어 둔 양식은 숨김(claude.ai 판에는 전역 숨김 규칙이 없다)");
   const boxOk = (box, n) => box && box.querySelector(".form-label").textContent === "양식" && box.querySelectorAll("button.form-dl").length === (n || 1);
   // 받기: 파일 저장을 가로채 이름·크기를 본다(jsdom 은 파일을 저장하지 못한다)
   const saved = [], realClick = w.HTMLAnchorElement.prototype.click;
@@ -510,8 +511,20 @@ w.DATA.meta.site.calcOff = [];
   const note = box && box.querySelector(".form-note");
   ok(saved.length === 1 && saved[0].name === (f8 && f8.file) && saved[0].blob.size === raw.length && /hwp/.test(saved[0].blob.type) && note && /PC/.test(note.textContent) && /인쇄/.test(note.textContent),
     "단추를 누르면 그 이름으로 한글 파일(" + raw.length + "바이트)을 받고, ‘PC 한글에서 열어 채운 뒤 인쇄’ 안내가 뜸");
-  d.querySelector("#q").value = "출장"; d.querySelector("#ask-form").dispatchEvent(new w.Event("submit", { cancelable: true }));
-  ok(!d.querySelector("#compass-thread article.a .form-box"), "양식 이름과 다른 낱말(‘출장’)이면 맨 위 양식 칸 없음");
+  // 양식 이름 일부로 찾아도 맨 위 '양식' 칸: 이름에 그 낱말이 든 양식을 먼저, 그다음 그 낱말이 나오는 항이 직접 부르는 양식
+  const seek = (q) => { d.querySelector("#q").value = q; d.querySelector("#ask-form").dispatchEvent(new w.Event("submit", { cancelable: true })); return d.querySelector("#compass-thread article.a .form-box"); };
+  const titlesOf = (bx) => (bx ? [...bx.querySelectorAll("button.form-dl")].map((b) => b.textContent.replace(/^한글/, "").replace(/ 받기$/, "")) : []);
+  let hb = seek("육아휴직"), ht = titlesOf(hb);
+  const byName = ["육아휴직 신청서", "출산휴가 및 자동육아휴직 신청·변경서", "배우자출산휴가 및 자동육아휴직 신청·변경서", "육아휴직·휴직 증명서"];
+  ok(byName.every((x) => ht.slice(0, 4).includes(x)) && ht.includes("휴직자 국외 출국 신고서") && !ht.includes("사직서") && /인사관리세칙 별지 제15-1호\(제23조\)/.test(hb.textContent),
+    "나침반 ‘육아휴직’: 맨 위 양식 칸에 이름에 ‘육아휴직’이 든 양식 4개가 먼저, ‘육아휴직’이 나오는 항이 부르는 휴직자 국외 출국 신고서도");
+  hb = seek("신청서");
+  const shown = () => [...hb.querySelectorAll("button.form-dl")].filter((b) => !b.closest("[hidden]")).length, moreBtn = hb && hb.querySelector("button.form-more");
+  const before = hb ? shown() : 0;
+  if (moreBtn) moreBtn.click();
+  ok(before === 6 && moreBtn && /양식 \d+개 더 보기/.test(moreBtn.textContent) && shown() >= 30 && !hb.querySelector("button.form-more"),
+    "넓은 말(‘신청서’)은 양식 6개만 먼저 보이고 ‘양식 N개 더 보기’로 모두 펼침(" + before + " → " + (hb ? shown() : 0) + ")");
+  ok(titlesOf(seek("출장")).includes("공무국외출장계획서") && !seek("반차"), "‘출장’이면 공무국외출장 양식이 뜨고, 양식과 상관없는 ‘반차’는 양식 칸 없음");
   // 질문하기: 핵심 정리 표 아래 '양식' 칸(근거 조문 인사관리세칙 제31조제1항이 부르는 서식), 근거 원문 칸에서는 조문 아래
   mode("ask").click();
   w.pick(w.DATA.cards.find((x) => x.id === "r3-2-1-resignation"));

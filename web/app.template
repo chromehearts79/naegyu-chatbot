@@ -140,6 +140,7 @@ button { cursor: pointer; }
 .form-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
 .form-label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
 .form-item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.form-item[hidden] { display: none; }
 .form-meta { font-size: 12.5px; color: var(--ink-3); }
 .form-dl {
   display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 10px 2px 4px;
@@ -651,17 +652,33 @@ function formsByWords(text) {
   return q ? (DATA.forms || []).filter(function (f) { return f.byName && q.indexOf(f.title.replace(/\s+/g, "")) >= 0; }) : [];
 }
 function addForms(list, more) { more.forEach(function (f) { if (list.indexOf(f) < 0) list.push(f); }); return list; }
-// '양식' 칸: 서식마다 받기 단추와 어느 내규 몇 호 별지인지(부르는 조문, 시행일). 받은 뒤 안내도 칸 안에(휴대폰은 받아도 티가 잘 안 나고 한글 파일이 안 열리기도 한다)
-function formBox(forms) {
+// 나침반에서 찾은 낱말(들)로 띄울 양식: 이름에 그 낱말이 다 든 양식을 먼저, 그다음 그 낱말이 다 나오는 항이 직접 부르는 양식.
+// 여러 개를 내규·별지 번호와 함께 늘어놓으므로(하나로 단정하지 않음) 이름이 겹치는 양식도 띄운다
+function formsBySearch(words) {
+  var ws = words.map(function (w) { return String(w).replace(/\s+/g, ""); }).filter(Boolean);
+  var has = function (s) { s = String(s || "").replace(/\s+/g, ""); return ws.length && ws.every(function (w) { return s.indexOf(w) >= 0; }); };
+  var all = DATA.forms || [];
+  return addForms(all.filter(function (f) { return has(f.title); }), all.filter(function (f) { return f.calls.some(function (c) { return has(c.text); }); }));
+}
+// '양식' 칸: 서식마다 받기 단추와 어느 내규 몇 호 별지인지(부르는 조문, 시행일). 받은 뒤 안내도 칸 안에(휴대폰은 받아도 티가 잘 안 나고 한글 파일이 안 열리기도 한다).
+// cap: 그 수만큼만 먼저 보이고 나머지는 '양식 N개 더 보기'로 펼친다
+function formBox(forms, cap) {
   if (!forms.length) return null;
   var box = h("div", { class: "form-box", role: "group", "aria-label": "양식" }, [h("span", { class: "form-label", text: "양식" })]);
-  forms.forEach(function (f) {
-    box.append(h("span", { class: "form-item" }, [
+  forms.forEach(function (f, i) {
+    var arts = addForms([], f.calls.map(function (c) { return c.art; }));
+    box.append(h("span", { class: "form-item", hidden: cap && i >= cap ? "" : null }, [
       h("button", { class: "form-dl", type: "button", title: "한글 파일 · PC에서 열어 빈칸을 채운 뒤 인쇄해 서명합니다", "aria-label": f.title + " 양식 받기(한글 파일)",
         onclick: function () { saveForm(f); formNote(box, f); } }, [h("span", { class: "hwp", text: "한글" }), f.title + " 받기"]),
-      h("span", { class: "form-meta", text: f.rule + " 별지 제" + f.no + "호(" + addForms([], f.calls.map(function (c) { return c.art; })).join("·") + ") · " + f.effective + " 시행" })
+      h("span", { class: "form-meta", text: f.rule + " 별지 제" + f.no + "호" + (arts.length ? "(" + arts.join("·") + ")" : "") + " · " + f.effective + " 시행" })
     ]));
   });
+  if (cap && forms.length > cap) {
+    var more = h("button", { class: "linkish form-more", type: "button", text: "양식 " + (forms.length - cap) + "개 더 보기", onclick: function () {
+      box.querySelectorAll(".form-item[hidden]").forEach(function (x) { x.hidden = false; }); more.remove();
+    } });
+    box.append(more);
+  }
   return box;
 }
 function formNote(box, f) {
@@ -1201,10 +1218,12 @@ function findWord(text) {
     h("h3", { class: "a-title", text: shown + (res.mode === "all" ? " 함께 나오는 곳" : " 나오는 곳") }),
     nExact ? h("span", { class: "pill ok", text: "글자 그대로 " + nExact + "곳 · 내규 " + res.exact.length + "개" }) : h("span", { class: "pill warn", text: res.foldN ? "다른 낱말 속에서만 나옴" : "글자 그대로는 없음" })
   ]));
-  // 찾은 말이 양식 이름이면(사직서) 맨 위에 '양식' 칸을 띄우고, 그 내규 원문은 양식을 부르는 조문에서 연다
+  // 찾은 말이 양식 이름이면(사직서) 그 내규 원문은 양식을 부르는 조문에서 연다.
+  // 맨 위 '양식' 칸: 그 양식, 이름에 찾은 말이 든 양식(육아휴직 → 육아휴직 신청서 …), 찾은 말이 나오는 항이 부르는 양식 순
   var named = formsByWords(text), startAt = {};
-  named.forEach(function (f) { if (!startAt[f.rule]) startAt[f.rule] = f.calls[0].art; });
-  if (named.length) head.append(formBox(named));
+  named.forEach(function (f) { if (!startAt[f.rule] && f.calls.length) startAt[f.rule] = f.calls[0].art; });
+  var headForms = addForms(named.slice(), formsBySearch(words));
+  if (headForms.length) head.append(formBox(headForms, 6));
   if (res.named.length) head.append(h("p", { class: "named" }, [h("span", { class: "soft", text: "이름에 들어간 내규" })].concat(res.named.map(function (n) {
     return h("button", { class: "linkish", type: "button", text: n.rule + " (" + n.articles + "개 조)", onclick: function () { if (body) body.pick(n.rule); } });
   }))));
