@@ -37,7 +37,8 @@ ok(emptyFeat.length === 0, "자주 찾는 분야 버튼마다 답 목록이 나�
 ok(!d.querySelector(".wrap").classList.contains("reading") && d.querySelector("#source").dataset.open === "false", "처음에는 오른쪽 원문 칸을 접어 둠");
 const notice = d.querySelector("#notice");
 ok(/AI가 쓴 답/.test(notice.textContent) && notice.querySelector("details") && !notice.querySelector("details").open && /검수 전/.test(notice.querySelector("details").textContent), "맨 위 안내는 한 문장, 표시의 뜻은 '자세히'에 접어 둠");
-ok(/근거 문구 6,671곳/.test(d.querySelector(".about-line").textContent) && !d.querySelector("#about details").open, "검증 정보는 한 줄 요약, 숫자는 '검증 방법 보기'에 접어 둠");
+const nFacts = w.DATA.cards.reduce((n, c) => n + c.facts.length, 0);
+ok(new RegExp("근거 문구 " + nFacts.toLocaleString("en-US") + "곳").test(d.querySelector(".about-line").textContent) && !d.querySelector("#about details").open, "검증 정보는 한 줄 요약, 숫자는 '검증 방법 보기'에 접어 둠");
 ok(d.querySelectorAll(".howto li").length === 3, "쓰는 법 3단계 안내");
 {
   // 화면 색 고르기: 자동·밝게·어둡게
@@ -113,6 +114,16 @@ ok(t.querySelector(".calc-link button"), "계산기 없는 답(국내 출장 종
 t.querySelector(".calc-link button").click();
 ok(t.querySelector(".calc [id$='-days']").value === "2" && t.querySelector(".calc [id$='-nights']").value === "1" && t.querySelector(".calc [id$='-region']").value === "metro" && /최대 180,000원/.test(t.querySelector(".calc table").textContent),
   "'부산 1박2일' → 버튼을 누르면 2일·1박·광역시를 채운 여비 계산기");
+t = ask("팀원이 총 12명인데 S는 몇명나오나요?");
+const gq = (n) => t.querySelector(".calc [id$='-" + n + "']"), grow = (g) => [...t.querySelectorAll(".calc tr")].find((tr) => tr.firstChild.textContent === g);
+ok(/평가등급 배분/.test(title(t)) && /12명이라면/.test(t.querySelector(".a").textContent) && gq("size") && gq("size").value === "12" && !gq("senior") &&
+  /함께 등급을 나누는 인원/.test(gq("size").closest("label").textContent) && grow("가(탁월)") && /^가\(탁월\)1명$/.test(grow("가(탁월)").textContent),
+  "‘팀원 12명인데 S 몇 명’ → ‘그 인원이 12명이라면’으로 답하고, ‘함께 등급을 나누는 인원’ 한 칸 계산기(12명 → 가(탁월) 1명)");
+const hint = document => t.querySelector("#" + gq("size").getAttribute("aria-describedby").split(" ")[0]);
+ok(/팀 단위면 팀원 수, 실 단위면 실 인원/.test(t.querySelector(".calc").textContent) && /성과관리편람·운영기준/.test(t.querySelector(".calc").textContent) && hint() && /실 단위/.test(hint().textContent),
+  "칸 아래 안내: 팀 단위면 팀원 수, 실 단위면 실 인원, 단위와 포함 인원은 편람·운영기준(화면 읽기 프로그램에도 칸 설명으로 연결)");
+gq("size").value = "10"; gq("size").dispatchEvent(new w.Event("input", { bubbles: true }));
+ok(/^다\(보통\)5명$/.test(grow("다(보통)").textContent) && /aria-describedby/.test(gq("size").outerHTML), "인원을 10명으로 바꾸면 다시 찾음(다 5명)");
 // 돈·기간을 묻는 질문은 어떤 답이 나와도 계산기나 '계산기 열기'에 닿는다(평가단이 계산기를 못 찾았던 질문들)
 const reach = ["출장비 얼마 받아요", "부산 1박2일 출장 여비", "출장 식비 얼마", "회의비로 밥 먹으면 출장비 깎여요?", "출장 가서 점심을 회사 돈으로 먹었어요",
   "연차 며칠이에요", "가족수당 얼마", "복지포인트 얼마 나와요", "아이 7살인데 육아휴직 돼요?", "출산휴가 언제부터 쓸 수 있어요", "장기재직휴가 언제 받아요", "가족돌봄휴가 유급 며칠"];
@@ -226,7 +237,7 @@ const VALS = { number: ["", "0", "1", "-3", "2.7", "30", "400"], date: ["", "195
 // 필수 칸을 채운 기준값(이 값에서 한 칸씩 바꿔 본다)
 const BASE = { spouseBirth: { due: "2026-12-01" }, maternity: { due: "2026-12-01" }, loss: { who: "self", date: "2026-10-01", weeks: "12" },
   childAge: { birth: "2020-03-01" }, familyCare: { children: "2" }, allowance: { spouse: "y", children: "2" }, annualLeave: { hire: "2021-03-02" },
-  longService: { hire: "2014-03-02" }, welfarePoints: { years: "7", spouse: "y", children: "2" }, tripExpense: { days: "2", nights: "1", region: "metro" } };
+  longService: { hire: "2014-03-02" }, welfarePoints: { years: "7", spouse: "y", children: "2" }, tripExpense: { days: "2", nights: "1", region: "metro" }, gradeQuota: { size: "12" } };
 const fire = (el) => el.dispatchEvent(new w.Event("change", { bubbles: true }));
 let calcRuns = 0; const calcBad = [], emptyBad = [];
 for (const kind of Object.keys(w.CALCS)) {

@@ -155,6 +155,7 @@ details.box[open] summary { margin-bottom: 8px; }
 .calc form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
 .calc label { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
 .calc label.inline { display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; }
+.calc-hint { flex-basis: 100%; margin: -4px 0 0; font-size: 12.5px; color: var(--ink-3); }
 .calc input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
 .calc input[type=date], .calc input[type=number], .calc select { padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); color: var(--ink); min-width: 0; font: inherit; }
 .calc label.need > span::after { content: "확인 필요"; margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 1px 7px; }
@@ -551,6 +552,7 @@ var CALCS = {
   annualLeave: { title: "내 연가(연차) 일수", fields: [["hire", "date", "입사일", ""], ["today", "date", "기준일", E.iso(TODAY), null, "opt"]] },
   longService: { title: "장기재직휴가 대상과 기한", fields: [["hire", "date", "입사일", ""], ["today", "date", "기준일", E.iso(TODAY), null, "opt"]] },
   welfarePoints: { title: "연간 복지포인트 계산", fields: [["years", "number", "근속연수(전년도 말 기준)", ""], ["spouse", "yesno", "배우자", ""], ["children", "number", "20세 미만 자녀 수", ""], ["disabled", "check", "장애인 직원"], ["newHire", "check", "올해 신규채용"]] },
+  gradeQuota: { title: "평가등급 인원배분(개인성과)", fields: [["size", "number", "함께 등급을 나누는 인원", "", null, null, "팀 단위면 팀원 수, 실 단위면 실 인원. 단위와 포함 인원은 성과관리편람·운영기준에서 정하니 관련 부서에 확인하세요."]] },
   tripExpense: { title: "국내 출장 여비 계산(직원)", fields: [["days", "number", "출장 일수", ""], ["nights", "number", "숙박 일수", ""], ["region", "select", "숙박 지역", "", [CHOOSE, ["seoul", "서울특별시"], ["metro", "광역시·제주"], ["other", "그 밖의 지역"]]], ["meals", "number", "다른 예산(회의비 등)으로 먹은 끼니", "0", null, "opt"], ["car", "check", "업무용 차량 이용"]],
     optional: { region: function (o) { return o.nights === "0"; } } }
 };
@@ -590,6 +592,8 @@ function renderCalc(kind, question) {
       input.value = val;
     } else { input = h("input", { type: f[1], id: id, value: String(val), min: f[1] === "number" ? "0" : null, step: f[1] === "number" ? "1" : null, inputmode: f[1] === "number" ? "numeric" : null }); }
     form.append(h("label", { for: id }, [h("span", { text: f[2] }), input]));
+    // 칸 아래 안내(f[6]): 무엇을 넣을지 헷갈리는 칸에만. 화면 읽기 프로그램에도 칸 설명으로 이어 준다
+    if (f[6]) { input.setAttribute("aria-describedby", id + "-hint"); input.dataset.hint = id + "-hint"; form.append(h("p", { class: "calc-hint", id: id + "-hint", text: f[6] })); }
   });
   // 칸 값이 계산에 쓸 만한지: 날짜는 연도까지 다 쳤는지(크롬 날짜 칸은 연도를 칠 때마다 0002 → 0020 → 0202 → 2021 로 바뀐다),
   // 숫자는 0 이상의 정수인지. 고치는 도중의 값으로 계산하면 '근속 1824년' 같은 결과가 번쩍인다
@@ -619,7 +623,8 @@ function renderCalc(kind, question) {
       el.parentNode.classList.toggle("need", need);
       el.setAttribute("aria-required", required ? "true" : "false");
       el.setAttribute("aria-invalid", need ? "true" : "false");
-      if (need) el.setAttribute("aria-describedby", msgId); else el.removeAttribute("aria-describedby");
+      var desc = [el.dataset.hint, need ? msgId : ""].filter(Boolean).join(" ");
+      if (desc) el.setAttribute("aria-describedby", desc); else el.removeAttribute("aria-describedby");
       if (need) (st === "partial" ? partial : st === "bad" ? bad : miss).push(f[2]);
     });
     if (miss.length || partial.length || bad.length) {

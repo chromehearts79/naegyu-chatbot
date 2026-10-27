@@ -84,6 +84,12 @@ L.domains().forEach((dm) => { const items = devRows.filter((_, i) => dev[i].doma
 devRows.filter((r) => verbose || r.startsWith("✗")).forEach((r) => console.log("    " + r));
 const hoRes = holdout.map(judge), hoOk = hoRes.filter((r) => r.ok).length;
 console.log(`[2b] 고치기 전에 얼려 둔 새 시험 질문 ${holdout.length}개: 맞게 처리 ${hoOk}개 (${pct(hoOk, holdout.length)}), 엉뚱한 답을 바로 냄 ${hoRes.filter((r) => r.wrongDirect).length}개`);
+{
+  // 직원이 실제로 물었는데 답을 못 찾던 질문: 등급 글자('S는')와 '팀원 N명 … 몇 명'을 평가등급 배분으로 잇는다
+  const q = "팀원이 총 12명인데 S는 몇명나오나요?", dec = E.decide(idx.score(q), q, idx.lastQuery);
+  assert.ok((dec.mode === "answer" && dec.id === "r3-2-3-grade-distribution") || (dec.mode === "ask" && dec.ids[0] === "r3-2-3-grade-distribution"),
+    "‘팀원 12명인데 S 몇 명’ → 평가등급 배분 카드: " + JSON.stringify(dec));
+}
 hoRes.filter((r) => verbose || !r.ok).forEach((r) => console.log("    " + r.row));
 
 if (process.argv.includes("--json")) {
@@ -128,6 +134,34 @@ assert.match(rows(C.longService({ hire: "2020-05-01", today: "2026-10-21" }))["�
 r = rows(C.tripExpense({ days: 2, nights: 1, region: "seoul" }));
 assert.match(r["합계(운임 제외)"], /최대 200,000원/);
 assert.match(rows(C.tripExpense({ days: 1, nights: 0, region: "other", car: true }))["합계(운임 제외)"], /최대 25,000원/);
+// 평가등급 인원배분(평가세칙 별표 제2호): '함께 등급을 나누는 인원' 한 칸으로 표를 찾는다. 계산기 표가 원문 표와 한 칸도 다르지 않은지 대조한다.
+// 누구와 함께 나누는지(팀·실, 포함 인원)는 성과관리편람·운영기준(제19조)에서 정하므로 계산기가 셈하지 않는다
+{
+  const ax = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "rules.json"), "utf8")).rules
+    .find((x) => x.name === "평가세칙").annexes.find((x) => x.title.includes("제2호")).text;
+  const table = {};
+  for (const tr of ax.matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
+    const cells = [...tr[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map((m) => m[1].trim()), m = /^인원수\s*(\d+)$/.exec(cells[0] || "");
+    if (m && cells.length === 6) table[+m[1]] = cells.slice(1).map((x) => (x === "" ? 0 : +x));
+  }
+  for (const line of ax.split("\n")) {
+    const c = line.split("|").map((x) => x.trim()), m = /^인원수\s*(\d+)$/.exec(c[1] || "");
+    if (m) table[+m[1]] = c.slice(2, 7).map((x) => (x === "" ? 0 : +x));
+  }
+  const G = ["가(탁월)", "나(우수)", "다(보통)", "라(미흡)", "마(부족)"];
+  for (let n = 4; n <= 100; n++) {
+    const got = rows(C.gradeQuota({ size: n }));
+    assert.deepStrictEqual(G.map((g) => got[g]), table[n].map((v) => v + "명"), `인원 ${n}명: 계산기가 별표 제2호 인원배분표와 같음`);
+  }
+  r = rows(C.gradeQuota({ size: 12 }));
+  assert.ok(r["함께 등급을 나누는 인원"] === "12명이라면" && r["가(탁월)"] === "1명" && r["다(보통)"] === "6명", "12명이라면 가 1·다 6");
+  assert.match(rows(C.gradeQuota({ size: 3 }))["등급"], /나\(우수\)~라\(미흡\)/, "1~3명은 나~라만");
+  assert.ok(C.gradeQuota({}).error && C.gradeQuota({ size: 0 }).error && C.gradeQuota({ size: 101 }).error, "인원이 없거나 표(100명) 밖이면 알림");
+  const nt = C.gradeQuota({ size: 12 }).notes.join(" ");
+  assert.ok(/성과관리편람/.test(nt) && /관련 부서에 확인/.test(nt) && !("senior" in C.gradeQuota({ size: 12 })), "누구와 함께 나누는지는 편람·운영기준에서 정한다고 알리고, 팀 빼기 셈은 하지 않음");
+  assert.strictEqual(E.valuesIn("팀원이 총 12명인데 S는 몇명나오나요?").size, 12, "질문의 인원을 읽음");
+  assert.strictEqual(E.valuesIn("자녀 2명이면 가족수당 얼마").size, undefined, "자녀 수는 인원으로 읽지 않음");
+}
 console.log("[3] 계산기 시험 통과");
 
 // 4) 내규나침반: 낱말이 어느 내규 어디에 나오는지. 글자 그대로 나오는 곳은 하나도 빠뜨리면 안 된다
