@@ -252,7 +252,8 @@ details.box[open] summary { margin-bottom: 8px; }
 .law mark.sim, .legend mark.sim { background: var(--sim); color: var(--sim-ink); }
 .legend mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; padding: 0 1px; }
 .law mark.now { outline: 2px solid var(--accent); outline-offset: 1px; }
-.cnav { position: sticky; top: -14px; z-index: 1; box-shadow: 0 -14px 0 var(--surface); display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px 4px 10px; }
+/* ▲▼ 줄: 원문 칸 안쪽 여백(14px)만큼 올려 칸 맨 위에 붙인다. 위로 뻗는 배경 그림자는 바로 위 '현행 시행 · 찾은 곳' 줄을 덮어 쓰지 않는다 */
+.cnav { position: sticky; top: -14px; z-index: 1; display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px 4px 10px; }
 .cnav span { flex: 1; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .cnav .btn.ghost { min-height: 32px; min-width: 40px; padding: 2px 8px; }
 .legend { margin: 0; font-size: 12.5px; color: var(--ink-3); }
@@ -283,7 +284,7 @@ details.box[open] summary { margin-bottom: 8px; }
 @media (max-width: 999px) {
   .cbody.picked .clist { display: none; }
   .cbody:not(.picked) .cpane { display: none; }
-  .cnav { top: 0; box-shadow: none; }
+  .cnav { top: 0; }
   .rl { min-height: 44px; align-items: center; }
   .jump button { min-height: 36px; }
 }
@@ -485,7 +486,8 @@ function renderLaw(text, para, quote) {
   blocks.forEach(function (b) {
     if (typeof b !== "string") {
       var d = document.createElement("div"); d.innerHTML = b.html; box.append(d);
-      if (b.hit && !marked) { marked = true; target = target || d; }
+      // 긴 별표(표)는 표 가운데로 굴리면 표시한 줄이 칸 밖에 숨으므로 표시한 글자로 굴린다
+      if (b.hit && !marked) { marked = true; target = target || d.querySelector("mark") || d; }
       return;
     }
     var n = CIRCLED.indexOf(b.trim()[0]) + 1, el = h("p", { class: n ? "para" : "" });
@@ -896,6 +898,17 @@ function compassLaw(text, quote, hit, sim, occ) {
   markWords(law.box, hit, sim, occ);
   return law.box;
 }
+// 넓은 화면 원문 칸에서 찾아 갈 곳(el)을 어디로 굴릴지. 결과 머리글 때문에 칸이 화면 아래로 걸쳐 있으면 칸 가운데로 굴려도
+// 화면 밖에 숨으므로, 화면에 보이는 부분의 가운데이면서 맨 위에 붙는 ▲▼ 줄(navH) 아래로 보낸다.
+// 칸이 화면에 조금만 보이면(낮은 화면) 페이지를 먼저 내려 칸을 화면 위에 붙인다. 처음 열 때(keepPage)는 머리글을 그대로 두고,
+// 보이는 틈이 그 줄도 못 담을 만큼 좁을 때만 페이지를 내렸을 때 가운데 오게 칸만 굴린다(틈에 맞추면 내렸을 때 ▲▼ 줄 밑에 숨는다).
+// 돌려주는 값: { page: 페이지를 내릴 만큼, pane: 원문 칸의 새 scrollTop }
+function paneReveal(p) {
+  var gap = Math.min(p.paneBottom, p.viewH) - Math.max(p.paneTop, 0) - p.navH;
+  var page = gap < (p.keepPage ? p.elBottom - p.elTop + 16 : 120) ? p.paneTop - 16 : 0;
+  var top = Math.max(p.paneTop - page, 0) + p.navH, bottom = Math.min(p.paneBottom - page, p.viewH);
+  return { page: p.keepPage ? 0 : page, pane: Math.max(0, p.scrollTop + (p.elTop + p.elBottom) / 2 - page - (top + bottom) / 2) };
+}
 // 오른쪽 원문 칸: 고른 내규의 원문 전체를 그리고 찾은 곳을 표시한다.
 // e: { rule, n, hits: [{ no, kind }], hit: 넣은 낱말(노란색), sim: 비슷한 말·줄인 말(파란색), quotes: {조문: 답 카드 근거 문구}, whys: [이 내규를 보여 주는 이유],
 //      occ: {조문: Map(원문 위치 → 켰는지)} 걸린 곳마다 켰는지(꺼 둔 곳은 점선) }
@@ -931,11 +944,17 @@ function rulePane(e, onBack) {
   });
   function artOf(no) { return [].slice.call(body.querySelectorAll(".art")).filter(function (a) { return a.dataset.no === no; })[0]; }
   function current(art) { var no = art && art.dataset.no; chips.forEach(function (b) { b.setAttribute("aria-current", b.dataset.no === no ? "true" : "false"); }); }
-  // 넓은 화면: 원문 칸 안에서만 굴린다(페이지는 그대로). 휴대폰 폭: 원문 칸이 페이지에 붙어 있어 페이지를 굴린다
+  // 넓은 화면: 원문 칸 안을 굴린다(칸이 화면에 조금만 보이면 ▲▼·바로가기 때 페이지도 내린다, paneReveal).
+  // 휴대폰 폭: 원문 칸이 페이지에 붙어 있어 페이지를 굴린다
   function reveal(el, jump) {
     if (window.matchMedia("(min-width: 1000px)").matches) {
-      var t = pane.scrollTop + el.getBoundingClientRect().top - pane.getBoundingClientRect().top - pane.clientHeight / 2;
-      if (pane.scrollTo) pane.scrollTo({ top: t, behavior: jump ? "auto" : "smooth" }); else pane.scrollTop = t;
+      var nav = pane.querySelector(".cnav"), at = function (keepPage) {
+        var pr = pane.getBoundingClientRect(), er = el.getBoundingClientRect();
+        return paneReveal({ scrollTop: pane.scrollTop, paneTop: pr.top, paneBottom: pr.bottom, elTop: er.top, elBottom: er.bottom, viewH: window.innerHeight, navH: nav ? nav.offsetHeight : 0, keepPage: keepPage });
+      };
+      var m = at(jump);
+      if (m.page) { window.scrollBy(0, m.page); m = at(true); }
+      if (pane.scrollTo) pane.scrollTo({ top: m.pane, behavior: jump ? "auto" : "smooth" }); else pane.scrollTop = m.pane;
     } else if (pane.offsetParent) el.scrollIntoView({ block: "center", behavior: jump ? "auto" : "smooth" });
   }
   // jump: 처음 열 때는 바로 그 자리로(긴 내규를 천천히 굴러 내려가면 사양 낮은 PC에서 오래 걸린다), ▲▼는 부드럽게

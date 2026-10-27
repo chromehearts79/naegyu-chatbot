@@ -194,6 +194,42 @@ ok(sizes.length > 20 && Math.min(...sizes) >= 12 && /body \{[^}]*font-size: 16px
 // 글은 칸 끝까지 쓰고, 마지막 줄에 한두 낱말만 남지 않게 한다
 ok(![...css.matchAll(/max-width:\s*[\d.]+ch/g)].length && /\.a p \{[^}]*text-wrap: pretty/.test(css), "문단 폭을 글자 수로 묶지 않음(칸 끝까지 쓰고 줄 끝을 고르게)");
 ok(/\.cite \{[^}]*min-height: 24px/.test(css) && /@media \(max-width: 999px\) \{\s*\.chip, \.btn\.ghost[^}]*min-height: 44px/.test(css), "누르는 크기: 근거 조문 24px 이상, 휴대폰에서 버튼 44px 이상");
+// 나침반 원문 칸: ▲▼ 줄의 위로 뻗는 배경 그림자가 줄 간격보다 길면 바로 위 '현행 시행 · 찾은 곳' 줄 아랫부분을 덮는다
+const cnavUp = +(((css.match(/\.cnav \{[^}]*\}/) || [""])[0].match(/box-shadow:\s*0 -(\d+)px/) || [])[1] || 0), cpaneGap = +((css.match(/\.cpane \{[^}]*gap: (\d+)px/) || [])[1] || 0);
+ok(cpaneGap > 0 && cnavUp <= cpaneGap, "나침반 원문 칸: ▲▼ 줄이 위 줄(현행 시행 · 찾은 곳)을 가리지 않음(위로 " + cnavUp + "px, 줄 간격 " + cpaneGap + "px)");
+// 나침반 원문 칸(넓은 화면): 결과 머리글 때문에 칸이 화면 아래로 걸쳐 있으면, 칸 가운데로 굴려도 찾아 간 곳이 화면 밖에 숨는다
+// (1280×860에서 칸 596~1424, ▼로 간 곳 1008px). 화면에 보이는 부분의 가운데, 맨 위 ▲▼ 줄 아래로 보내고,
+// 칸이 화면에 조금만 보이면(낮은 화면) 페이지를 내려 칸을 화면에 붙인다
+{
+  const f = w.paneReveal, NAV = 42;
+  const land = (p) => { const m = f(p), top = p.paneTop - m.page, bottom = p.paneBottom - m.page, dy = m.page + (m.pane - p.scrollTop);
+    return { m, elTop: p.elTop - dy, elBottom: p.elBottom - dy, top: Math.max(top, 0) + p.navH, bottom: Math.min(bottom, p.viewH) }; };
+  const seen = (x) => x.elTop >= x.top && x.elBottom <= x.bottom;
+  const a = typeof f === "function" && land({ scrollTop: 0, paneTop: 596, paneBottom: 1424, elTop: 1008, elBottom: 1025, viewH: 860, navH: NAV });
+  const b = typeof f === "function" && land({ scrollTop: 1000, paneTop: 16, paneBottom: 844, elTop: 1500, elBottom: 1517, viewH: 860, navH: NAV });
+  const c = typeof f === "function" && land({ scrollTop: 0, paneTop: 600, paneBottom: 1218, elTop: 900, elBottom: 917, viewH: 650, navH: NAV });
+  const z = typeof f === "function" && f({ scrollTop: 0, paneTop: 596, paneBottom: 1424, elTop: 700, elBottom: 717, viewH: 860, navH: NAV });
+  ok(a && a.m.page === 0 && seen(a) && seen(b) && b.m.page === 0 && c.m.page > 0 && seen(c) && z.pane === 0,
+    "나침반 원문 칸: ▼·바로가기로 간 곳이 화면 안, ▲▼ 줄 아래에 보임(칸이 화면 아래로 걸쳐도, 낮은 화면이면 페이지를 내림)");
+  // 처음 열 때(keepPage)는 페이지를 내리지 않는다. 낮은 화면(1366×650)에서 칸이 화면에 거의 안 보이면 그 좁은 틈에 맞추지 말고,
+  // 페이지를 내려 칸이 화면 위에 붙었을 때 가운데 오게 굴린다('반차' 칸 642~1260: 틈에 맞추면 내렸을 때 ▲▼ 줄 밑에 숨음)
+  const after = (p) => { const m = f(p), shift = p.paneTop - 16, dy = m.pane - p.scrollTop;
+    return { m, elTop: p.elTop - shift - dy, elBottom: p.elBottom - shift - dy, top: 16 + p.navH, bottom: Math.min(p.paneBottom - shift, p.viewH) }; };
+  const k1 = typeof f === "function" && after({ scrollTop: 0, paneTop: 642, paneBottom: 1260, elTop: 3809, elBottom: 3826, viewH: 650, navH: NAV, keepPage: true });
+  const k2 = typeof f === "function" && after({ scrollTop: 0, paneTop: 596, paneBottom: 1214, elTop: 920, elBottom: 937, viewH: 650, navH: NAV, keepPage: true });
+  const k3 = typeof f === "function" && land({ scrollTop: 0, paneTop: 596, paneBottom: 1424, elTop: 920, elBottom: 937, viewH: 860, navH: NAV, keepPage: true });
+  // 틈이 그 줄을 담을 만큼은 되면(1000×760: 칸 617~, 틈 101px) 지금 화면에 보이게 하고, 내려도 ▲▼ 줄 아래에 남는다
+  const p4 = { scrollTop: 0, paneTop: 617, paneBottom: 1345, elTop: 900, elBottom: 917, viewH: 760, navH: NAV, keepPage: true };
+  const k4 = typeof f === "function" && land(p4), k4b = typeof f === "function" && after(p4);
+  ok(k1 && k1.m.page === 0 && seen(k1) && k2.m.page === 0 && seen(k2) && k3.m.page === 0 && seen(k3) && k4.m.page === 0 && seen(k4) && seen(k4b),
+    "나침반 처음 자리: 페이지는 그대로 두고, 칸이 화면에 거의 안 보이는 낮은 화면이면 내렸을 때 ▲▼ 줄 아래에 보임");
+}
+// 근거 원문 칸: 인용이 긴 별표(표) 안에 있으면 표 전체가 아니라 표시한 글자로 굴린다
+// (위임전결기준 표 2300px: 표 가운데로 굴리면 표시한 줄이 칸 위로 지나가 숨는다)
+{
+  const law = typeof w.renderLaw === "function" && w.renderLaw("<table><tr><td>구분</td><td>전결권자</td></tr><tr><td>국내 출장 승인</td><td>팀장</td></tr></table>", null, "국내 출장 승인");
+  ok(law && law.target && law.target.tagName === "MARK", "근거 원문 칸: 별표(표) 인용은 표시한 글자로 굴려 감");
+}
 ok(!d.querySelector("#loading") && /여는 중/.test(html) && d.querySelector("#ask-form").getAttribute("onsubmit") === "return false", "여는 동안 안내가 있고 다 열리면 사라짐, 열리기 전 '묻기'로 화면이 다시 열리지 않음");
 {
   const box = w.renderCalc("tripExpense", "");
