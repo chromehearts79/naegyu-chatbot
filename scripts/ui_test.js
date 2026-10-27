@@ -455,6 +455,86 @@ w.DATA.meta.site.calcOff = [];
   d.querySelectorAll("#thread .turn, #compass-thread .turn").forEach((x) => x.remove());
 }
 
+// 서식 받기: 서식 대장에서 받기를 켠 별지(내규 원본에서 한 장씩 떼어 압축해 넣음). 조문이 직접 부른 별지만 그 조문 아래 '양식' 칸에,
+// 질문하기는 핵심 정리 표 아래. 찾은 말·물은 말에 이름이 하나뿐인 양식 이름이 들어 있으면 맨 위에도
+{
+  const zlib = require("zlib");
+  const forms = w.DATA.forms || [];
+  const f8 = forms.find((f) => f.rule === "인사관리세칙" && f.no === "8");
+  const eff = (w.DATA.rules.find((r) => r.name === "인사관리세칙") || {}).effective;
+  const raw = f8 ? zlib.inflateRawSync(Buffer.from(f8.b64, "base64")) : Buffer.alloc(0);
+  ok(f8 && f8.packed === "deflate-raw" && f8.title === "사직서" && raw.slice(0, 4).toString("hex") === "d0cf11e0" && f8.file === "사직서(인사관리세칙 별지 제8호, " + eff + " 시행).hwp",
+    "서식 대장의 사직서(인사관리세칙 별지 제8호)를 압축한 한글 파일로 싣고, 받는 파일 이름에 내규·별지 번호·시행일");
+  const badInflate = forms.filter((f) => { const z = Buffer.from(f.b64, "base64"); return Buffer.compare(Buffer.from(w.inflateRaw(new Uint8Array(z))), zlib.inflateRawSync(z)) !== 0; });
+  ok(forms.length >= 200 && badInflate.length === 0, `양식 ${forms.length}개 모두 화면 안 압축 풀기가 원래 파일과 똑같음` + (badInflate.length ? ": " + badInflate.map((f) => f.rule + " " + f.no).join(", ") : ""));
+  ok(forms.every((f) => f.calls.length || f.byName) && w.formsAt("정보공개운영세칙", "제19조").length === 0 && w.formsAt("인사관리세칙", "제31조").length === 1,
+    "양식은 조문이 부르거나 이름이 하나뿐인 것만, 부르는 이름이 서식 제목과 다른 조문(정보공개운영세칙 제19조)에는 달지 않음");
+  ok(/\.form-box \{/.test(html) && /\.form-dl \{/.test(html) && /\.form-note \{/.test(html), "양식 칸·받기 단추·안내 모양");
+  const boxOk = (box, n) => box && box.querySelector(".form-label").textContent === "양식" && box.querySelectorAll("button.form-dl").length === (n || 1);
+  // 받기: 파일 저장을 가로채 이름·크기를 본다(jsdom 은 파일을 저장하지 못한다)
+  const saved = [], realClick = w.HTMLAnchorElement.prototype.click;
+  w.URL.createObjectURL = (b) => { saved.push({ blob: b }); return "blob:form-test"; };
+  w.URL.revokeObjectURL = () => {};
+  w.HTMLAnchorElement.prototype.click = function () { if (this.download) saved[saved.length - 1].name = this.download; else realClick.call(this); };
+  const mode = (m) => d.querySelector(`#modes button[data-mode=${m}]`);
+  mode("compass").click();
+  d.querySelector("#q").value = "사직서"; d.querySelector("#ask-form").dispatchEvent(new w.Event("submit", { cancelable: true }));
+  const c = d.querySelector("#compass-thread .turn");
+  // '사직서'로 찾으면: 결과 맨 위 칸에 '양식' 칸, 원문은 사직서 양식을 부르는 제31조에서 열림(처음 나오는 제25조가 아니라)
+  const head = c && c.querySelector("article.a"), hbox = head && head.querySelector(".form-box");
+  const pane0 = c && c.querySelector(".cpane"), now0 = pane0 && pane0.querySelector("mark.now");
+  ok(boxOk(hbox) && head.querySelector(".a-head").nextElementSibling === hbox && /인사관리세칙 별지 제8호\(제31조\)/.test(hbox.textContent),
+    "나침반 ‘사직서’: 결과 맨 위 칸에 ‘양식’ 칸(사직서 받기 · 인사관리세칙 별지 제8호(제31조))");
+  ok(pane0 && pane0.querySelector("h3").textContent === "인사관리세칙" && now0 && now0.closest(".art").dataset.no === "제31조" && /2\/2/.test(pane0.querySelector(".cnav span").textContent),
+    "원문 칸은 사직서 양식을 부르는 제31조에서 열려(2/2) 그 아래 ‘양식’ 칸이 바로 보임");
+  const rl = c && [...c.querySelectorAll(".clist .rl")].find((b) => /^인사관리세칙/.test(b.textContent.trim()));
+  if (rl) rl.click();
+  const pane = c && c.querySelector(".cpane"), art = pane && pane.querySelector('section.art[data-no="제31조"]');
+  const law = art && art.querySelector(".law"), box = art && art.querySelector(".form-box"), dl = box && box.querySelector("button.form-dl");
+  ok(boxOk(box) && law.nextElementSibling === box && !law.querySelector("button") && /사직서/.test(dl.textContent) && /한글/.test(dl.textContent) && /별지 제8호/.test(box.textContent),
+    "나침반 원문(인사관리세칙 제31조): 조문 글 속이 아니라 조문 아래 ‘양식’ 칸에 ‘사직서 받기(한글)’ 단추와 별지 번호");
+  const flat = (s) => s.replace(/\s+/g, "");
+  const a31 = w.DATA.rules.find((r) => r.name === "인사관리세칙").articles.find((x) => x.no === "제31조");
+  // 인사관리세칙 원문 전체: 양식을 부르는 조문마다 그 아래 양식 칸(조문이 부르는 양식 수만큼 단추)
+  const want = w.DATA.rules.find((r) => r.name === "인사관리세칙").articles.reduce((n, x) => n + w.formsAt("인사관리세칙", x.no).length, 0);
+  const a11 = pane && pane.querySelector('section.art[data-no="제11조"] .form-box');
+  ok(law && flat(law.textContent) === flat(a31.text) && [...law.querySelectorAll("mark")].some((m) => m.textContent === "사직서") &&
+    pane.querySelectorAll("button.form-dl").length === want && want > 10,
+    "조문 글자와 찾은 낱말 노란 표시는 그대로, 인사관리세칙의 양식을 부르는 조문마다 양식 칸(단추 " + want + "개)");
+  ok(boxOk(a11, 7) && [...a11.querySelectorAll("button.form-dl")].every((b) => /근로계약서/.test(b.textContent)),
+    "‘별지 제1호에서 별지 제5-3호까지의 서식에 의한 근로계약서’(제11조): 근로계약서 7가지를 한 양식 칸에서 고름");
+  if (dl) dl.click();
+  const note = box && box.querySelector(".form-note");
+  ok(saved.length === 1 && saved[0].name === (f8 && f8.file) && saved[0].blob.size === raw.length && /hwp/.test(saved[0].blob.type) && note && /PC/.test(note.textContent) && /인쇄/.test(note.textContent),
+    "단추를 누르면 그 이름으로 한글 파일(" + raw.length + "바이트)을 받고, ‘PC 한글에서 열어 채운 뒤 인쇄’ 안내가 뜸");
+  d.querySelector("#q").value = "출장"; d.querySelector("#ask-form").dispatchEvent(new w.Event("submit", { cancelable: true }));
+  ok(!d.querySelector("#compass-thread article.a .form-box"), "양식 이름과 다른 낱말(‘출장’)이면 맨 위 양식 칸 없음");
+  // 질문하기: 핵심 정리 표 아래 '양식' 칸(근거 조문 인사관리세칙 제31조제1항이 부르는 서식), 근거 원문 칸에서는 조문 아래
+  mode("ask").click();
+  w.pick(w.DATA.cards.find((x) => x.id === "r3-2-1-resignation"));
+  const a = top(), abox = a && a.querySelector(".form-box"), aBtn = abox && abox.querySelector("button.form-dl");
+  ok(boxOk(abox) && a.querySelector(".facts-box").nextElementSibling === abox && !a.querySelector(".facts button.form-dl") && a.querySelectorAll("button.form-dl").length === 1,
+    "질문하기: 핵심 정리 표 안이 아니라 표 바로 아래 ‘양식’ 칸에 사직서 받기 단추 하나");
+  const row = a && [...a.querySelectorAll(".facts tbody tr")].find((tr) => /인사관리세칙 제31조제1항/.test(tr.textContent));
+  if (row) row.querySelector(".cite").click();
+  const src = d.querySelector("#source-inner"), sbox = src.querySelector(".form-box");
+  ok(boxOk(sbox) && src.querySelector(".law").nextElementSibling === sbox && !src.querySelector(".law button") && src.querySelector(".law mark"),
+    "근거 원문 칸: 인용 표시는 조문 글에, 사직서 받기는 조문 아래 ‘양식’ 칸에");
+  if (aBtn) aBtn.click();
+  ok(saved.length === 2 && saved[1].name === (f8 && f8.file) && abox.querySelector(".form-note"), "질문하기 양식 칸으로도 같은 파일을 받고 안내가 뜸");
+  // 물은 말에 양식 이름이 들어 있으면(전체 서식 대장에서 이름이 하나뿐인 양식만) 되묻기·다른 규정 답에도 '양식' 칸
+  let t2 = ask("사직서");
+  const qbox = t2.querySelector(".form-box"), cands = t2.querySelector(".cands");
+  ok(/조금 더 알려주세요|어떤 내용을 찾으세요/.test(t2.textContent) && boxOk(qbox) && cands && (qbox.compareDocumentPosition(cands) & w.Node.DOCUMENT_POSITION_FOLLOWING) && t2.querySelectorAll(".form-box").length === 1,
+    "질문하기 ‘사직서’(되묻기): 후보 목록 위에 ‘양식’ 칸 하나");
+  t2 = ask("사직서 받고 싶어요");
+  ok(/사직과 의원면직 제한/.test(title(t2)) && boxOk(t2.querySelector(".form-box")), "질문하기 ‘사직서 받고 싶어요’(업무규정 답): 답에도 ‘양식’ 칸(인사관리세칙 별지 제8호)");
+  t2 = ask("부산 출장 여비 얼마예요?");
+  ok(!t2.querySelector(".form-box"), "양식 이름이 없는 질문에는 양식 칸 없음");
+  w.HTMLAnchorElement.prototype.click = realClick;
+  d.querySelectorAll("#thread .turn, #compass-thread .turn").forEach((x) => x.remove());
+}
+
 // 모든 카드를 열고, 모든 근거 버튼을 눌러 원문과 인용 표시를 확인
 const cards = w.DATA.cards;
 let cites = 0, marked = 0, missing = [];

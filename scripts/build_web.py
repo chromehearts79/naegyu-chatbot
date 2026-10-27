@@ -5,13 +5,16 @@
 
 검사(check_knowledge.py), 독립 검증(reports/blind_check.json), 검색 시험(test_engine.js) 결과를
 화면의 '검증 정보'에 넣는다. 내규나침반 낱말 경계(knowledge/word_bounds.json)는 원문과 맞을 때만 묶는다.
+서식 대장(knowledge/forms.json)에서 받기를 켠 별지는 대장·떼어 낸 파일(data/forms)이 지금 원문과 맞을 때만 한글 파일째 묶는다.
 """
 import base64
+import collections
 import datetime
 import json
 import re
 import subprocess
 import sys
+import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -19,10 +22,47 @@ from check_knowledge import load_domains  # noqa: E402
 import check_changes  # noqa: E402
 from review_workbook import card_hash  # noqa: E402
 import build_bounds  # noqa: E402
+import build_forms  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 FONTS = ROOT / "web" / "fonts"
+FORMS = ROOT / "data" / "forms"
+
+
+def form_payload(rules, led, index):
+    """서식 대장에서 받기를 켠 별지 중 지금 원문과 맞는 것만 한글 파일째 싣는다.
+    rules: {내규 이름: 내규}, led: 서식 대장, index: data/forms/index.json 의 forms. 돌려주는 값: (실을 서식, 못 실은 까닭)"""
+    bad = build_forms.check(rules, led)
+    out, warn = [], []
+    # 물은 말·찾은 말에 양식 이름이 들어 있으면 띄우는데, 서식 대장 전체에서 이름이 하나뿐인 양식만(신고서·확인서처럼 겹치는 이름은 하나로 단정하지 않는다)
+    flat = lambda s: re.sub(r"\s+", "", s)  # noqa: E731
+    names = [flat(f["title"]) for e in led["rules"] for f in e["forms"]]
+    for e in led["rules"]:
+        for f in [x for x in e["forms"] if x.get("download")]:
+            name = f"{e['rule']} 별지 제{f['no']}호({f['title']})"
+            cut = index.get(f"{e['rule']}/{f['no']}")
+            # 양식 칸을 다는 조문: 법령·다른 규정의 별지를 부르는 곳, 부르는 이름이 서식 제목과 다른 곳(원문 번호가 틀렸을 수 있음)은 뺀다
+            calls = [{"art": c["art"], "para": c["para"], "phrase": c["phrase"]} for c in f["calls"] if not c.get("outside") and not c.get("mismatch")]
+            by_name = names.count(flat(f["title"])) == 1
+            if e["rule"] in bad:
+                warn.append(f"{name}: " + " / ".join(bad[e["rule"]]) + " → python3 scripts/build_forms.py " + e["rule"])
+            elif not calls and not by_name:
+                continue  # 달 조문도 없고 이름도 겹쳐 띄울 곳이 없다
+            elif not cut or cut["effective"] != rules[e["rule"]]["effective"] or not (FORMS / cut["file"]).exists():
+                warn.append(f"{name}: 떼어 낸 파일이 없거나 옛 원문에서 나옴 → node scripts/cut_forms.cjs")
+            else:
+                eff = rules[e["rule"]]["effective"]
+                out.append({"rule": e["rule"], "no": f["no"], "title": f["title"], "calls": calls,
+                            "file": f"{f['title']}({e['rule']} 별지 제{f['no']}호, {eff} 시행).hwp", "effective": eff,
+                            "byName": by_name, "packed": "deflate-raw", "b64": pack_form((FORMS / cut["file"]).read_bytes())})
+    return out, warn
+
+
+def pack_form(data):
+    """한글 파일을 압축해(raw deflate) 글자로 싣는다. 파일 안 빈칸이 많아 40%쯤 준다. 화면에서 inflateRaw 로 푼다"""
+    z = zlib.compressobj(9, zlib.DEFLATED, -15)
+    return base64.b64encode(z.compress(data) + z.flush()).decode()
 
 
 
@@ -109,6 +149,10 @@ def main():
                 b = next(b for b in r["buchik"] if b.get("effective") == bm[2])
                 buchik.setdefault(bm[1], {})[bm[2]] = b["text"]
 
+    # 서식 받기: 서식 대장(knowledge/forms.json)에서 받기를 켠 별지 중 원문·떼어 낸 파일과 맞는 것만
+    index = json.loads((FORMS / "index.json").read_text())["forms"] if (FORMS / "index.json").exists() else {}
+    forms, form_warn = form_payload({r["name"]: r for r in rules}, build_forms.load(), index)
+
     data = {
         "meta": {
             "basis": snap["taken"].replace("-", ".") + ".",
@@ -132,6 +176,7 @@ def main():
                    "annexes": [{"title": x["title"], "text": x.get("text", "")} for x in r["annexes"]]} for r in rules],
         "buchik": buchik,
         "bounds": {k: v for k, v in bounds.items() if k in keys},
+        "forms": forms,
     }
     blob = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     page = (ROOT / "web" / "app.template").read_text()
@@ -154,6 +199,11 @@ def main():
     print(f"카드 {len(cards)}장, 규정 {len(rules)}개 → {dist}/index.html ({size:.1f}MB), artifact.html")
     print(f"검증: 인용 {m[1]}/{m[2]}, 독립 검증 확인 필요 {len(need)}, 검색 시험 {search}")
     print(f"개정 감지: 카드 확인 기준 {snap['taken']}, 개정 후 재검수 전 카드 {len(stale)}장 · 담당부서 검수 완료 {reviewed}장")
+    per = collections.Counter(f["rule"] for f in forms)
+    print(f"서식 받기: {len(forms)}개 · 내규 {len(per)}개 · 압축해 {sum(len(f['b64']) for f in forms) / 1e6:.1f}MB"
+          + (f" (많은 순: {', '.join(f'{k} {v}' for k, v in per.most_common(3))})" if per else ""))
+    for w in form_warn:
+        print(f"  서식 받기에서 뺌: {w}")
 
 
 if __name__ == "__main__":

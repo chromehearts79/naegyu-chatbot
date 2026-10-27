@@ -136,6 +136,19 @@ button { cursor: pointer; }
   padding: 2px 8px; font-size: 12.5px; font-family: var(--font-mono), var(--font-body); font-weight: 500; text-align: left;
 }
 .cite:hover { background: var(--accent); color: var(--accent-ink); }
+/* 서식 받기: 조문 아래(질문하기는 핵심 정리 표 아래) 따로 두는 '양식' 칸 — 한글 파일 받기 단추, 어느 별지인지, 받은 뒤 안내 */
+.form-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
+.form-label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.form-item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.form-meta { font-size: 12.5px; color: var(--ink-3); }
+.form-dl {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 10px 2px 4px;
+  border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.4;
+}
+.form-dl .hwp { background: var(--accent); color: var(--accent-ink); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+.form-dl:hover { background: var(--accent); color: var(--accent-ink); }
+.form-dl:hover .hwp { background: var(--accent-ink); color: var(--accent); }
+.form-note { flex-basis: 100%; font-size: 13px; color: var(--ink-2); background: var(--accent-soft); border-radius: 6px; padding: 6px 10px; margin: 0; }
 .caution { font-size: 14px; color: var(--ink); background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 8px 10px; border-radius: 6px; margin: 0; }
 .note { font-size: 13px; color: var(--ink-2); border-left: 3px solid var(--line); padding-left: 10px; }
 .soft { font-size: 13px; color: var(--ink-3); }
@@ -300,7 +313,7 @@ details.annex > summary { cursor: pointer; font-size: 14px; font-weight: 600; }
 .about ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 4px; }
 /* 휴대폰 폭: 손가락으로 누르는 것은 44px 이상 */
 @media (max-width: 999px) {
-  .chip, .btn.ghost, .calc input[type=date], .calc input[type=number], .calc select, .calc label.inline, .gchip { min-height: 44px; }
+  .chip, .btn.ghost, .calc input[type=date], .calc input[type=number], .calc select, .calc label.inline, .gchip, .form-dl { min-height: 44px; }
   .cite { min-height: 32px; }
   .theme button { min-height: 40px; }
 }
@@ -519,13 +532,14 @@ function openSource(cite, quote) {
   inner.replaceChildren($("#source-close") || closeBtn());
   if (!r) { inner.append(h("p", { class: "empty-source", text: "원문을 찾지 못했습니다: " + cite })); }
   else {
-    var law = renderLaw(r.text, r.para, quote);
+    var law = renderLaw(r.text, r.para, quote), fb = r.no ? formBox(formsAt(r.rule, r.no)) : null;
     inner.append(
       h("div", { class: "label", text: "근거 조문 원문" }),
       h("h2", { text: r.rule + " " + r.title }),
       h("div", { class: "meta", text: [r.chapter, r.effective ? "현행 시행 " + r.effective : "", "인용: " + cite].filter(Boolean).join(" · ") }),
       law.box
     );
+    if (fb) inner.append(fb);
     if (law.target) setTimeout(function () { law.target.scrollIntoView({ block: "center", behavior: "smooth" }); }, 30);
   }
   setSource(true);
@@ -536,6 +550,135 @@ function setSource(open) { $("#source").dataset.open = open ? "true" : "false"; 
 function closeBtn() { return h("button", { class: "btn ghost close", type: "button", id: "source-close", text: "닫기", onclick: function () { setSource(false); } }); }
 $("#source-close").addEventListener("click", function () { setSource(false); });
 function citeBtn(cite, quote) { return h("button", { class: "cite", type: "button", title: "원문 보기", onclick: function () { openSource(cite, quote); } }, [cite]); }
+
+/* ── 서식 받기 ─────────────────────────────── */
+// 서식 대장에서 받기를 켠 별지(DATA.forms)만 한글 파일째 들어 있다. 조문이 그 별지를 직접 부른 조·항에만 보여 주고,
+// 찾은 낱말과 서식 이름을 맞춰 보여 주지는 않는다(엉뚱한 서식이 나가지 않게). 조문 글 속에 링크처럼 끼우지 않고 아래 '양식' 칸에 따로 둔다
+function formsAt(rule, no, para) {
+  return (DATA.forms || []).filter(function (f) {
+    return f.rule === rule && f.calls.some(function (c) { return c.art === no && (!para || !c.para || c.para === para); });
+  });
+}
+// 압축해 넣은 양식 파일 풀기(raw deflate, RFC 1951). 브라우저마다 압축 풀기 기능이 달라(오래된 PC 포함) 직접 푼다
+var INF = {
+  lbase: [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258],
+  lext: [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0],
+  dbase: [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577],
+  dext: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13],
+  order: [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
+};
+function inflateRaw(src) {
+  var out = new Uint8Array(src.length * 3 + 1024), n = 0, pos = 0, bitbuf = 0, bitcnt = 0;
+  function put(b) { if (n >= out.length) { var bigger = new Uint8Array(out.length * 2); bigger.set(out); out = bigger; } out[n++] = b; }
+  function bits(k) {
+    while (bitcnt < k) { if (pos >= src.length) throw new Error("압축 자료가 잘렸습니다"); bitbuf |= src[pos++] << bitcnt; bitcnt += 8; }
+    var v = bitbuf & ((1 << k) - 1); bitbuf >>>= k; bitcnt -= k; return v;
+  }
+  // 길이 목록으로 허프만 표 만들기(길이별 개수, 길이·값 순서의 기호)
+  function table(lens) {
+    var count = new Uint16Array(16), offs = new Uint16Array(16), sym = new Uint16Array(lens.length), i;
+    for (i = 0; i < lens.length; i++) count[lens[i]]++;
+    count[0] = 0;
+    for (i = 1; i < 16; i++) offs[i] = offs[i - 1] + count[i - 1];
+    for (i = 0; i < lens.length; i++) if (lens[i]) sym[offs[lens[i]]++] = i;
+    return { count: count, sym: sym };
+  }
+  function decode(t) {
+    for (var len = 1, code = 0, first = 0, index = 0; len < 16; len++) {
+      code |= bits(1);
+      var c = t.count[len];
+      if (code - c < first) return t.sym[index + (code - first)];
+      index += c; first = (first + c) << 1; code <<= 1;
+    }
+    throw new Error("압축 자료가 깨졌습니다");
+  }
+  var fixedLit = null, fixedDist = null, last;
+  do {
+    last = bits(1);
+    var type = bits(2), lit, dist, i;
+    if (type === 0) {   // 압축 안 한 덩어리: 바이트 경계로 맞춘 뒤 길이만큼 그대로
+      bitbuf = 0; bitcnt = 0;
+      var len = src[pos] | (src[pos + 1] << 8); pos += 4;
+      for (i = 0; i < len; i++) put(src[pos++]);
+      continue;
+    }
+    if (type === 1) {   // 정해진 허프만 표
+      if (!fixedLit) {
+        var fl = new Uint8Array(288);
+        for (i = 0; i < 288; i++) fl[i] = i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8;
+        var fd = new Uint8Array(30); fd.fill(5);
+        fixedLit = table(fl); fixedDist = table(fd);
+      }
+      lit = fixedLit; dist = fixedDist;
+    } else if (type === 2) {   // 덩어리마다 실린 허프만 표
+      var hlit = bits(5) + 257, hdist = bits(5) + 1, hclen = bits(4) + 4, cl = new Uint8Array(19);
+      for (i = 0; i < hclen; i++) cl[INF.order[i]] = bits(3);
+      var clt = table(cl), lens = new Uint8Array(hlit + hdist);
+      for (i = 0; i < hlit + hdist;) {
+        var s = decode(clt);
+        if (s < 16) lens[i++] = s;
+        else {
+          var rep = s === 16 ? 3 + bits(2) : s === 17 ? 3 + bits(3) : 11 + bits(7), v = s === 16 ? lens[i - 1] : 0;
+          while (rep--) lens[i++] = v;
+        }
+      }
+      lit = table(lens.subarray(0, hlit)); dist = table(lens.subarray(hlit));
+    } else throw new Error("압축 자료가 깨졌습니다");
+    for (;;) {
+      var sym = decode(lit);
+      if (sym < 256) put(sym);
+      else if (sym === 256) break;
+      else {
+        sym -= 257;
+        var length = INF.lbase[sym] + bits(INF.lext[sym]), ds = decode(dist), back = INF.dbase[ds] + bits(INF.dext[ds]);
+        for (i = 0; i < length; i++) put(out[n - back]);
+      }
+    }
+  } while (!last);
+  return out.subarray(0, n);
+}
+function saveForm(f) {
+  var bin = atob(f.b64), u = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  if (f.packed === "deflate-raw") u = inflateRaw(u);
+  var url = URL.createObjectURL(new Blob([u], { type: "application/x-hwp" })), a = h("a", { href: url, download: f.file, hidden: "" });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+}
+// 물은 말·찾은 말에 양식 이름이 들어 있으면(띄어쓰기 무시) 그 양식. 서식 대장 전체에서 이름이 하나뿐인 양식만(byName, 빌드 때 정함)
+function formsByWords(text) {
+  var q = String(text || "").replace(/\s+/g, "");
+  return q ? (DATA.forms || []).filter(function (f) { return f.byName && q.indexOf(f.title.replace(/\s+/g, "")) >= 0; }) : [];
+}
+function addForms(list, more) { more.forEach(function (f) { if (list.indexOf(f) < 0) list.push(f); }); return list; }
+// '양식' 칸: 서식마다 받기 단추와 어느 내규 몇 호 별지인지(부르는 조문, 시행일). 받은 뒤 안내도 칸 안에(휴대폰은 받아도 티가 잘 안 나고 한글 파일이 안 열리기도 한다)
+function formBox(forms) {
+  if (!forms.length) return null;
+  var box = h("div", { class: "form-box", role: "group", "aria-label": "양식" }, [h("span", { class: "form-label", text: "양식" })]);
+  forms.forEach(function (f) {
+    box.append(h("span", { class: "form-item" }, [
+      h("button", { class: "form-dl", type: "button", title: "한글 파일 · PC에서 열어 빈칸을 채운 뒤 인쇄해 서명합니다", "aria-label": f.title + " 양식 받기(한글 파일)",
+        onclick: function () { saveForm(f); formNote(box, f); } }, [h("span", { class: "hwp", text: "한글" }), f.title + " 받기"]),
+      h("span", { class: "form-meta", text: f.rule + " 별지 제" + f.no + "호(" + addForms([], f.calls.map(function (c) { return c.art; })).join("·") + ") · " + f.effective + " 시행" })
+    ]));
+  });
+  return box;
+}
+function formNote(box, f) {
+  var note = h("p", { class: "form-note", role: "status", text: "받은 파일: ‘" + f.file + "’. 한글 파일이라 PC 한글에서 열어 빈칸을 채운 뒤 인쇄해 서명하세요." });
+  var old = box.querySelector(".form-note");
+  if (old) old.replaceWith(note); else box.append(note);
+}
+// 답 카드의 근거 조문들이 부르는 서식(같은 서식은 한 번만)
+function formsForCites(cites) {
+  var out = [];
+  if (!DATA.forms || !DATA.forms.length) return out;
+  cites.forEach(function (cite) {
+    var r = resolveCite(cite);
+    if (r && r.no) formsAt(r.rule, r.no, r.para).forEach(function (f) { if (out.indexOf(f) < 0) out.push(f); });
+  });
+  return out;
+}
 
 /* ── 계산기 ───────────────────────────────── */
 var TODAY = (function () { var d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); })();
@@ -755,6 +898,9 @@ function renderAnswer(c, opts) {
   a.append(h("div", { class: "facts-box" }, [h("table", { class: "facts" }, [h("caption", { class: "label", style: "text-align:left;padding:8px 10px 0", text: "핵심 정리와 근거" }), h("tbody", null, c.facts.map(function (f) {
     return h("tr", null, [h("th", { scope: "row", text: f.label }), h("td", null, [h("div", { text: f.value }), citeBtn(f.cite, f.quote)])]);
   }))])]));
+  // 양식: 근거 조문이 부르는 양식, 그리고 물은 말에 이름이 든 양식("사직서 받고 싶어요"처럼 다른 규정 답이 나와도)
+  var fbox = formBox(addForms(formsForCites(c.facts.map(function (f) { return f.cite; })), formsByWords(opts.question)));
+  if (fbox) a.append(fbox);
   if (c.calc) { var cb = renderCalc(c.calc, opts.question); if (cb) a.append(cb); }
   // 계산기가 없는 답이라도 관련 계산기가 있으면(카드에 적어 둔 calc_link, 또는 금액·기간을 묻는 질문) 여는 버튼을 단다
   var link = c.calc ? null : c.calc_link || E.calcFor(opts.question);
@@ -824,6 +970,8 @@ function ask(question) {
       dec.missing && dec.missing.length ? missingNote(dec.missing) : (!dec.vague && !lead ? h("p", { class: "caution", text: "내규에 직접 정한 내용이 없을 수도 있습니다. 후보와 조문에서 찾지 못하면 관련 부서에 문의하세요." }) : null),
       // "가족수당 얼마"처럼 넓지만 계산을 원하는 질문이면 후보를 고르기 전에 계산기부터 열 수 있게
       !lead && E.calcFor(question) ? calcButton(E.calcFor(question), question) : null,
+      // "사직서"처럼 양식 이름만 물었으면 후보를 고르기 전에 양식부터 받을 수 있게(펼친 답이 있으면 그 답 안에 있다)
+      lead ? null : formBox(formsByWords(question)),
       h("div", { class: "cands" }, dec.ids.map(function (id) { return cardButton(id, pick); })),
       lead || relatedHits(question)
     ].filter(Boolean));
@@ -911,7 +1059,7 @@ function paneReveal(p) {
 }
 // 오른쪽 원문 칸: 고른 내규의 원문 전체를 그리고 찾은 곳을 표시한다.
 // e: { rule, n, hits: [{ no, kind }], hit: 넣은 낱말(노란색), sim: 비슷한 말·줄인 말(파란색), quotes: {조문: 답 카드 근거 문구}, whys: [이 내규를 보여 주는 이유],
-//      occ: {조문: Map(원문 위치 → 켰는지)} 걸린 곳마다 켰는지(꺼 둔 곳은 점선) }
+//      occ: {조문: Map(원문 위치 → 켰는지)} 걸린 곳마다 켰는지(꺼 둔 곳은 점선), startAt: 처음 열 조문(찾은 말이 양식 이름이면 그 양식을 부르는 조문) }
 function rulePane(e, onBack) {
   var r = rulesByName.get(e.rule), hit = e.hit || [], sim = e.sim || [], quotes = e.quotes || {}, test = E.wordRe(hit.concat(sim));
   var listed = new Set(e.hits.map(function (x) { return x.no; }));
@@ -919,7 +1067,10 @@ function rulePane(e, onBack) {
   r.articles.forEach(function (a) {
     if (a.chapter && a.chapter !== chapter) { chapter = a.chapter; body.append(h("p", { class: "chapter", text: chapter })); }
     var oc = e.occ && e.occ[a.no];
-    body.append(h("section", { class: "art", "data-no": a.no }, [compassLaw(a.text, quotes[a.no], hit, sim, oc ? { flat: E.flatText(a.text), base: 0, at: oc } : null)]));
+    var sec = h("section", { class: "art", "data-no": a.no }, [compassLaw(a.text, quotes[a.no], hit, sim, oc ? { flat: E.flatText(a.text), base: 0, at: oc } : null)]);
+    var fb = formBox(formsAt(e.rule, a.no));
+    if (fb) sec.append(fb);
+    body.append(sec);
   });
   // 별표는 표가 커서 접어 둔다. 찾은 별표만 펼친다(접힌 별표는 펼칠 때 그린다)
   r.annexes.forEach(function (x) {
@@ -983,7 +1134,16 @@ function rulePane(e, onBack) {
     legend(body),
     body
   ].forEach(function (x) { if (x) pane.append(x); });
-  return { el: pane, start: function () { if (marks.length) go(0, true); else if (e.hits[0]) current(artOf(e.hits[0].no)); } };
+  // 처음 자리: 찾은 말이 양식 이름이면 그 양식을 부르는 조문(startAt)의 첫 표시로, 아니면 첫 표시로
+  function start() {
+    var at = e.startAt && artOf(e.startAt);
+    if (at) {
+      for (var i = 0; i < marks.length; i++) if (marks[i].closest(".art") === at) return go(i, true);
+      current(at); return reveal(at, true);
+    }
+    if (marks.length) go(0, true); else if (e.hits[0]) current(artOf(e.hits[0].no));
+  }
+  return { el: pane, start: start };
 }
 // 원문 칸 표시의 뜻: 파란색(같은 뜻의 다른 말)·점선(다른 낱말 속에서 걸린 곳)이 있을 때만
 function legend(body) {
@@ -1040,6 +1200,10 @@ function findWord(text) {
     h("h3", { class: "a-title", text: shown + (res.mode === "all" ? " 함께 나오는 곳" : " 나오는 곳") }),
     nExact ? h("span", { class: "pill ok", text: "글자 그대로 " + nExact + "곳 · 내규 " + res.exact.length + "개" }) : h("span", { class: "pill warn", text: res.foldN ? "다른 낱말 속에서만 나옴" : "글자 그대로는 없음" })
   ]));
+  // 찾은 말이 양식 이름이면(사직서) 맨 위에 '양식' 칸을 띄우고, 그 내규 원문은 양식을 부르는 조문에서 연다
+  var named = formsByWords(text), startAt = {};
+  named.forEach(function (f) { if (!startAt[f.rule]) startAt[f.rule] = f.calls[0].art; });
+  if (named.length) head.append(formBox(named));
   if (res.named.length) head.append(h("p", { class: "named" }, [h("span", { class: "soft", text: "이름에 들어간 내규" })].concat(res.named.map(function (n) {
     return h("button", { class: "linkish", type: "button", text: n.rule + " (" + n.articles + "개 조)", onclick: function () { if (body) body.pick(n.rule); } });
   }))));
@@ -1108,7 +1272,7 @@ function findWord(text) {
       r.articles.forEach(function (a, i) { ord[a.no] = i; });
       r.annexes.forEach(function (x, i) { ord[x.title] = 10000 + i; });
       hits.sort(function (a, b) { return ord[a.no] - ord[b.no]; });
-      return { rule: rule, n: hits.length, hits: hits, hit: words, occ: per[rule].occ,
+      return { rule: rule, n: hits.length, hits: hits, hit: words, occ: per[rule].occ, startAt: startAt[rule],
         sim: res.aliases.filter(function (a) { return a.rule === rule; }).map(function (a) { return a.alias; }) };
     });
   }
