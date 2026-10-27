@@ -1048,13 +1048,14 @@ function compassLaw(text, quote, hit, sim, occ) {
 }
 // 넓은 화면 원문 칸에서 찾아 갈 곳(el)을 어디로 굴릴지. 결과 머리글 때문에 칸이 화면 아래로 걸쳐 있으면 칸 가운데로 굴려도
 // 화면 밖에 숨으므로, 화면에 보이는 부분의 가운데이면서 맨 위에 붙는 ▲▼ 줄(navH) 아래로 보낸다.
-// 칸이 화면에 조금만 보이면(낮은 화면) 페이지를 먼저 내려 칸을 화면 위에 붙인다. 처음 열 때(keepPage)는 머리글을 그대로 두고,
-// 보이는 틈이 그 줄도 못 담을 만큼 좁을 때만 페이지를 내렸을 때 가운데 오게 칸만 굴린다(틈에 맞추면 내렸을 때 ▲▼ 줄 밑에 숨는다).
+// 칸이 화면에 조금만 보이면(낮은 화면) 페이지를 먼저 내려 칸을 화면 위에 붙인다. 처음 열 때(keepPage)는 페이지를 그대로 두고,
+// 페이지를 내려 칸이 화면 위에 붙었을 때를 기준으로 칸만 굴린다. 화면 아래 좁은 틈에 맞추면 칸 머리(내규 이름·조문 바로가기)가
+// 밀려 올라가거나, 내렸을 때 ▲▼ 줄 밑에 숨는다. 그때 이미 보이는 곳이면 가운데로 맞추려고 굴리지도 않는다.
 // 돌려주는 값: { page: 페이지를 내릴 만큼, pane: 원문 칸의 새 scrollTop }
 function paneReveal(p) {
-  var gap = Math.min(p.paneBottom, p.viewH) - Math.max(p.paneTop, 0) - p.navH;
-  var page = gap < (p.keepPage ? p.elBottom - p.elTop + 16 : 120) ? p.paneTop - 16 : 0;
+  var page = p.keepPage || Math.min(p.paneBottom, p.viewH) - Math.max(p.paneTop, 0) - p.navH < 120 ? p.paneTop - 16 : 0;
   var top = Math.max(p.paneTop - page, 0) + p.navH, bottom = Math.min(p.paneBottom - page, p.viewH);
+  if (p.keepPage && p.elTop - page >= top && p.elBottom - page <= bottom - 24) return { page: 0, pane: p.scrollTop };
   return { page: p.keepPage ? 0 : page, pane: Math.max(0, p.scrollTop + (p.elTop + p.elBottom) / 2 - page - (top + bottom) / 2) };
 }
 // 오른쪽 원문 칸: 고른 내규의 원문 전체를 그리고 찾은 곳을 표시한다.
