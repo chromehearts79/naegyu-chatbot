@@ -81,6 +81,19 @@ forms2, _ = build_web.form_payload(r4, l2, index)
 quit8 = lambda fs: next(f for f in fs if f["rule"] == "인사관리세칙" and f["no"] == "8")  # noqa: E731
 ok(quit8(forms)["byName"] is True and quit8(forms2)["byName"] is False,
    "이름이 하나뿐인 양식(사직서)만 이름으로 띄우고, 다른 내규에 같은 이름(띄어쓰기 달라도)이 있으면 이름으로는 띄우지 않는다")
+# 이름이 겹쳐도 그 양식들이 모두 같은 종이(원문 별지 글이 같음)면 어느 쪽을 받아도 같아 이름으로 띄운다
+at = lambda rule, no: next((f for f in forms if f["rule"] == rule and f["no"] == no), None)  # noqa: E731
+sg = [at("평가세칙", "3"), at("전임전문직원관리세칙", "1")]
+ok(all(f and f["byName"] is True and f["calls"] == [] for f in sg),
+   "부르는 조문이 없고 이름이 겹쳐도 같은 종이면(연봉등급 승급 평가표: 평가세칙 별지 제3호·전임전문직원관리세칙 별지 제1호) 둘 다 싣고 이름으로 띄운다")
+
+# 법령 이름 뒤에 나온 별지라도 이 내규 끝에 그 번호 별지가 있으면 내규 별지로 보고 그 조문에 양식 칸을 단다
+seven = [("채용업무관리세칙", "4", "제6조"), ("개인정보보호세칙", "1", "제47조"), ("정보공개운영세칙", "10", "제18조"), ("정보공개운영세칙", "16", "제28조"),
+         ("법무업무처리지침", "1", "제13조"), ("법무업무처리지침", "2", "제14조"), ("공익신고 처리 및 신고자 보호 운영지침", "9", "제19조")]
+miss = [f"{r} {art}" for r, no, art in seven if not (at(r, no) and any(c["art"] == art for c in at(r, no)["calls"]))]
+ok(not miss and not any(c.get("outside") for e in led["rules"] for f in e["forms"] for c in f["calls"]),
+   "법령 이름 뒤에 나오지만 내규 끝에 그 번호 별지가 있는 7곳(법무업무처리지침 제13조 '별지 제1호 서식의 의뢰서' 등)에도 양식 칸을 단다"
+   + (": 빠짐 " + ", ".join(miss) if miss else ""))
 
 # 떼어 낸 양식 검사(check_forms): 떼어 낸 파일을 다시 읽은 글을 원본 변환본의 그 별지 부분과 맞댄다
 orig = "[별지 제8호 서식]\n\n사 직 서\n소 속 :\n직 위 :\n성 명 :\n위 본인은 아래와 같이 사직서를 제출합니다.\n□ 사직일자 : 20 년 월 일\n□ 사 유 :\n신청인 인\n우체국금융개발원장 귀하"
@@ -92,5 +105,15 @@ ok(check_forms.compare(orig, moved, "8")[0], "검사: 글자는 같고 한 줄�
 ok(not check_forms.compare(orig, orig.replace("제8호", "제9호"), "8")[0], "검사: 첫 별지 표시가 다른 번호면 실패")
 ok(not check_forms.compare(orig, orig + "\n\n[별지 제9호 서식]\n\n인사기록 변경신청서\n소 속 :", "8")[0], "검사: 다음 양식의 별지 표시가 섞이면 실패")
 ok(not check_forms.compare(orig, orig[:60], "8")[0], "검사: 양식 글이 절반쯤 빠지면 실패")
+
+# 바깥 별지(법령·다른 규정의 별지)는 내규 끝에 그 번호 별지가 없을 때만. '법률자문'의 '법률'처럼 법령 이름이 아닌 말 뒤도 내규 별지
+law = {"articles": [
+    {"no": "제28조", "text": "", "paras": [{"no": 0, "text": "원장은 「공공기관의 정보공개에 관한 법률 시행규칙」 제9조에 의하여 별지 제16호 서식의 정보공개 운영실태를 작성하여"}]},
+    {"no": "제14조", "text": "", "paras": [{"no": 2, "text": "② 법률자문 평가는 별지 제2호 서식에 따라 실시한다."}]},
+    {"no": "제58조", "text": "", "paras": [{"no": 1, "text": "「산업안전보건법 시행규칙」 별지 제30호에 따른 서류를 낸다."}]}]}
+lc = build_forms.form_calls(law)
+moved = build_forms.own_forms(lc, ["2", "16"])
+ok(not lc["16"][0].get("outside") and not lc["2"][0].get("outside") and lc["30"][0].get("outside") and sorted(n for n, _ in moved) == ["16", "2"],
+   "법령 이름 뒤 별지라도 내규 끝에 그 번호가 있으면 내규 별지(별지 제16호·제2호), 없으면 바깥 별지(별지 제30호)")
 
 sys.exit(1 if FAIL else 0)

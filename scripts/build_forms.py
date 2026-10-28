@@ -26,7 +26,8 @@ NOTE = ("서식 대장. 내규마다 별지 번호·서식 제목·부르는 조
         "(파일은 node scripts/cut_forms.cjs 로 원본에서 떼어 data/forms 에 둔다).")
 PENDING = "확인 전"
 NUM = r"\d+(?:-\d+)?"
-# 법령·다른 규정의 별지를 부르는 말: "규칙 별지 제30호", "「…시행규칙」 제9조에 의하여 별지 제16호"
+# 법령·다른 규정의 별지를 부르는 말: "규칙 별지 제30호", "「…시행규칙」 제9조에 의하여 별지 제16호".
+# 내규 끝에 그 번호 별지가 있으면 내규 별지로 본다(own_forms)
 OUTSIDE = re.compile(r"(?:규칙|법률|시행령|[」｣])[^.。]{0,25}$")
 # 서식 이름 뒤에 붙는 조사(가·이는 '출산휴가'처럼 이름 끝 글자와 겹쳐 떼지 않는다)
 JOSA = re.compile(r"(?:와|과|를|을|에게|에서|에|으로|로|는|은|도)$")
@@ -130,11 +131,23 @@ def name_mismatch(phrase, titles):
     return m.group(1).strip()
 
 
+def own_forms(calls, nos):
+    """법령 이름 뒤에 나온 별지라도 이 내규 끝에 그 번호 별지가 있으면 내규 별지로 본다(내규가 법령 서식을 제 별지로 옮겨 싣고,
+    '법률자문 의뢰서'의 '법률'처럼 법령 이름이 아닌 말도 있다). 바깥 별지(outside)는 내규 끝에 그 번호가 없을 때만 남긴다.
+    돌려주는 값: 내규 별지로 바꾼 부름 [(번호, 부름)] (개정 반영 때 원문을 확인하라고 보여 준다)"""
+    moved = []
+    for no in [n for n in nos if n in calls]:
+        for c in calls[no]:
+            if c.pop("outside", None):
+                moved.append((no, c))
+    return moved
+
+
 def read_rule(rule):
     titles = form_titles(rule_md(rule))
     nos = list(titles)
     calls = expand_ranges(form_calls(rule), nos)
-    return titles, calls
+    return titles, calls, own_forms(calls, nos)
 
 
 def load():
@@ -147,11 +160,15 @@ def update(names, prune=False):
     led["_note"] = NOTE
     for name in names:
         r = rules.get(name) or sys.exit(f"내규를 못 찾음: {name}")
-        titles, calls = read_rule(r)
+        titles, calls, near_law = read_rule(r)
         if not titles:
             sys.exit(f"{name}: 원문 끝에서 별지를 못 찾음(data/md 변환본 확인)")
         for no in sorted(set(calls) - set(titles)):
-            print(f"  {name}: {', '.join(c['art'] for c in calls[no])}이 별지 제{no}호를 부르는데 원문 끝에 그 번호 별지가 없음(번호가 다른지 확인)")
+            arts = [c["art"] for c in calls[no] if not c.get("outside")]
+            if arts:
+                print(f"  {name}: {', '.join(arts)}이 별지 제{no}호를 부르는데 원문 끝에 그 번호 별지가 없음(번호가 다른지 확인)")
+        for no, c in near_law:
+            print(f"  {name} {c['art']}: 법령 이름 뒤에 나오지만 원문 끝에 별지 제{no}호('{titles[no]}')가 있어 이 내규 별지로 보고 양식 칸을 닮(원문 확인)")
         old = next((x for x in led["rules"] if x["rule"] == name), None)
         prev = {f["no"]: f for f in (old or {}).get("forms", [])}
         forms = []

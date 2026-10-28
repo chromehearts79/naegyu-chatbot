@@ -532,6 +532,14 @@ w.DATA.meta.site.calcOff = [];
   ok(before === 6 && moreBtn && /양식 \d+개 더 보기/.test(moreBtn.textContent) && shown() >= 30 && !hb.querySelector("button.form-more"),
     "넓은 말(‘신청서’)은 양식 6개만 먼저 보이고 ‘양식 N개 더 보기’로 모두 펼침(" + before + " → " + (hb ? shown() : 0) + ")");
   ok(titlesOf(seek("출장")).includes("공무국외출장계획서") && !seek("반차"), "‘출장’이면 공무국외출장 양식이 뜨고, 양식과 상관없는 ‘반차’는 양식 칸 없음");
+  // 이름이 겹쳐도 같은 종이인 양식(연봉등급 승급 평가표)은 둘 다, 어느 내규 몇 호인지와 함께
+  hb = seek("연봉등급 승급 평가표");
+  ok(titlesOf(hb).filter((x) => x === "연봉등급 승급 평가표").length === 2 && /평가세칙 별지 제3호/.test(hb.textContent) && /전임전문직원관리세칙 별지 제1호/.test(hb.textContent),
+    "나침반 ‘연봉등급 승급 평가표’: 이름이 같은 두 양식(같은 종이)을 내규·별지 번호와 함께 둘 다");
+  // 법령 이름 뒤에 나와도 내규 끝에 있는 별지면 그 조문에 양식 칸
+  const near = [["법무업무처리지침", "제13조", "1"], ["법무업무처리지침", "제14조", "2"], ["정보공개운영세칙", "제28조", "16"], ["개인정보보호세칙", "제47조", "1"], ["채용업무관리세칙", "제6조", "4"]];
+  ok(near.every(([r, art, no]) => w.formsAt(r, art).some((f) => f.no === no)),
+    "법령 이름 뒤에 나와도 내규 끝에 있는 별지(법무업무처리지침 제13조 법률자문 의뢰서, 정보공개운영세칙 제28조 정보공개 운영실태 등)는 그 조문에 양식 칸");
   // 질문하기: 핵심 정리 표 아래 '양식' 칸(근거 조문 인사관리세칙 제31조제1항이 부르는 서식), 근거 원문 칸에서는 조문 아래
   mode("ask").click();
   w.pick(w.DATA.cards.find((x) => x.id === "r3-2-1-resignation"));
@@ -552,6 +560,8 @@ w.DATA.meta.site.calcOff = [];
     "질문하기 ‘사직서’(되묻기): 후보 목록 위에 ‘양식’ 칸 하나");
   t2 = ask("사직서 받고 싶어요");
   ok(/사직과 의원면직 제한/.test(title(t2)) && boxOk(t2.querySelector(".form-box")), "질문하기 ‘사직서 받고 싶어요’(업무규정 답): 답에도 ‘양식’ 칸(인사관리세칙 별지 제8호)");
+  t2 = ask("연봉등급 승급 평가표 받고 싶어요");
+  ok(t2.querySelectorAll(".form-box button.form-dl").length === 2, "질문하기 ‘연봉등급 승급 평가표 받고 싶어요’: 이름이 같은 두 양식(같은 종이)을 함께");
   t2 = ask("부산 출장 여비 얼마예요?");
   ok(!t2.querySelector(".form-box"), "양식 이름이 없는 질문에는 양식 칸 없음");
   w.HTMLAnchorElement.prototype.click = realClick;

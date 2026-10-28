@@ -23,6 +23,7 @@ import check_changes  # noqa: E402
 from review_workbook import card_hash  # noqa: E402
 import build_bounds  # noqa: E402
 import build_forms  # noqa: E402
+import check_forms  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
@@ -35,9 +36,26 @@ def form_payload(rules, led, index):
     rules: {내규 이름: 내규}, led: 서식 대장, index: data/forms/index.json 의 forms. 돌려주는 값: (실을 서식, 못 실은 까닭)"""
     bad = build_forms.check(rules, led)
     out, warn = [], []
-    # 물은 말·찾은 말에 양식 이름이 들어 있으면 띄우는데, 서식 대장 전체에서 이름이 하나뿐인 양식만(신고서·확인서처럼 겹치는 이름은 하나로 단정하지 않는다)
+    # 물은 말·찾은 말에 양식 이름이 들어 있으면 띄우는데, 서식 대장 전체에서 이름이 하나뿐인 양식만(신고서·확인서처럼 겹치는 이름은 하나로 단정하지 않는다).
+    # 이름이 겹쳐도 그 양식들이 모두 같은 종이(원문 별지 글이 같음)면 어느 쪽을 받아도 같아 함께 띄운다(평가세칙·전임전문직원관리세칙의 연봉등급 승급 평가표)
     flat = lambda s: re.sub(r"\s+", "", s)  # noqa: E731
-    names = [flat(f["title"]) for e in led["rules"] for f in e["forms"]]
+    same = collections.defaultdict(list)
+    for e in led["rules"]:
+        for f in e["forms"]:
+            same[flat(f["title"])].append((e["rule"], f["no"]))
+    papers = {}
+
+    def paper(rule, no):
+        if rule not in papers:
+            papers[rule] = check_forms.sections(build_forms.rule_md(rules[rule])) if rule in rules else {}
+        return check_forms.flat(check_forms.LABEL.sub("", papers[rule].get(no, ""), count=1))
+
+    def one_paper(title):
+        group = same[flat(title)]
+        if len(group) == 1:
+            return True
+        texts = {paper(*x) for x in group}
+        return len(texts) == 1 and "" not in texts
     # 부르는 항의 글(나침반에서 찾은 낱말이 그 항에 나오면 그 항이 부르는 양식도 맨 위에 띄운다)
     def para_text(rule, art, para):
         a = next((x for x in rules[rule]["articles"] if x["no"] == art), None) if rule in rules else None
@@ -52,7 +70,7 @@ def form_payload(rules, led, index):
             # 양식 칸을 다는 조문: 법령·다른 규정의 별지를 부르는 곳, 부르는 이름이 서식 제목과 다른 곳(원문 번호가 틀렸을 수 있음)은 뺀다
             calls = [{"art": c["art"], "para": c["para"], "phrase": c["phrase"], "text": para_text(e["rule"], c["art"], c["para"])}
                      for c in f["calls"] if not c.get("outside") and not c.get("mismatch")]
-            by_name = names.count(flat(f["title"])) == 1
+            by_name = one_paper(f["title"])
             if e["rule"] in bad:
                 warn.append(f"{name}: " + " / ".join(bad[e["rule"]]) + " → python3 scripts/build_forms.py " + e["rule"])
             elif not calls and not by_name:
