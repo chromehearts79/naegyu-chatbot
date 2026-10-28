@@ -1,11 +1,13 @@
 """서식 대장(knowledge/forms.json)을 만들고 원문과 맞는지 점검한다.
 
 서식 대장에는 내규마다 별지 번호, 서식 제목, 그 서식을 부르는 조문(문구까지)을 적는다.
-서식 받기 단추는 조문이 "별지 제8호 서식의 사직서"처럼 직접 부른 자리에만 붙인다(찾은 낱말과 서식 이름을 맞추지 않는다).
-사람이 적는 칸(제목 고친 것, 쓰는 사람, 내는 방법, 받기 켜기)은 다시 만들어도 그대로 둔다.
+조문 아래 '양식' 칸은 조문이 "별지 제8호 서식의 사직서"처럼 직접 부른 자리에만 붙인다. 부르는 이름이 서식 제목과 다르면
+(원문 번호가 틀렸을 수 있음) 그 조문에는 붙이지 않는다(mismatch). 사람이 적는 칸(제목 고친 것, 쓰는 사람, 내는 방법,
+받기 켜기, cutNote)은 다시 만들어도 그대로 둔다. 새로 생긴 별지는 받기를 켠 채로 넣는다(떼지 못하면 빌드가 빼고 알린다).
 
-  python3 scripts/build_forms.py 인사관리세칙   그 내규의 서식을 원문에서 다시 읽어 대장에 넣는다(바뀐 곳을 보여 줌)
-  python3 scripts/build_forms.py --check        대장이 지금 원문과 맞는지만 본다(안 맞으면 끝 코드 1)
+  python3 scripts/build_forms.py 인사관리세칙 [--prune]  그 내규의 서식을 원문에서 다시 읽어 대장에 넣는다(바뀐 곳을 보여 줌).
+                                                       --prune: 없어진 내규를 대장에서 뺀다
+  python3 scripts/build_forms.py --check                대장이 지금 원문과 맞는지만 본다(안 맞으면 끝 코드 1)
 """
 import difflib
 import html
@@ -139,7 +141,7 @@ def load():
     return json.loads(LEDGER.read_text()) if LEDGER.exists() else {"_note": NOTE, "rules": []}
 
 
-def update(names):
+def update(names, prune=False):
     rules = {r["name"]: r for r in json.loads(RULES.read_text())["rules"]}
     led = load()
     led["_note"] = NOTE
@@ -165,7 +167,7 @@ def update(names):
             title = p["title"] if p.get("title") and p.get("title") != p.get("seen") else seen
             f = {"no": no, "label": f"별지 제{no}호 서식", "seen": seen, "title": title,
                  "calls": calls.get(no, []), "writer": p.get("writer", PENDING), "submit": p.get("submit", PENDING),
-                 "download": p.get("download", False)}
+                 "download": p.get("download", True)}
             if p.get("cutNote"):
                 f["cutNote"] = p["cutNote"]
             if p and p.get("seen") != seen:
@@ -182,6 +184,11 @@ def update(names):
             led["rules"].append(entry)
         n_call = sum(1 for f in forms if f["calls"])
         print(f"{name}: 별지 {len(forms)}개 (조문에서 부르는 것 {n_call}개, 안 불리는 것 {len(forms) - n_call}개), 기준 시행일 {r['effective']}")
+    if prune:
+        gone = [e["rule"] for e in led["rules"] if e["rule"] not in rules]
+        led["rules"] = [e for e in led["rules"] if e["rule"] in rules]
+        for g in gone:
+            print(f"{g}: 내규가 없어져 서식 대장에서 뺌")
     LEDGER.write_text(json.dumps(led, ensure_ascii=False, indent=1) + "\n")
 
 
@@ -219,9 +226,10 @@ def main():
             print(f"{k}: " + " / ".join(v))
         print("서식 대장: 원문과 맞음" if not bad else "서식 대장을 다시 만들어 주세요: python3 scripts/build_forms.py " + " ".join(bad))
         sys.exit(1 if bad else 0)
-    if not args:
+    names = [a for a in args if a != "--prune"]
+    if not names and "--prune" not in args:
         sys.exit(__doc__)
-    update(args)
+    update(names, prune="--prune" in args)
 
 
 if __name__ == "__main__":

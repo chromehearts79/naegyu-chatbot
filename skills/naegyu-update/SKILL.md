@@ -26,6 +26,7 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
 1. `python3 scripts/update_rules.py convert` (몇 분 걸릴 수 있다).
 2. `reports/change_report.md` 를 읽고 규정별로 쉽게 정리한다.
    - 시행일 변경, 바뀐 조문(개정 전 → 후 핵심 한두 줄), 다시 확인할 카드 수, 다시 확인할 계산기, 새로 생긴 조문, 카드가 없는 새 내규, 카드 검사 오류(조문 번호가 바뀌거나 삭제돼 인용이 깨진 것, 계산기 근거 문구가 원문에서 사라진 것)
+   - 양식(별지): convert 출력의 서식 대장 줄(`원문 제목이 바뀜`, `부르는 조문이 바뀜`, `… 그 조문에는 양식 칸을 달지 않음(원문 확인)`, `… 그 번호 별지가 없음`)
 3. 버튼: `카드 고치기 시작`(메시지: "내규 개정 반영 3단계: 카드 고쳐줘") / `보고서 자세히 보기`.
 
 ## 3단계 — 카드 고치기 (AI 작업)
@@ -37,18 +38,21 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
 3. **새 조문**: 직원이 물을 만한 실질 내용이면 카드를 새로 만들거나 관련 카드에 더한다.
 4. **새 내규**: 개요 카드 1장 + 실질 조문 카드(조문 1~3개당 1장), 시험 질문 2~4개(`_devset_<접두어>.json`, 카드 질문과 다른 표현). 파일·접두어 규칙은 AUTHORING.md. 카드가 15장이 넘으면 서브에이전트에 나눠 맡겨도 된다.
 5. 개정 이유가 법령 개정이면 korean-law 도구로 상위 법령을 확인하고, 필요하면 `knowledge/external_laws.json` 과 카드의 law_refs 를 고친다.
+   - **양식(서식 대장 `knowledge/forms.json`)**: 2단계에서 나온 서식 대장 줄을 원문과 대조한다. 화면 제목이 깨졌으면 그 별지의 `title` 을 고친다(사람이 고친 제목은 다시 읽어도 그대로). 조문이 부르는 이름과 별지 제목이 다른 곳은 양식 칸이 안 붙으니 사용자에게 알리고 `reports/rule_fix_candidates.md` 에 적는다. 새로 생긴 별지는 받기를 켠 채로 들어온다.
 6. 검사: `python3 scripts/check_knowledge.py` 오류 0건 → 고친·새 카드만 `python3 scripts/blind_check.py <카드 id…>`(백그라운드, 수 분) → 위임전결세칙이 바뀌었으면 `python3 scripts/check_approval_table.py`. 검증 모델의 '확인 필요'는 원문과 대조해 고치거나 `reports/review_decisions.json` 에 결정을 남긴다.
 7. 사용자에게 보여 줄 것: 고친 카드·새 카드 목록, 카드마다 "무엇이 바뀌었나" 한 줄(예: "배우자 출산휴가 20일 → 25일"), 고친 계산기와 바뀐 숫자, 담당부서 확인이 필요한 점.
 8. 버튼: `반영 승인`(메시지: "내규 개정 반영 4단계: 승인하고 시범본 만들어줘") / `고칠 점 말하기`.
 
 ## 4단계 — 승인하고 시범본 다시 만들기
 
-1. `python3 scripts/update_rules.py finish <이번에 바뀐 규정명들>` — 개정 지문 갱신, 판 번호 +1, 내규나침반 낱말 경계(`knowledge/word_bounds.json`) 다시 만들기, 시범본(dist/index.html)·GPTs 묶음·검수표 다시 만들기, 원본 파일 기록 갱신.
+1. `python3 scripts/update_rules.py finish <이번에 바뀐 규정명들>` — 개정 지문 갱신, 판 번호 +1, 내규나침반 낱말 경계(`knowledge/word_bounds.json`) 다시 만들기, 양식 다시 떼기(`scripts/cut_forms.cjs`, 원본 .hwp·.hwpx → `data/forms`)와 검사(`scripts/check_forms.py`), 시범본(dist/index.html)·GPTs 묶음·검수표 다시 만들기, 원본 파일 기록 갱신.
+   - 양식 떼기에는 `npm i --no-save jsdom@24.1.3 cfb@1.2.2` 가 필요하다(한 번만). "못 뗀 것"이 있으면 그 별지는 빌드가 빼고 알린다.
+   - 양식 검사(check_forms)가 "다름"으로 멈추면: 떼어 낸 양식이 원본 별지와 다르다는 뜻이다. 그 별지의 `download` 를 `false`, `cutNote` 에 까닭을 적고 finish 를 다시 돌린 뒤 사용자에게 알린다.
    - "형태소 분석기가 없습니다"로 멈추면: 분석기(약 100MB)를 받아도 되는지 사용자에게 먼저 묻고, 승낙하면 저장소에서 `python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements-bounds.txt` 후 finish 를 다시 돌린다. 버전은 고정이다(바뀌면 낱말 나누기가 달라져 나침반 시험이 잡는다).
    - 나침반 시험(test_engine.js [4])이 실패하면 낱말 경계가 이미 고친 경우를 되살린 것이다. 실패한 낱말을 보고 `knowledge/word_splits.json`(한 글자 머리 말·고유 이름 확인 목록)을 고치거나 사용자에게 알린다.
-2. 화면 점검을 돌린다(`node --max-old-space-size=8192 scripts/ui_test.js dist/index.html`, jsdom 이 없으면 `npm i --no-save jsdom@24.1.3` 후). 계산기·예시 질문 항목까지 모두 통과해야 한다.
+2. 화면 점검을 돌린다(`node --max-old-space-size=8192 scripts/ui_test.js dist/index.html`, jsdom 이 없으면 `npm i --no-save jsdom@24.1.3 cfb@1.2.2` 후(둘을 함께 받아야 서로 지우지 않는다)). 계산기·예시 질문 항목까지 모두 통과해야 한다.
 3. claude.ai 시범본을 쓰고 있으면 `dist/artifact.html` 로 같은 주소에 다시 올린다(사용자에게 먼저 물어본다).
-4. 결과: 판 번호, 카드 수 변화, 검색 시험 점수, "재검수 전" 카드 0장·멈춘 계산기 0종 확인, 배포 파일 위치.
+4. 결과: 판 번호, 카드 수 변화, 검색 시험 점수, "재검수 전" 카드 0장·멈춘 계산기 0종 확인, 양식 수(빌드의 '서식 받기: N개'와 빠진 양식), 배포 파일 위치.
 5. 버튼: `커밋하기`(메시지: "내규 개정 반영 5단계: 커밋해줘") / `나중에`.
 
 ## 5단계 — 기록과 다음 할 일

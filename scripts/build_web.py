@@ -62,9 +62,14 @@ def form_payload(rules, led, index):
             else:
                 eff = rules[e["rule"]]["effective"]
                 out.append({"rule": e["rule"], "no": f["no"], "title": f["title"], "calls": calls,
-                            "file": f"{f['title']}({e['rule']} 별지 제{f['no']}호, {eff} 시행).hwp", "effective": eff,
+                            "file": file_name(f"{f['title']}({e['rule']} 별지 제{f['no']}호, {eff} 시행)") + Path(cut["file"]).suffix, "effective": eff,
                             "byName": by_name, "packed": "deflate-raw", "b64": pack_form((FORMS / cut["file"]).read_bytes())})
     return out, warn
+
+
+def file_name(s):
+    """윈도·맥에서 파일 이름으로 못 쓰는 글자는 비슷한 전각 글자로('예시 : 상담파트장' → '예시 ： 상담파트장'). 브라우저가 이름을 바꾸지 않게"""
+    return s.translate(str.maketrans('\\/:*?"<>|', "＼／：＊？＂＜＞｜"))
 
 
 def pack_form(data):

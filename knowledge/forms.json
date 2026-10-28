@@ -453,7 +453,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -469,7 +469,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "3",
@@ -485,7 +485,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "4",
@@ -501,7 +501,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "5",
@@ -511,7 +511,7 @@
      "calls": [],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "6",
@@ -521,7 +521,7 @@
      "calls": [],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "7",
@@ -531,7 +531,7 @@
      "calls": [],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "8",
@@ -547,7 +547,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "9",
@@ -563,7 +563,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },
@@ -586,7 +586,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -602,7 +602,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "3",
@@ -618,7 +618,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },
@@ -646,7 +646,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -662,7 +662,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },
@@ -1877,7 +1877,7 @@
      "calls": [],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -1893,7 +1893,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "3",
@@ -1909,7 +1909,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "4",
@@ -1925,7 +1925,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "5",
@@ -1946,7 +1946,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "6",
@@ -1962,7 +1962,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "7",
@@ -1978,7 +1978,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "8",
@@ -1994,7 +1994,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },
@@ -2174,7 +2174,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -2190,7 +2190,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "3",
@@ -2206,7 +2206,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "4",
@@ -2222,7 +2222,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },
@@ -2245,7 +2245,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -2261,7 +2261,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },
@@ -4530,7 +4530,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -4546,7 +4546,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "3",
@@ -4562,7 +4562,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "4",
@@ -4578,7 +4578,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },
@@ -4601,7 +4601,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "2",
@@ -4622,7 +4622,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "3",
@@ -4638,7 +4638,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "4",
@@ -4654,7 +4654,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "5",
@@ -4670,7 +4670,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     },
     {
      "no": "6",
@@ -4686,7 +4686,7 @@
      ],
      "writer": "확인 전",
      "submit": "확인 전",
-     "download": false
+     "download": true
     }
    ]
   },

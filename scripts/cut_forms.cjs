@@ -1,4 +1,4 @@
-// 서식 대장(knowledge/forms.json)에서 받기를 켠 별지를 내규 원본 한글 파일(.hwp)에서 한 장씩 떼어 data/forms 에 둔다.
+// 서식 대장(knowledge/forms.json)에서 받기를 켠 별지를 내규 원본 한글 파일(.hwp·.hwpx)에서 한 장씩 떼어 data/forms 에 둔다.
 // 원본의 글자·표·쪽 설정 레코드를 그대로 옮기므로 원본과 같은 모양이다(한글에서 열어 채우고 인쇄할 수 있다).
 // 사용: node scripts/cut_forms.cjs   (원본 폴더는 NAEGYU_SRC 로 바꿀 수 있다)
 // 필요: npm i --no-save jsdom@24.1.3 cfb@1.2.2
@@ -118,6 +118,107 @@ function cut(buf, no) {
   return Buffer.from(CFB.write(cfb, { type: "buffer", fileType: "cfb" }));
 }
 
+/* ── 새 형식(.hwpx): 압축 묶음 안 Contents/sectionN.xml 의 맨 위 덩어리(hp:p)를 글자 그대로 옮긴다 ── */
+function unzip(buf) {
+  let e = buf.length - 22;
+  while (e >= 0 && buf.readUInt32LE(e) !== 0x06054b50) e--;
+  if (e < 0) throw new Error("hwpx 압축 묶음이 아님");
+  const files = new Map();
+  for (let i = 0, p = buf.readUInt32LE(e + 16); i < buf.readUInt16LE(e + 10); i++) {
+    const method = buf.readUInt16LE(p + 10), size = buf.readUInt32LE(p + 20), nl = buf.readUInt16LE(p + 28);
+    const name = buf.toString("utf8", p + 46, p + 46 + nl), at = buf.readUInt32LE(p + 42);
+    const data = buf.subarray(at + 30 + buf.readUInt16LE(at + 26) + buf.readUInt16LE(at + 28)).subarray(0, size);
+    files.set(name, method === 8 ? zlib.inflateRawSync(data) : Buffer.from(data));
+    p += 46 + nl + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+  }
+  return files;
+}
+// mimetype 을 맨 앞에 압축 없이 두는 hwpx 규칙대로 다시 묶는다
+function zipFiles(files) {
+  const names = ["mimetype", ...[...files.keys()].filter((n) => n !== "mimetype")], local = [], central = [];
+  let off = 0;
+  for (const name of names) {
+    const raw = files.get(name), stored = name === "mimetype", data = stored ? raw : zlib.deflateRawSync(raw), nm = Buffer.from(name, "utf8");
+    const h = Buffer.alloc(30); h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6); h.writeUInt16LE(stored ? 0 : 8, 8);
+    h.writeUInt32LE(zlib.crc32(raw) >>> 0, 14); h.writeUInt32LE(data.length, 18); h.writeUInt32LE(raw.length, 22); h.writeUInt16LE(nm.length, 26);
+    const c = Buffer.alloc(46); c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); h.copy(c, 8, 6, 30); c.writeUInt32LE(off, 42);
+    local.push(h, nm, data); central.push(c, nm); off += 30 + nm.length + data.length;
+  }
+  const cd = Buffer.concat(central), end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(names.length, 8); end.writeUInt16LE(names.length, 10); end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(off, 16);
+  return Buffer.concat([...local, cd, end]);
+}
+const TAG = /<(\/?)([A-Za-z][\w.:-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g;
+// 요소 하나(start 에서 시작)의 끝 위치
+function elementEnd(xml, start) {
+  TAG.lastIndex = start;
+  for (let depth = 0, m; (m = TAG.exec(xml));) {
+    if (m[1]) depth--; else if (!m[4]) depth++;
+    if (depth === 0) return TAG.lastIndex;
+  }
+  throw new Error("XML 이 깨짐");
+}
+// 구역 XML 을 머리·맨 위 덩어리들·꼬리로 나눈다
+function splitSection(xml) {
+  const open = xml.indexOf("<hs:sec"), a = xml.indexOf(">", open) + 1, b = xml.lastIndexOf("</hs:sec>"), parts = [];
+  for (let i = xml.indexOf("<", a); i >= 0 && i < b; i = xml.indexOf("<", i)) { const j = elementEnd(xml, i); parts.push(xml.slice(i, j)); i = j; }
+  return { head: xml.slice(0, a), parts, tail: xml.slice(b) };
+}
+const unxml = (s) => s.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+// 덩어리 안 문단(표 칸 속 포함)마다 글, 문단이 열리는 차례대로
+function xmlTexts(part) {
+  const out = [], stack = [];
+  TAG.lastIndex = 0;
+  for (let m; (m = TAG.exec(part));) {
+    if (m[2] === "hp:p" && !m[1] && !m[4]) { stack.push(out.length); out.push(""); }
+    else if (m[2] === "hp:p" && m[1]) stack.pop();
+    else if (m[2] === "hp:t" && !m[1] && !m[4] && stack.length) { const e = elementEnd(part, m.index); out[stack[stack.length - 1]] += unxml(part.slice(TAG.lastIndex = m.index, e)); TAG.lastIndex = e; }
+  }
+  return out.map(norm);
+}
+function cutHwpx(buf, no) {
+  const files = unzip(buf), names = [...files.keys()].filter((n) => /^Contents\/section\d+\.xml$/.test(n)).sort((a, b) => +a.match(/\d+/) - +b.match(/\d+/));
+  const all = names.map((n) => splitSection(files.get(n).toString("utf8")));
+  const lead = (p) => xmlTexts(p).find(Boolean) || "";
+  const nextAt = (ps, i0) => ps.findIndex((p, i) => i >= i0 && xmlTexts(p).some((s) => isLabel(s)));
+  let si = 0, from = -1;
+  for (; si < all.length; si++) { from = all[si].parts.findIndex((p) => xmlTexts(p).some((s) => isLabel(s, no))); if (from >= 0) break; }
+  if (from < 0) throw new Error("원본에서 '[별지 제" + no + "호]' 표시를 못 찾음");
+  if (!isLabel(lead(all[si].parts[from]), no)) throw new Error("앞 양식과 한 덩어리 안에 있어 깨끗하게 뗄 수 없음");
+  const pieces = [];
+  for (let sj = si, a = from; sj < all.length; sj++, a = 0) {
+    const ps = all[sj].parts, b = nextAt(ps, sj === si ? from + 1 : 0);
+    if (b >= 0 && !isLabel(lead(ps[b]))) throw new Error("다음 양식과 한 덩어리 안에 있어 깨끗하게 뗄 수 없음");
+    if (b !== a) {
+      const keep = ps.slice(a, b < 0 ? ps.length : b);
+      if (a > 0) {
+        // 구역 첫 덩어리의 구역 정의(secPr)·단 정의(colPr)를 별지 첫 덩어리의 첫 글자 묶음(run) 앞에 옮겨 붙이고, 쪽 나누기는 지운다
+        const p0 = ps[0], s = p0.indexOf("<hp:secPr");
+        if (s < 0) throw new Error("구역 정의를 못 찾음");
+        let defs = p0.slice(s, elementEnd(p0, s));
+        for (let c = p0.indexOf("<hp:ctrl>"); c >= 0; c = p0.indexOf("<hp:ctrl>", c + 1)) { const ce = elementEnd(p0, c); if (p0.slice(c, ce).includes("<hp:colPr")) { defs += p0.slice(c, ce); break; } }
+        let k = keep[0].replace(/^<hp:p\b[^>]*>/, (t) => t.replace(/pageBreak="1"/, 'pageBreak="0"'));
+        const r = k.indexOf("<hp:run"), re = k.indexOf(">", r) + 1;
+        keep[0] = r >= 0 && k[re - 2] !== "/" ? k.slice(0, re) + defs + k.slice(re) : k.replace(/^(<hp:p\b[^>]*>)/, "$1<hp:run charPrIDRef=\"0\">" + defs + "</hp:run>");
+      }
+      pieces.push(all[sj].head + keep.join("") + all[sj].tail);
+    }
+    if (b >= 0) break;
+  }
+  // 구역 파일·목록·구역 수를 남긴 구역에 맞춘다
+  names.forEach((n) => files.delete(n));
+  pieces.forEach((x, i) => files.set("Contents/section" + i + ".xml", Buffer.from(x, "utf8")));
+  const hpf = files.get("Contents/content.hpf").toString("utf8")
+    .replace(/<opf:item id="section\d+"[^>]*\/>/g, (t, o, s) => (/section0"/.test(t) ? pieces.map((_, i) => `<opf:item id="section${i}" href="Contents/section${i}.xml" media-type="application/xml"/>`).join("") : ""))
+    .replace(/<opf:itemref idref="section\d+"[^>]*\/>/g, (t) => (/section0"/.test(t) ? pieces.map((_, i) => `<opf:itemref idref="section${i}" linear="yes"/>`).join("") : ""));
+  files.set("Contents/content.hpf", Buffer.from(hpf, "utf8"));
+  files.set("Contents/header.xml", Buffer.from(files.get("Contents/header.xml").toString("utf8").replace(/secCnt="\d+"/, `secCnt="${pieces.length}"`), "utf8"));
+  // 미리보기 글은 별지 글로, 원본 첫 쪽 미리보기 그림은 뺀다
+  files.set("Preview/PrvText.txt", Buffer.from(pieces.map((x) => splitSection(x).parts.map(xmlTexts).flat().filter(Boolean).join("\r\n")).join("\r\n").slice(0, 1023), "utf8"));
+  files.delete("Preview/PrvImage.png");
+  return zipFiles(files);
+}
+
 function main() {
   const led = JSON.parse(fs.readFileSync(path.join(ROOT, "knowledge", "forms.json"), "utf8"));
   const rules = new Map(JSON.parse(fs.readFileSync(path.join(ROOT, "data", "rules.json"), "utf8")).rules.map((r) => [r.name, r]));
@@ -127,11 +228,12 @@ function main() {
   for (const e of led.rules) {
     const r = rules.get(e.rule);
     for (const f of e.forms.filter((x) => x.download)) {
-      const key = e.rule + "/" + f.no, src = path.join(SRC, e.code + ". " + e.rule + ".hwp");
+      const key = e.rule + "/" + f.no, base = path.join(SRC, e.code + ". " + e.rule);
       try {
         if (!r) throw new Error("data/rules.json 에 내규가 없음");
-        if (!fs.existsSync(src)) throw new Error("원본 .hwp 가 없음(" + src + "). .hwpx 원본은 아직 못 뗌");
-        const out = cut(fs.readFileSync(src), f.no), file = e.rule + "_별지" + f.no + ".hwp";
+        const ext = fs.existsSync(base + ".hwp") ? ".hwp" : fs.existsSync(base + ".hwpx") ? ".hwpx" : "";
+        if (!ext) throw new Error("원본 한글 파일이 없음(" + base + ".hwp/.hwpx)");
+        const buf = fs.readFileSync(base + ext), out = ext === ".hwp" ? cut(buf, f.no) : cutHwpx(buf, f.no), file = e.rule + "_별지" + f.no + ext;
         fs.writeFileSync(path.join(OUT, file), out);
         index[key] = { file, effective: r.effective, bytes: out.length, sha: crypto.createHash("sha256").update(out).digest("hex").slice(0, 16) };
         console.log("✓ " + key + " " + f.title + " → data/forms/" + file + " (" + out.length + "바이트, 원문 시행 " + r.effective + ")");
@@ -143,4 +245,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { cut };
+module.exports = { cut, cutHwpx };

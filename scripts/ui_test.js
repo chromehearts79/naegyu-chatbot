@@ -1,8 +1,8 @@
 // 시범본 화면 자동 점검 (jsdom). 사용법: node scripts/ui_test.js dist/index.html
-// 모든 카드를 열고 모든 근거 버튼을 눌러 원문과 인용 표시를 확인한다. jsdom 이 필요하다: npm i --no-save jsdom@24.1.3
+// 모든 카드를 열고 모든 근거 버튼을 눌러 원문과 인용 표시를 확인한다. jsdom 이 필요하다: npm i --no-save jsdom@24.1.3 cfb@1.2.2 (함께 받아야 서로 지우지 않는다)
 const fs = require("fs");
 let jsdom;
-try { jsdom = require("jsdom"); } catch (e) { console.error("jsdom 이 없습니다. 먼저 실행: npm i --no-save jsdom@24.1.3"); process.exit(2); }
+try { jsdom = require("jsdom"); } catch (e) { console.error("jsdom 이 없습니다. 먼저 실행: npm i --no-save jsdom@24.1.3 cfb@1.2.2"); process.exit(2); }
 const { JSDOM, VirtualConsole } = jsdom;
 const html = fs.readFileSync(process.argv[2], "utf8");
 const errors = [];
@@ -470,6 +470,13 @@ w.DATA.meta.site.calcOff = [];
     "서식 대장의 사직서(인사관리세칙 별지 제8호)를 압축한 한글 파일로 싣고, 받는 파일 이름에 내규·별지 번호·시행일");
   const badInflate = forms.filter((f) => { const z = Buffer.from(f.b64, "base64"); return Buffer.compare(Buffer.from(w.inflateRaw(new Uint8Array(z))), zlib.inflateRawSync(z)) !== 0; });
   ok(forms.length >= 200 && badInflate.length === 0, `양식 ${forms.length}개 모두 화면 안 압축 풀기가 원래 파일과 똑같음` + (badInflate.length ? ": " + badInflate.map((f) => f.rule + " " + f.no).join(", ") : ""));
+  // 받는 파일 이름에 윈도·맥에서 못 쓰는 글자(\ / : * ? " < > |)가 없어야 브라우저가 이름을 바꾸지 않는다
+  const badName = forms.filter((f) => /[\\/:*?"<>|]/.test(f.file));
+  ok(badName.length === 0 && forms.some((f) => /예시 ： 상담파트장/.test(f.file)), "받는 파일 이름에 파일 이름으로 못 쓰는 글자가 없음(‘예시 : 상담파트장’ → 전각 ‘：’)" + (badName.length ? ": " + badName.map((f) => f.file).join(", ") : ""));
+  // 새 형식(.hwpx) 원본의 양식은 .hwpx 로 받는다(압축 묶음: 첫 항목이 압축 안 한 mimetype)
+  const fx = forms.find((f) => f.rule === "이사회운영규정" && f.no === "2"), zx = fx ? zlib.inflateRawSync(Buffer.from(fx.b64, "base64")) : Buffer.alloc(0);
+  ok(fx && /\(이사회운영규정 별지 제2호, [\d.]+ 시행\)\.hwpx$/.test(fx.file) && zx.slice(0, 4).toString("hex") === "504b0304" && zx.slice(30, 38).toString() === "mimetype" &&
+    forms.filter((f) => /\.hwpx$/.test(f.file)).length >= 30, "새 형식 원본의 양식(이사회운영규정 별지 제2호 등)은 한글 .hwpx 파일로 실음");
   ok(forms.every((f) => f.calls.length || f.byName) && w.formsAt("정보공개운영세칙", "제19조").length === 0 && w.formsAt("인사관리세칙", "제31조").length === 1,
     "양식은 조문이 부르거나 이름이 하나뿐인 것만, 부르는 이름이 서식 제목과 다른 조문(정보공개운영세칙 제19조)에는 달지 않음");
   ok(/\.form-box \{/.test(html) && /\.form-dl \{/.test(html) && /\.form-note \{/.test(html) && /\.form-item\[hidden\] \{ display: none; \}/.test(html),

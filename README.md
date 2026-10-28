@@ -25,7 +25,10 @@ python3 scripts/blind_check.py [분야]      # 4. 독립 검증(로컬 ollama qw
 python3 scripts/check_approval_table.py    #    위임전결기준 표의 ○ 칸과 카드 전결권자 대조 → reports/approval_table_check.md
 python3 scripts/check_changes.py           #    규정 개정 감지 → reports/change_report.md (아래 '규정이 개정되면')
 node scripts/test_engine.js -v       # 5. 검색·계산기 시험
-python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/
+python3 scripts/build_forms.py <규정명…> | --check   #    서식 대장(별지 번호·제목·부르는 조문) → knowledge/forms.json
+node scripts/cut_forms.cjs                 #    원본 .hwp·.hwpx 에서 별지 한 장씩 떼기 → data/forms (npm i --no-save jsdom@24.1.3 cfb@1.2.2)
+python3 scripts/check_forms.py             #    떼어 낸 양식이 원본 별지와 같은지 검사
+python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/ (양식은 압축해 싣는다)
 ```
 
 ## 규정이 개정되면 (쉬운 안내: docs/유지보수_안내.md)

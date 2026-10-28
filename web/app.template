@@ -642,7 +642,9 @@ function saveForm(f) {
   var bin = atob(f.b64), u = new Uint8Array(bin.length);
   for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
   if (f.packed === "deflate-raw") u = inflateRaw(u);
-  var url = URL.createObjectURL(new Blob([u], { type: "application/x-hwp" })), a = h("a", { href: url, download: f.file, hidden: "" });
+  // 원본이 새 형식이면 .hwpx(압축 묶음), 옛 형식이면 .hwp
+  var type = /\.hwpx$/.test(f.file) ? "application/hwp+zip" : "application/x-hwp";
+  var url = URL.createObjectURL(new Blob([u], { type: type })), a = h("a", { href: url, download: f.file, hidden: "" });
   document.body.append(a); a.click(); a.remove();
   setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
 }

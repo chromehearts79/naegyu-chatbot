@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_forms  # noqa: E402
 import build_web  # noqa: E402
+import check_forms  # noqa: E402
 
 FAIL = []
 
@@ -80,5 +81,16 @@ forms2, _ = build_web.form_payload(r4, l2, index)
 quit8 = lambda fs: next(f for f in fs if f["rule"] == "인사관리세칙" and f["no"] == "8")  # noqa: E731
 ok(quit8(forms)["byName"] is True and quit8(forms2)["byName"] is False,
    "이름이 하나뿐인 양식(사직서)만 이름으로 띄우고, 다른 내규에 같은 이름(띄어쓰기 달라도)이 있으면 이름으로는 띄우지 않는다")
+
+# 떼어 낸 양식 검사(check_forms): 떼어 낸 파일을 다시 읽은 글을 원본 변환본의 그 별지 부분과 맞댄다
+orig = "[별지 제8호 서식]\n\n사 직 서\n소 속 :\n직 위 :\n성 명 :\n위 본인은 아래와 같이 사직서를 제출합니다.\n□ 사직일자 : 20 년 월 일\n□ 사 유 :\n신청인 인\n우체국금융개발원장 귀하"
+ok(check_forms.compare(orig, orig, "8")[0], "검사: 원본 별지 부분과 같으면 통과")
+ok(check_forms.compare(orig, "인사관리세칙\n\n![image](images/x/image_001.png)\n\n" + orig.replace("사 직 서", "**사 직 서**"), "8")[0],
+   "검사: 원본에 없던 로고 그림 줄·머리말(내규 이름)·굵은 글씨 표시만 다르면 통과")
+moved = orig.replace("\n신청인 인", "") .replace("소 속 :", "신청인 인\n소 속 :")
+ok(check_forms.compare(orig, moved, "8")[0], "검사: 글자는 같고 한 줄을 읽어 낸 차례만 다르면 통과(동호회운영지침 별지 제6호의 '※ 붙임서류' 줄)")
+ok(not check_forms.compare(orig, orig.replace("제8호", "제9호"), "8")[0], "검사: 첫 별지 표시가 다른 번호면 실패")
+ok(not check_forms.compare(orig, orig + "\n\n[별지 제9호 서식]\n\n인사기록 변경신청서\n소 속 :", "8")[0], "검사: 다음 양식의 별지 표시가 섞이면 실패")
+ok(not check_forms.compare(orig, orig[:60], "8")[0], "검사: 양식 글이 절반쯤 빠지면 실패")
 
 sys.exit(1 if FAIL else 0)

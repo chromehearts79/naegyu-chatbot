@@ -1,9 +1,9 @@
 """내규 개정·신설 반영 도우미. 원본 폴더에 개정본·신설 내규 파일을 넣은 뒤 단계별로 쓴다.
 
   python3 scripts/update_rules.py status    # 1단계: 바뀐 파일·새 파일·사라진 파일 찾기
-  python3 scripts/update_rules.py convert   # 2단계: 그 파일만 변환 → 규정 DB 다시 만들기 → 개정 감지 보고서
+  python3 scripts/update_rules.py convert   # 2단계: 그 파일만 변환 → 규정 DB 다시 만들기 → 개정 감지 보고서 → 그 내규의 서식 대장 다시 읽기
   (3단계: 카드 고치기 — 사람 또는 AI가 reports/change_report.md 를 보고 카드를 고친다)
-  python3 scripts/update_rules.py finish 복무세칙 [규정명 …]   # 4단계: 확인한 규정을 승인하고 시범본·지식 묶음 다시 만들기
+  python3 scripts/update_rules.py finish 복무세칙 [규정명 …]   # 4단계: 확인한 규정을 승인하고 양식 다시 떼기·검사, 시범본·지식 묶음 다시 만들기
   python3 scripts/update_rules.py init      # 처음 한 번: 지금 원본 파일들을 기준으로 기록
 
 원본 폴더: iCloud 내규챗봇 폴더(파일 이름 '코드. 규정명.hwp', 예: 'Ⅲ-3-1. 복무세칙.hwp').
@@ -126,6 +126,15 @@ def convert():
     print(run(sys.executable, "scripts/build_db.py").strip())
     out = run(sys.executable, "scripts/check_changes.py").strip()
     print(out)
+    # 서식 대장: 바뀌거나 새로 들어온 내규의 별지 번호·제목·부르는 조문을 새 원문에서 다시 읽는다(사람이 고친 칸은 그대로)
+    rules_now = json.loads((ROOT / "data" / "rules.json").read_text())["rules"]
+    with_forms = {r["name"] for r in rules_now if r.get("forms")}
+    led_path = ROOT / "knowledge" / "forms.json"
+    in_led = {e["rule"] for e in json.loads(led_path.read_text())["rules"]} if led_path.exists() else set()
+    touched = [m[2] for m in (CODE.match(Path(n).stem) for n in todo) if m]
+    form_rules = [n for n in dict.fromkeys(touched) if n in with_forms or n in in_led]
+    if form_rules or in_led - {r["name"] for r in rules_now}:
+        print(run(sys.executable, "scripts/build_forms.py", *form_rules, "--prune").strip())
     chk = run(sys.executable, "scripts/check_knowledge.py", check=False)
     errs = re.search(r"오류 (\d+)건", chk)
     stale_all = json.loads((ROOT / "knowledge" / "stale_cards.json").read_text())
@@ -176,6 +185,14 @@ def finish(accept):
     if not py:
         sys.exit("형태소 분석기가 없습니다. 한 번만 설치해 주세요: python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements-bounds.txt")
     print(run(py, "scripts/build_bounds.py").strip())
+    # 서식 받기: 대장이 원문과 맞는지 → 원본에서 양식을 다시 떼기 → 떼어 낸 양식이 원본 별지와 같은지 검사(다르면 멈춘다)
+    print(run(sys.executable, "scripts/build_forms.py", "--check").strip())
+    cut = run("node", "scripts/cut_forms.cjs", check=False)
+    fails = [l for l in cut.splitlines() if l.startswith("✗")]
+    print(f"양식 떼기: {sum(l.startswith('✓') for l in cut.splitlines())}개" + (f", 못 뗀 것 {len(fails)}개" if fails else ""))
+    for l in fails:
+        print("  " + l)
+    print(run(sys.executable, "scripts/check_forms.py").strip())
     print(run(sys.executable, "scripts/build_web.py").strip())
     print(run(sys.executable, "scripts/export_gpts.py").strip())
     print(run(sys.executable, "scripts/review_workbook.py", "export").strip().splitlines()[-1])
