@@ -281,4 +281,43 @@ ok([x.verdict for x in res] == [T.V_SUSPECT], "idx가 바뀌어도 이름으로 
 ok(raises(lambda: W.check_sanity([], rel_of(ENTRY, ENTRY)), T.WatchFailure) and raises(lambda: W.check_sanity([ROW_SAME], rel_of(ENTRY, ENTRY, ENTRY)), T.WatchFailure), "받은 목록이 배포판의 절반 미만이면 확인 실패")
 W.check_sanity([ROW_SAME], rel_of(ENTRY, ENTRY))
 
+import hashlib  # noqa: E402
+import unicodedata  # noqa: E402
+ROOT = Path(__file__).resolve().parent.parent
+MD_DIR = ROOT / "data" / "md"
+
+
+def tree_sig():
+    files = [ROOT / "data" / "rules.json", ROOT / "knowledge" / "stale_cards.json", ROOT / "knowledge" / "source_snapshot.json", ROOT / "data" / "snapshot_texts.json"] + sorted(MD_DIR.glob("*.md"))
+    return [(p.name, hashlib.sha1(p.read_bytes()).hexdigest()) for p in files]
+
+
+if MD_DIR.exists():
+    import alio_compare as C  # noqa: E402
+    ok(C.KORDOC == "kordoc@4.24.42" and C.kordoc_cmd()[1:] == ["-y", "kordoc@4.24.42"], "kordoc 판을 고정한다")
+    p = next(x for x in MD_DIR.glob("*.md") if unicodedata.normalize("NFC", x.name) == "Ⅲ-3-1. 복무세칙.md")
+    md = p.read_text(encoding="utf-8")
+    fname = "복무세칙(2026년도 11월 2일 개정).hwp"
+    before = tree_sig()
+    lines = md.split("\n")
+    i = next(n for n, x in enumerate(lines) if "제4조(" in x)
+    lines[i] += " 다만, 시험 문구를 더한다."
+    r = C.compare_md("Ⅲ-3-1", "복무세칙", {fname: "\n".join(lines)})
+    ok("제4조" in r.changed_units and not r.whole_same and not r.error and r.before_after, f"조문이 바뀌면 잡고 전·후 글자를 준다({r.changed_units[:3]})")
+    ok(not any(u.endswith("항") and "조제" in u for u in r.changed_units), "바뀐 조문 수에 항 단위를 겹쳐 세지 않는다")
+    r = C.compare_md("Ⅲ-3-1", "복무세칙", {fname: md.replace("\n", "\n\n")})
+    ok(r.whole_same and not r.changed_units, "빈 줄만 달라지면 전체 글자가 같다")
+    r = C.compare_md("Ⅲ-3-1", "복무세칙", {fname: md + "\n\n[별지 제99호 서식]\n\n시험 양식 본문\n"})
+    ok(not r.changed_units and not r.whole_same and r.outside_diff, "별지만 바뀌면 조문 변화 0이어도 전체 글자가 다르다")
+    new_text = "제1조(목적) 이 지침은 시험이다.\n\n제2조(적용) 전 직원에 적용한다.\n\n부 칙\n\n이 지침은 2026년 11월 2일부터 시행한다.\n"
+    r = C.compare_md("Ⅳ-99", "새 시험 지침", {"새 시험 지침(2026년도 11월 2일 제정).hwp": new_text})
+    ok("제1조" in r.added_units and "제2조" in r.added_units and not r.error, "새 내규는 새 조문으로 나온다")
+    r = C.compare_md("", "새 시험 지침", {"새 시험 지침(2026년도 11월 2일 제정).hwp": new_text})
+    ok("제1조" in r.added_units and not r.error, "분류 코드가 없는 새 내규도 임시 코드로 비교한다")
+    p2 = next(x for x in MD_DIR.glob("*.md") if "위임전결기준" in unicodedata.normalize("NFC", x.name))
+    r = C.compare_md("Ⅲ-7-1", "위임전결세칙", {"(별표)위임전결기준(2026년도 11월 2일 개정).xlsx": p2.read_text(encoding="utf-8") + "\n| 시험 | 칸 |\n"})
+    ok(any("별표" in u for u in r.changed_units), "별표 엑셀은 별표 변환본 자리에 들어간다")
+    ok(tree_sig() == before, "실제 data·knowledge는 바뀌지 않는다")
+
+
 sys.exit(1 if FAIL else 0)
