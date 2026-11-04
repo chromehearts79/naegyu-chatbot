@@ -328,5 +328,73 @@ if MD_DIR.exists():
     ok(isinstance(r, C.CompareResult) and r.error and "npx" in r.error, "npx 가 없으면 예외 없이 error")
     ok(tree_sig() == before, "실제 data·knowledge는 바뀌지 않는다")
 
+import datetime  # noqa: E402
+import tempfile  # noqa: E402
+import alio_report as RP  # noqa: E402
+
+ok(RP.safe_name('a:b/c?*"<>|\\d. ') == "a_b_c_______d" and len(RP.safe_name("가" * 300)) <= 80, "경로에 못 쓰는 글자와 긴 이름을 정리한다")
+F = T.Finding(name="복무세칙", code="Ⅲ-3-1", idx="9387", verdict=T.V_SUSPECT, st_date="2026.11.02", mod="2026.11.09", file_date="2026.11.02", ext=".hwp", files=[("복무:세칙(2026).hwp", b"x")], target_name="Ⅲ-3-1. 복무세칙.hwp",
+              compare=cmp_res(changed_units=["제19조"], stale_cards=["a", "b"], related_cards=["c"], calcs=["가족수당"], before_after=[("제19조", "옛 <글>", "새 글")]))
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    saved = RP.save_bundle(td / "대기", F)
+    ok(Path(saved).parent == td / "대기" and any(Path(saved).iterdir()), "이름에 못 쓰는 글자가 있어도 대기 폴더에 저장한다")
+    F2 = T.Finding(name="평가:세칙/?", code="", idx="1", verdict=T.V_SUSPECT, file_date="2026.11", files=[("가" * 300 + ".hwp", b"y")])
+    ok(any(Path(RP.save_bundle(td / "대기", F2)).iterdir()), "지나치게 긴 파일 이름도 저장한다")
+
+    csv_path = td / "기록.csv"
+    first, err = RP.update_history(csv_path, [F], "2026-11-09")
+    ok(first["9387"] == "2026-11-09" and not err and csv_path.read_bytes().startswith(b"\xef\xbb\xbf"), "처음 잡힌 날을 적는다(엑셀용 BOM)")
+    first, err = RP.update_history(csv_path, [F], "2026-11-16")
+    ok(first["9387"] == "2026-11-09", "다음 주에도 처음 잡힌 날을 유지한다")
+    RP.update_history(csv_path, [], "2026-11-23")
+    text = csv_path.read_text(encoding="utf-8-sig")
+    ok("2026-11-09" in text and "2026-11-23" in text, "해소되면 해소된 날을 적는다")
+    bad = td / "열림.csv"
+    bad.mkdir()
+    first, err = RP.update_history(bad, [F], "2026-11-09")
+    ok(err and first == {}, "기록 파일을 쓸 수 없어도(엑셀로 열림) 예외 없이 사유를 돌려준다")
+
+    meta = {"today": "2026-11-09", "last_success": "2026-10-17", "release_no": 7, "release_built": "2026-11-04", "source_note": "", "failure": None, "history_error": "기록.csv를 쓰지 못했습니다", "mode": "full"}
+    F.days, F.saved_dir = 15, "C:\\대기\\복무세칙"
+    page = RP.render_html([F, T.Finding(name="<b>x</b>", code="", idx="2", verdict=T.V_DONE)], meta)
+    ok("마지막 확인: 23일 전" in page and "제7판" in page, "맨 위에 마지막 확인과 판 번호")
+    ok("복무세칙" in page and "제19조" in page and "2장" in page and "가족수당" in page and "C:\\대기\\복무세칙" in page and "Ⅲ-3-1. 복무세칙.hwp" in page, "개정 의심: 조문·문답·계산기·파일 위치·넣을 이름")
+    ok("정 담당 확인, 부재면 게시판에 미반영 공지" in page and 'class="late"' in page, "14일이 넘으면 빨간 표시와 안내")
+    ok("<b>x</b>" not in page and "옛 &lt;글&gt;" in page, "ALIO 글자는 이스케이프한다")
+    ok("기록.csv를 쓰지 못했습니다" in page, "기록 실패를 화면에 알린다")
+    F.days = 13
+    ok('class="late"' not in RP.render_html([F], meta), "14일 전에는 빨간 표시가 없다")
+    page = RP.render_html([], dict(meta, last_success=None, failure="ALIO 응답이 이상합니다", history_error=None))
+    ok("확인 실패" in page and "ALIO 응답이 이상합니다" in page and "이번 주 변동 없음" not in page, "확인 실패가 변동 없음으로 보이지 않는다")
+    page = RP.render_html([], dict(meta, source_note="배포판을 읽지 못해 이 PC의 마지막 빌드와 비교함", history_error=None))
+    ok("이번 주 변동 없음" in page and "배포판을 읽지 못해 이 PC의 마지막 빌드와 비교함" in page, "변동 없음과 기준 안내")
+    NEWF = T.Finding(name="새 지침", code="", idx="5", verdict=T.V_NEW, compare=cmp_res(added_units=["제1조", "제2조", "부칙"], error="kordoc 실패"))
+    page = RP.render_html([NEWF], meta)
+    ok("조문 2개" in page and "kordoc 실패" in page and "0개" not in page, "새 내규는 조문 수를 보이고 비교 실패는 메모로 남긴다")
+
+    RP.write_outputs(td, "<html>결과</html>", [F], "2026-11-09")
+    ok((td / "이번 주 결과.html").exists() and (td / "기록" / "2026-11-09.html").exists(), "이번 주 결과와 보관본을 쓴다")
+    saved_json = json.loads((td / "최근 결과.json").read_text(encoding="utf-8"))
+    ok(saved_json["findings"][0]["name"] == "복무세칙" and "files" not in saved_json["findings"][0] and saved_json["findings"][0]["values"] is None, "최근 결과에 파일 내용을 넣지 않는다")
+
+ok(RP.elapsed_days("2026.10.20", "2026-11-09", "2026-11-09") == 20, "경과일은 게시일부터")
+ok(RP.elapsed_days("2026.11.09", "2026-10-20", "2026-11-09") == 20, "게시일이 밀려도 처음 잡은 날부터")
+seen_call = {}
+
+
+def fake_run(cmd, **kw):
+    seen_call.update(cmd=cmd, env=kw.get("env"))
+
+
+ok(RP.notify("제목", "복무세칙 알림", run=fake_run, system="Windows") and seen_call["cmd"][0] == "powershell" and "복무세칙" not in " ".join(seen_call["cmd"]) and seen_call["env"]["NAEGYU_TOAST_BODY"] == "복무세칙 알림", "윈도우 알림: 글자는 환경 변수로 넘긴다")
+
+
+def boom(*a, **k):
+    raise OSError("no")
+
+
+ok(RP.notify("t", "b", run=boom, system="Windows") is False and RP.notify("t", "b", run=boom, system="Darwin") is False, "알림 실패는 예외 없이 False")
+
 
 sys.exit(1 if FAIL else 0)
