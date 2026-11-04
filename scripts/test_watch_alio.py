@@ -317,6 +317,15 @@ if MD_DIR.exists():
     p2 = next(x for x in MD_DIR.glob("*.md") if "위임전결기준" in unicodedata.normalize("NFC", x.name))
     r = C.compare_md("Ⅲ-7-1", "위임전결세칙", {"(별표)위임전결기준(2026년도 11월 2일 개정).xlsx": p2.read_text(encoding="utf-8") + "\n| 시험 | 칸 |\n"})
     ok(any("별표" in u for u in r.changed_units), "별표 엑셀은 별표 변환본 자리에 들어간다")
+    r = C.compare_md("Ⅲ-3-1", "복무세칙", {fname: md, "복무세칙(2026년도 11월 2일 개정)_1.hwpx": md})
+    ok(r.error and "둘 이상" in r.error and not r.changed_units, "한글 파일이 둘이면 비교하지 않고 error")
+    real_which = C.shutil.which
+    C.shutil.which = lambda *a, **k: None
+    try:
+        r = C.compare_rule("복무세칙", "Ⅲ-3-1", [(fname, b"x")])
+    finally:
+        C.shutil.which = real_which
+    ok(isinstance(r, C.CompareResult) and r.error and "npx" in r.error, "npx 가 없으면 예외 없이 error")
     ok(tree_sig() == before, "실제 data·knowledge는 바뀌지 않는다")
 
 

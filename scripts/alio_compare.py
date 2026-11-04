@@ -67,9 +67,13 @@ def compare_md(code, name, new_md):
             shutil.copy(HERE / "build_db.py", tmp / "scripts" / "build_db.py")
             for p in MD_DIR.glob("*.md"):
                 shutil.copy(p, tmp / "data" / "md" / p.name)
-            old_all, new_all, found = [], [], True
+            old_all, new_all, found, used = [], [], True, set()
             for fname, text in new_md.items():
                 target = place(code, name, fname, existing)
+                if target in used:  # 같은 자리에 둘이 들어가면 하나만 비교하게 되므로 비교하지 않는다
+                    res.error = f"같은 종류의 파일이 둘 이상이라 비교하지 않습니다({fname})"
+                    return res
+                used.add(target)
                 if target is None:
                     res.error = f"별표 변환본을 둘 자리가 없습니다({fname})"
                     return res
