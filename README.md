@@ -60,6 +60,22 @@ python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/ (양식은 
 
 카드 하나 = 답의 칸 하나. `facts` 의 `cite`(조문 위치)와 `quote`(원문 그대로의 문구)는 3번 검사에서 원문과 대조된다. `questions` 는 직원이 칠 법한 예상 질문, `check` 는 담당부서가 확인할 점이다. `_devset.json` 의 시험 질문은 카드에 옮겨 넣지 않는다.
 
+## 매주 ALIO 확인 (쉬운 안내: docs/유지보수_안내.md)
+
+ALIO의 우리 내규가 배포한 판과 달라졌는지 매주 확인하는 루틴이다. AI와 외부 전송 없이 ALIO와 `release_url` 에만 접속한다. 윈도우 이전 뒤에 시작한다(맥 자동 실행은 없다).
+
+```bash
+python3 -X utf8 scripts/watch_alio.py --config 설정.json [--force]   # 한 번 확인(작업 스케줄러가 부른다)
+python3 -X utf8 scripts/alio_confirm.py --config 설정.json            # 담당자 '확인함'(확인함.bat)
+python -X utf8 scripts/install_watch.py --mode full|alert [--repo 폴더] [--url 주소] [--dry-run]   # 작업 스케줄러 등록
+python -X utf8 scripts/install_watch.py --pack 부담당.zip              # 부 담당 PC용 묶음
+python3 -X utf8 scripts/test_watch_alio.py                             # 시험
+```
+
+- `scripts/alio_types.py`(판정 이름·자료 꼴), `alio_client.py`(ALIO 접속), `alio_pick.py`(현행 묶음 고르기), `alio_release.py`(기록·배포판 목록), `alio_report.py`(결과 화면·기록), `watch_alio.py`(판정과 실행), `alio_compare.py`(정 담당 PC의 원문 비교), `alio_confirm.py`(확인함), `install_watch.py`(설치). 앞의 다섯과 `watch_alio.py`, `install_watch.py` 는 저장소 없이도 돈다(부 담당 PC).
+- `knowledge/alio_seen.json`: 배포한 판을 만들 때 ALIO에서 본 값(게시일·목록 날짜·최신 첨부)과 담당자 확인함 기록. `update_rules.py finish` 가 올린다.
+- `dist/release.json`: 내규별 이름·ALIO 값·원본 지문을 담은 배포판 목록. 새 판과 함께 만들어 배포하며, 공개 내규의 이름·날짜·지문만 들어 있다. 설정의 `release_url` 이 이 파일의 배포 주소다.
+
 ## 검색 시험 (`node scripts/test_engine.js`)
 
 - **[0] 베끼기 검사**: 시험 질문이 정답 카드의 예상 질문과 글자 조각 60% 넘게 겹치면 알린다. 시험지를 카드에 옮겨 적으면 처음 보는 질문을 재지 못하기 때문이다.

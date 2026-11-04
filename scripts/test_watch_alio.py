@@ -597,4 +597,34 @@ if MD_DIR.exists():
     ok("경고:" not in buf.getvalue() and "바뀐 내규 0건" in buf.getvalue(), "성공하면 refresh 출력만 보인다")
 
 
+# 설치 프로그램
+import subprocess  # noqa: E402
+import xml.etree.ElementTree as ET  # noqa: E402
+import install_watch as IW  # noqa: E402
+
+xml = IW.task_xml("C:\\Python\\pythonw.exe", "C:\\내규\\watch_alio.py", "C:\\내규 확인\\config.json")
+ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+root = ET.fromstring(xml)
+ok(root.find(".//t:CalendarTrigger/t:ScheduleByWeek/t:DaysOfWeek/t:Monday", ns) is not None and "T09:00:00" in root.find(".//t:CalendarTrigger/t:StartBoundary", ns).text, "매주 월요일 9시")
+ok(root.find(".//t:LogonTrigger", ns) is not None, "로그인할 때도 돈다")
+ok(root.find(".//t:LogonType", ns).text == "InteractiveToken", "로그인해 있을 때만(알림과 화면을 띄우므로)")
+ok(root.find(".//t:StartWhenAvailable", ns).text == "true" and root.find(".//t:DisallowStartIfOnBatteries", ns).text == "false" and root.find(".//t:StopIfGoingOnBatteries", ns).text == "false", "놓치면 바로 돌고 배터리여도 돈다")
+ok(root.find(".//t:RestartOnFailure/t:Interval", ns).text == "PT1H" and root.find(".//t:RestartOnFailure/t:Count", ns).text == "3", "실패 시 1시간 간격 3번")
+ok(root.find(".//t:MultipleInstancesPolicy", ns).text == "IgnoreNew", "겹쳐 돌지 않는다")
+args = root.find(".//t:Exec/t:Arguments", ns).text
+ok(root.find(".//t:Exec/t:Command", ns).text == "C:\\Python\\pythonw.exe" and "-X utf8" in args and '"C:\\내규\\watch_alio.py"' in args and '"C:\\내규 확인\\config.json"' in args, "utf8로 돌고 경로를 따옴표로 묶는다")
+ok("chcp 65001" in IW.confirm_bat("p", "s", "c") and "-X utf8" in IW.confirm_bat("p", "s", "c"), "확인함 실행 파일: 한글 경로와 utf8")
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    names = IW.pack(td / "부담당.zip")
+    ok(set(names) == {f"{m}.py" for m in ("alio_types", "alio_client", "alio_pick", "alio_release", "alio_report", "watch_alio", "install_watch")}, "부 담당 묶음에 필요한 파일만 넣는다")
+    with zipfile.ZipFile(td / "부담당.zip") as z:
+        z.extractall(td / "x")
+    r = subprocess.run([sys.executable, "-X", "utf8", str(td / "x" / "watch_alio.py"), "--help"], capture_output=True, text=True, cwd=td / "x")
+    ok(r.returncode == 0, f"저장소 없이도 프로그램이 뜬다 {r.stderr[-200:]}")
+    r = subprocess.run([sys.executable, "-X", "utf8", str(td / "x" / "install_watch.py"), "--mode", "alert", "--url", "https://x/release.json", "--docs", str(td / "out"), "--dry-run"], capture_output=True, text=True, cwd=td / "x")
+    cfg_w = json.loads((td / "out" / "config.json").read_text(encoding="utf-8"))
+    ok(r.returncode == 0 and cfg_w["mode"] == "alert" and cfg_w["release_url"] == "https://x/release.json" and (td / "out" / "내규챗봇 ALIO 확인.xml").read_bytes()[:2] in (b"\xff\xfe", b"\xfe\xff"), "미리 보기: 설정과 UTF-16 작업 파일을 쓰고 등록은 하지 않는다")
+
+
 sys.exit(1 if FAIL else 0)
