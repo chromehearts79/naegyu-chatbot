@@ -167,4 +167,56 @@ ok(raises(lambda: fetch_list(list_with(result=[None]))), "행이 dict 가 아니
 ok(raises(lambda: fetch_list(list_with(result=["x"]))), "행이 문자열이어도 AlioError")
 ok(raises(lambda: fetch_list(list_with(result=[{"title": "a"}]))), "idx 없는 행은 실패")
 
+import alio_release as AR  # noqa: E402
+
+
+def xlsx_bytes(value, comment=""):
+    buf = io.BytesIO()
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("xl/sharedStrings.xml", f'<sst {ns}><si><t>{value}</t></si></sst>')
+        z.writestr("xl/worksheets/sheet1.xml", f'<worksheet {ns}><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>')
+        z.writestr("docProps/core.xml", f"<c>{comment}</c>")
+    return buf.getvalue()
+
+
+ok(AR.file_digest(b"abc") == "a9993e364706816a", "파일 지문은 SHA-1 앞 16자리(source_files.json과 같음)")
+ok(AR.xlsx_digest(xlsx_bytes("전결", "a")) == AR.xlsx_digest(xlsx_bytes("전결", "b")), "엑셀: 칸 값이 같으면 파일이 달라도 지문이 같다")
+ok(AR.xlsx_digest(xlsx_bytes("전결")) != AR.xlsx_digest(xlsx_bytes("대결")), "엑셀: 칸 값이 바뀌면 지문이 다르다")
+ok(AR.same_as(["a"], ["a", "b"]) and not AR.same_as(["a", "c"], ["a", "b"]) and not AR.same_as([], ["a"]), "지문 비교")
+ok(AR.norm_title("부정청구등 신고자보호 운영지침") == AR.norm_title("부정청구등 신고자 보호 운영지침") and AR.norm_title("전임·전문직원관리세칙") == AR.norm_title("전임전문직원관리세칙"), "이름 맞추기: 공백·가운뎃점 무시")
+ok(AR.values_of({"mod": "m", "st_date": "s"}, [{"file_no": "9", "name": ""}, {"file_no": "10", "name": ""}])["file_no"] == "10", "최신 첨부 번호는 숫자로 비교")
+
+X = xlsx_bytes("전결")
+srcs = {"Ⅲ-3-1. 복무세칙.hwp": b"bok", "Ⅲ-7-1. 위임전결세칙.hwp": b"wi", "Ⅲ-7-1._위임전결세칙_(별표)위임전결기준(1).xlsx": X}
+ent = AR.source_entries(srcs)
+ok(ent["Ⅲ-7-1"]["ext"] == ".hwp" and set(ent["Ⅲ-7-1"]["digests"]) == {AR.file_digest(b"wi"), AR.xlsx_digest(X)}, "엑셀 별표는 같은 코드 내규에 묶인다")
+seen = {"taken": "2026-11-04", "rules": {"9387": {"name": "복무세칙", "title": "복무세칙", "mod": "2026.08.19", "st_date": "2026.08.12", "file_no": "100", "file_date": "2026.08.12"},
+                                          "777": {"name": "넣지 않은 지침", "title": "넣지 않은 지침", "mod": "2026.10.01", "st_date": "2026.09.30", "file_no": "5", "file_date": "2026.09.30", "confirmed": {"date": "2026-11-09", "reason": "챗봇 범위 밖"}}}}
+rel = AR.build_release([{"code": "Ⅲ-3-1", "name": "복무세칙"}], srcs, seen, 7, "2026-11-04")
+e = next(x for x in rel["rules"] if x["idx"] == "9387")
+ok(rel["schema"] == 1 and rel["release_no"] == 7 and e["name"] == "복무세칙" and e["code"] == "Ⅲ-3-1" and e["mod"] == "2026.08.19" and e["files"] == [AR.file_digest(b"bok")] and e["ext"] == ".hwp", "배포판 목록: 내규 항목")
+ok(next(x for x in rel["rules"] if x["idx"] == "777")["files"] == [], "넣지 않기로 한 내규도 기록을 싣는다")
+
+R1 = {"idx": "9387", "title": "복무세칙", "st_date": "2026.11.02", "mod": "2026.11.09"}
+A1 = {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 11월 2일 개정).hwp"}]}
+
+
+def seen1():
+    return {"taken": "x", "rules": {"9387": dict(seen["rules"]["9387"])}}
+
+
+s = seen1()
+w = AR.refresh_seen(s, [R1], A1, {"101": b"bok"}.__getitem__, ent, lambda *a: False, [{"code": "Ⅲ-3-1", "name": "복무세칙"}])
+ok(s["rules"]["9387"]["mod"] == "2026.11.09" and s["rules"]["9387"]["file_no"] == "101" and s["rules"]["9387"]["file_date"] == "2026.11.02" and not w, "새 원본과 지문이 같으면 기록을 올린다")
+s = seen1()
+w = AR.refresh_seen(s, [R1], A1, {"101": b"other"}.__getitem__, ent, lambda *a: False, [{"code": "Ⅲ-3-1", "name": "복무세칙"}])
+ok(s["rules"]["9387"]["mod"] == "2026.08.19" and any("이 내규는 ALIO 파일과 달라 다음 확인 때 다시 잡힘" in x for x in w), "지문이 다르면 옛 기록을 두고 알린다")
+s = seen1()
+w = AR.refresh_seen(s, [R1], A1, {"101": b"other"}.__getitem__, ent, lambda *a: True, [{"code": "Ⅲ-3-1", "name": "복무세칙"}])
+ok(s["rules"]["9387"]["mod"] == "2026.11.09" and not w, "지문이 달라도 전체 글자가 같으면(재게시) 기록을 올린다")
+s = seen1()
+AR.confirm(s, R1, {"mod": "2026.11.09", "st_date": "2026.11.02", "file_no": "101"}, "2026.11.02", "내부 파일로 반영", "2026-11-16")
+ok(s["rules"]["9387"]["file_no"] == "101" and s["rules"]["9387"]["confirmed"] == {"date": "2026-11-16", "reason": "내부 파일로 반영"}, "확인함: 지금 값과 사유를 남긴다")
+
 sys.exit(1 if FAIL else 0)

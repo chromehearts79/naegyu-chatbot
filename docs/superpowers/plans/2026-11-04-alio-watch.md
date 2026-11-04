@@ -371,7 +371,7 @@ Expected: `ModuleNotFoundError: No module named 'alio_release'`
 
 `CODE = r"^([ⅠⅡⅢⅣ][\d\-]*)\.\s*(.+)$"` 로 파일 이름의 코드를 읽는다(파일 이름은 NFC로 맞춘 뒤). 엑셀 칸은 표준 `zipfile`·`xml.etree` 로 읽는다(공유 문자열 포함, 값의 공백은 `re.sub(r"\s+", " ", v).strip()`). 시험 대상이 되는 함수는 파일을 읽지 않는 순수 함수로 둔다. `update_rules` 는 CLI 함수 안에서만 import 한다(부 담당 PC에는 없다).
 
-`seed` 명령: ALIO 목록과 첨부 전체를 받아 내규마다 `pick_bundle` 을 돌리고, `data/rules.json` 이름과 `norm_title` 로 맞춘다. 다음 중 하나라도 어긋나면 파일을 쓰지 않고 까닭을 출력하고 `exit 1`: 대응 안 되는 내규가 있음, `pick_bundle` 문제가 있음, `st_date >= "2025.10"` 인 내규 중 지문이 다른 것이 있음, 지문이 다른 수가 `EXPECT_DIFF = 24` 가 아님. 통과하면 `knowledge/alio_seen.json`, `dist/release.json`, `reports/alio_seed_report.md`(지문이 다른 24건 목록, 내규관리부서 확인용)를 쓴다. 이미 `alio_seen.json` 이 있으면 `--force` 없이는 거부한다. 판 번호는 `knowledge/site.json` 의 `release.no`.
+`seed` 명령: ALIO 목록과 첨부 전체를 받아 내규마다 `pick_bundle` 을 돌리고, `data/rules.json` 이름과 `norm_title` 로 맞춘다. 다음 중 하나라도 어긋나면 파일을 쓰지 않고 까닭을 출력하고 `exit 1`: 대응 안 되는 내규가 있음, `pick_bundle` 문제가 있음(단 `KNOWN_TIES` 두 내규의 '한글 문서가 둘 이상' 하나뿐인 경우는 ALIO 값만 기록하고 지문 비교에서 뺀다), `st_date >= "2025.10"` 인 내규 중 지문이 다른 것이 있음, 지문이 다른 수가 `EXPECT_DIFF = 23` 가 아님. 통과하면 `knowledge/alio_seen.json`, `dist/release.json`, `reports/alio_seed_report.md`(지문이 다른 23건 목록과 '같은 달 첨부가 둘이라 지문을 비교하지 못함' 2건, 내규관리부서 확인용)를 쓴다. 이미 `alio_seen.json` 이 있으면 `--force` 없이는 거부한다. 판 번호는 `knowledge/site.json` 의 `release.no`.
 
 `refresh` 명령: 받기에 실패하면 경고를 출력하고 옛 기록으로 `dist/release.json` 만 쓰고 `exit 0`. `same_text` 는 `alio_compare.compare_rule(...).whole_same` 를 쓴다(Task 5). 함수 안에서 import 한다.
 
@@ -383,7 +383,7 @@ Expected: `✗` 없음, `exit=0`
 - [ ] **Step 5: 처음 기록을 실제로 만든다**
 
 Run: `python3 -X utf8 scripts/alio_release.py seed; echo exit=$?`
-Expected: `규정 71건`, `2025.10 이후 지문 같음 26건`, `지문 다름 24건`, `exit=0`. 위임전결세칙은 '지문 같음' 쪽이어야 한다. 수치가 다르면(그 사이 ALIO에 새 개정이 올라왔을 수 있음) 고치지 말고 멈춰서 사용자에게 알린다.
+Expected: `규정 71건`, `2025.10 이후 지문 같음 26건`, `지문 다름 23건`, `담당자 확인 2건`, `exit=0`. 위임전결세칙은 '지문 같음' 쪽이어야 한다. 수치가 다르면(그 사이 ALIO에 새 개정이 올라왔을 수 있음) 고치지 말고 멈춰서 사용자에게 알린다.
 
 - [ ] **Step 6: 커밋한다**
 
