@@ -294,7 +294,23 @@ def tree_sig():
 
 if MD_DIR.exists():
     import alio_compare as C  # noqa: E402
-    ok(C.KORDOC == "kordoc@4.24.42" and C.kordoc_cmd()[1:] == ["-y", "kordoc@4.24.42"], "kordoc 판을 고정한다")
+    real_which = C.shutil.which
+    C.shutil.which = lambda name, *a, **k: "/x/bin/npx" if name == "npx" else None
+    try:
+        ok(C.KORDOC == "kordoc@4.24.42" and C.kordoc_cmd() == ["/x/bin/npx", "-y", "kordoc@4.24.42"], "kordoc 판을 고정한다(저장소에 없으면 npx)")
+    finally:
+        C.shutil.which = real_which
+    seen_path = []
+
+    def which_local(name, *a, **k):
+        seen_path.append((name, k.get("path")))
+        return "/repo/node_modules/.bin/kordoc" if name == "kordoc" else "/x/bin/npx"
+
+    C.shutil.which = which_local
+    try:
+        ok(C.kordoc_cmd() == ["/repo/node_modules/.bin/kordoc"] and seen_path[0][1] == str(ROOT / "node_modules" / ".bin"), "저장소에 kordoc 이 있으면 npx 대신 그것을 쓴다")
+    finally:
+        C.shutil.which = real_which
     p = next(x for x in MD_DIR.glob("*.md") if unicodedata.normalize("NFC", x.name) == "Ⅲ-3-1. 복무세칙.md")
     md = p.read_text(encoding="utf-8")
     fname = "복무세칙(2026년도 11월 2일 개정).hwp"
@@ -311,7 +327,7 @@ if MD_DIR.exists():
     ok(not r.changed_units and not r.whole_same and r.outside_diff, "별지만 바뀌면 조문 변화 0이어도 전체 글자가 다르다")
     new_text = "제1조(목적) 이 지침은 시험이다.\n\n제2조(적용) 전 직원에 적용한다.\n\n부 칙\n\n이 지침은 2026년 11월 2일부터 시행한다.\n"
     r = C.compare_md("Ⅳ-99", "새 시험 지침", {"새 시험 지침(2026년도 11월 2일 제정).hwp": new_text})
-    ok("제1조" in r.added_units and "제2조" in r.added_units and not r.error, "새 내규는 새 조문으로 나온다")
+    ok("제1조" in r.added_units and "제2조" in r.added_units and not r.error and not r.outside_diff, "새 내규는 새 조문으로 나온다(조문 밖 차이는 비운다)")
     r = C.compare_md("", "새 시험 지침", {"새 시험 지침(2026년도 11월 2일 제정).hwp": new_text})
     ok("제1조" in r.added_units and not r.error, "분류 코드가 없는 새 내규도 임시 코드로 비교한다")
     p2 = next(x for x in MD_DIR.glob("*.md") if "위임전결기준" in unicodedata.normalize("NFC", x.name))
@@ -326,6 +342,28 @@ if MD_DIR.exists():
     finally:
         C.shutil.which = real_which
     ok(isinstance(r, C.CompareResult) and r.error and "npx" in r.error, "npx 가 없으면 예외 없이 error")
+    # 외부 프로그램은 시간 제한을 두고, 윈도우에서 콘솔 창이 뜨지 않게 한다
+    ok(C._popen_flags("nt") == {"creationflags": 0x08000000} and C._popen_flags("posix") == {}, "윈도우에서만 콘솔 창을 숨기는 옵션을 준다")
+    real_run, real_flags, calls_run = C.subprocess.run, C._popen_flags, []
+
+    def spy_run(cmd, **kw):
+        calls_run.append((cmd, kw))
+        if "build_db.py" in str(cmd[-1]):
+            raise C.subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        return real_run(cmd, **kw)
+
+    C.subprocess.run, C._popen_flags = spy_run, lambda *a: {"creationflags": 123}
+    try:
+        r = C.compare_md("Ⅲ-3-1", "복무세칙", {fname: md})
+        bd = next(kw for c, kw in calls_run if "build_db.py" in str(c[-1]))
+        ok(bd.get("timeout") == 600 and bd.get("creationflags") == 123 and r.error, f"조문 나누기는 600초 제한과 창 숨김 옵션을 받고 멈추면 error({r.error})")
+        calls_run.clear()
+        C.shutil.which = lambda name, *a, **k: "/x/npx"
+        r = C.compare_rule("복무세칙", "Ⅲ-3-1", [(fname, b"x")])
+        cv = next(kw for c, kw in calls_run)
+        ok(cv.get("creationflags") == 123, "변환 실행도 창 숨김 옵션을 받는다")
+    finally:
+        C.subprocess.run, C._popen_flags, C.shutil.which = real_run, real_flags, real_which
     ok(tree_sig() == before, "실제 data·knowledge는 바뀌지 않는다")
 
 import datetime  # noqa: E402

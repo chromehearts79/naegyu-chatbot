@@ -6,6 +6,7 @@
 """
 import difflib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -26,8 +27,19 @@ MD_DIR = cc.ROOT / "data" / "md"
 
 
 def kordoc_cmd():
-    """윈도우에서는 which 가 npx.cmd 를 찾는다. npx 가 없으면 None 이 들어간다."""
+    """저장소에 kordoc 이 깔려 있으면 그것을(바깥 접속 없음), 없으면 npx 로 받아 쓴다.
+    윈도우에서는 which 가 .cmd 를 찾는다. npx 가 없으면 None 이 들어간다."""
+    local = shutil.which("kordoc", path=str(cc.ROOT / "node_modules" / ".bin"))
+    if local:
+        return [local]
     return [shutil.which("npx"), "-y", KORDOC]
+
+
+def _popen_flags(name=None):
+    """윈도우에서 pythonw 아래 외부 프로그램을 돌릴 때 콘솔 창이 뜨지 않게 한다."""
+    if (name or os.name) == "nt":
+        return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)}
+    return {}
 
 
 def nfc(s):
@@ -84,7 +96,7 @@ def compare_md(code, name, new_md):
                     found = False
                 new_all.append(text)
                 path.write_text(text, encoding="utf-8")
-            run = subprocess.run([sys.executable, "-X", "utf8", str(tmp / "scripts" / "build_db.py")], capture_output=True, text=True, encoding="utf-8")
+            run = subprocess.run([sys.executable, "-X", "utf8", str(tmp / "scripts" / "build_db.py")], capture_output=True, text=True, encoding="utf-8", timeout=600, **_popen_flags())
             if run.returncode:
                 res.error = "조문 나누기 실패: " + (run.stderr or run.stdout)[-300:]
                 return res
@@ -106,7 +118,7 @@ def compare_md(code, name, new_md):
         new_units = cc.units_of(new_rules[name])
         res.before_after = [(u, texts.get(u, ""), new_units.get(u, "")) for u in res.changed_units[:20]]
         res.whole_same = bool(found and old_all) and squash("\n".join(old_all)) == squash("\n".join(new_all))
-        if not res.whole_same:
+        if not res.whole_same and old_all:  # 새 내규는 비교할 이전 글이 없다
             diff = difflib.unified_diff("\n".join(old_all).splitlines(), "\n".join(new_all).splitlines(), "이전", "이후", lineterm="", n=0)
             res.outside_diff = list(diff)[:40]
     except Exception as e:  # 비교 실패가 실행 전체를 멈추지 않게 한다
@@ -128,7 +140,7 @@ def convert(files, out):
         ext = Path(fname).suffix.lower()
         path = src / f"f{i}{ext}"
         path.write_bytes(data)
-        run = subprocess.run(cmd + ["-d", str(dst), str(path)], capture_output=True, text=True, encoding="utf-8", timeout=300)
+        run = subprocess.run(cmd + ["-d", str(dst), str(path)], capture_output=True, text=True, encoding="utf-8", timeout=300, **_popen_flags())
         got = dst / f"f{i}.md"
         if run.returncode or not got.exists():
             raise RuntimeError(f"변환 실패({fname}): " + (run.stderr or run.stdout)[-200:])
