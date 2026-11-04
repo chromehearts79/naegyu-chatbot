@@ -95,14 +95,19 @@ def install(mode, repo, url, path, docs_dir, dry_run=False) -> dict:
     if sys.version_info < (3, 11):
         raise SystemExit("파이썬 3.11 이상이 필요합니다.")
     docs = Path(docs_dir) if docs_dir else Path.home() / "Documents" / "내규챗봇 ALIO 확인"
-    docs.mkdir(parents=True, exist_ok=True)
     repo = str(repo or "")
     path = str(path or "")
-    if mode == "full":
+    url = url or ""
+    if mode == "full":  # 설치해 놓고 매번 실패하지 않도록 아무것도 쓰기 전에 막는다
         if not repo:
             raise SystemExit("정 담당 PC 설치에는 --repo 가 필요합니다.")
         path = path or str(Path(repo) / "dist" / "release.json")
-    cfg = {"mode": mode, "repo": repo, "release_url": url or "", "release_path": path, "docs_dir": str(docs)}
+        if not Path(path).is_file():
+            raise SystemExit(f"배포판 목록({path})이 없습니다. 먼저 python -X utf8 scripts/alio_release.py refresh 를 돌리세요.")
+    elif not url and not path:
+        raise SystemExit("부 담당 PC 설치에는 --url(배포판 목록 주소) 또는 --path(목록 파일)가 필요합니다.")
+    docs.mkdir(parents=True, exist_ok=True)
+    cfg = {"mode": mode, "repo": repo, "release_url": url, "release_path": path, "docs_dir": str(docs)}
     cfg_file = docs / "config.json"
     cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
     exe = python_exe()

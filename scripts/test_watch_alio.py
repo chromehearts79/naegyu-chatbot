@@ -758,4 +758,27 @@ with tempfile.TemporaryDirectory() as td:
     ok(AR.save_seen(chg10, json.loads(raw10)["rules"], sp, "2026-11-04") is True and json.loads(sp.read_text(encoding="utf-8"))["taken"] == "2026-11-04", "기록이 바뀌면 taken 을 고쳐 쓴다")
 
 
+# 전체 검토 수정 6: 설치 때 막을 수 있는 오류는 설치 전에 막는다
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+
+    def refused(*a, **k):
+        try:
+            IW.install(*a, **k)
+        except SystemExit as e:
+            return str(e)
+        return None
+
+    msg = refused("alert", "", "", "", str(td / "o1"), True)
+    ok(msg and "--url" in msg and "--path" in msg and not (td / "o1" / "config.json").exists(), f"부 담당 설치에 --url 도 --path 도 없으면 거부하고 아무것도 쓰지 않는다({msg})")
+    (td / "repo" / "dist").mkdir(parents=True)
+    msg = refused("full", str(td / "repo"), "", "", str(td / "o2"), True)
+    ok(msg and "alio_release.py refresh" in msg and not (td / "o2" / "config.json").exists(), f"정 담당 설치에 release.json 이 없으면 refresh 를 안내하며 거부한다({msg})")
+    (td / "repo" / "dist" / "release.json").write_text("{}", encoding="utf-8")
+    ok(refused("full", str(td / "repo"), "", "", str(td / "o3"), True) is None and (td / "o3" / "config.json").exists(), "release.json 이 있으면 설치된다(미리 보기)")
+    ok(refused("alert", "", "", str(td / "x.json"), str(td / "o4"), True) is None, "--path 만 있어도 부 담당 설치는 된다")
+    r = subprocess.run([sys.executable, "-X", "utf8", str(Path(IW.__file__)), "--mode", "alert", "--docs", str(td / "o5"), "--dry-run"], capture_output=True, text=True)
+    ok(r.returncode != 0 and "Traceback" not in r.stderr and "--url" in r.stderr, "명령줄에서도 쉬운 말로 거부한다")
+
+
 sys.exit(1 if FAIL else 0)
