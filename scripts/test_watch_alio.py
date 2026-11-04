@@ -558,4 +558,31 @@ with tempfile.TemporaryDirectory() as td:
     ok(code4 == 1 and len(notes) == n0 + 1 and len(opened) == o0 + 1, "다음 날 실패하면 알림과 화면 열기를 다시 한다")
 
 
+if MD_DIR.exists():
+    import alio_confirm as CF  # noqa: E402
+    items = [{"name": "복무세칙", "idx": "9387", "title": "복무세칙", "verdict": T.V_SUSPECT, "values": {"mod": "2026.11.09", "st_date": "2026.11.02", "file_no": "101"}, "file_date": "2026.11.02"},
+             {"name": "a", "idx": "2", "verdict": T.V_PENDING}, {"name": "b", "idx": "3", "verdict": T.V_DONE}, {"name": "c", "idx": "4", "title": "c", "verdict": T.V_GONE, "values": None, "file_date": ""}]
+    ok([x["idx"] for x in CF.pending_of({"findings": items})] == ["9387", "4"], "확인함 대상: 해소할 수 있는 알림만")
+    with tempfile.TemporaryDirectory() as td:
+        sp = Path(td) / "seen.json"
+        sp.write_text(json.dumps({"taken": "x", "rules": {"9387": {"name": "복무세칙", "title": "복무세칙", "mod": "old", "st_date": "old", "file_no": "100", "file_date": "old"}, "4": {"name": "c", "title": "c", "mod": "m", "st_date": "s", "file_no": "1", "file_date": "f"}}}), encoding="utf-8")
+        rebuilt = []
+        ok(raises(lambda: CF.apply_confirm(items[0], "  ", "2026-11-16", sp, lambda: rebuilt.append(1)), ValueError) and not rebuilt, "사유는 꼭 적어야 한다")
+        CF.apply_confirm(items[0], "내부 파일로 반영", "2026-11-16", sp, lambda: rebuilt.append(1))
+        s = json.loads(sp.read_text(encoding="utf-8"))["rules"]
+        ok(s["9387"]["mod"] == "2026.11.09" and s["9387"]["confirmed"]["reason"] == "내부 파일로 반영" and rebuilt == [1], "확인함: 값과 사유를 기록하고 release.json을 다시 만든다")
+        CF.apply_confirm(items[3], "유효한 내규", "2026-11-16", sp, lambda: None)
+        s = json.loads(sp.read_text(encoding="utf-8"))["rules"]
+        ok(s["4"]["confirmed"]["gone"] is True and s["4"]["mod"] == "m", "목록에서 사라짐을 확인함으로 끝내면 값은 그대로 둔다")
+        new_item = {"name": "새 지침", "idx": "555", "title": "새 지침", "verdict": T.V_NEW, "values": {"mod": "2026.11.09", "st_date": "2026.11.02", "file_no": "9"}, "file_date": "2026.11.02"}
+        CF.apply_confirm(new_item, "챗봇 범위 밖", "2026-11-16", sp, lambda: None)
+        s = json.loads(sp.read_text(encoding="utf-8"))["rules"]
+        ok(s["555"]["name"] == "새 지침" and s["555"]["file_no"] == "9" and s["555"]["confirmed"]["reason"] == "챗봇 범위 밖", "넣지 않기로 한 새 내규도 확인함으로 끝낸다")
+    ok(one([dict(ROW_NEW)], ATT_NEW, rel_of(dict(ENTRY, mod=ROW_NEW["mod"], st_date=ROW_NEW["st_date"], file_no="101", confirmed={"date": "d", "reason": "r"}))).verdict == T.V_NONE, "확인함을 올린 뒤에는 변동 없음")
+    row_again = dict(ROW_NEW, mod="2026.12.01")
+    ok(one([row_again], {"9387": [{"file_no": "102", "name": "복무세칙(2026년도 11월 2일 개정).hwp"}]}, rel_of(dict(ENTRY, mod=ROW_NEW["mod"], st_date=ROW_NEW["st_date"], file_no="101", confirmed={"date": "d", "reason": "r"})), {"102": NEW}).verdict == T.V_SUSPECT, "확인함 뒤 ALIO 값이 다시 바뀌면 다시 잡는다")
+    src = (ROOT / "scripts" / "update_rules.py").read_text(encoding="utf-8")
+    ok('"scripts/alio_release.py", "refresh"' in src and src.index("원본 파일 기록 갱신") < src.index('"scripts/alio_release.py", "refresh"'), "finish 끝에서 ALIO 기록을 올리고 release.json을 만든다")
+
+
 sys.exit(1 if FAIL else 0)

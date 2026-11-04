@@ -200,6 +200,8 @@ def finish(accept):
     cur = {n: sha(p) for n, p in sources().items()}
     MANIFEST.write_text(json.dumps({"taken": datetime.date.today().isoformat(), "files": cur}, ensure_ascii=False, indent=1) + "\n")
     print(f"원본 파일 기록 갱신: {len(cur)}개 ({MANIFEST.relative_to(ROOT)})")
+    # ALIO 기록을 올리고 dist/release.json 을 만든다(실패해도 개정 반영은 멈추지 않는다)
+    print(run(sys.executable, "scripts/alio_release.py", "refresh", check=False).strip())
 
 
 def init():
