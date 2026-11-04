@@ -396,5 +396,14 @@ def boom(*a, **k):
 
 ok(RP.notify("t", "b", run=boom, system="Windows") is False and RP.notify("t", "b", run=boom, system="Darwin") is False, "알림 실패는 예외 없이 False")
 
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    F3 = T.Finding(name="겹침", code="", idx="3", verdict=T.V_SUSPECT, file_date="2026.11.02",
+                   files=[("가" * 70 + "A.hwp", b"first"), ("sub/" + "가" * 70 + "B.hwp", b"second"), ("dir/", b"zzz"), ("x\\", b"zzz"), ("ok.hwp", b"third")])
+    got = sorted(p.read_bytes() for p in Path(RP.save_bundle(td / "대기", F3)).iterdir())
+    ok(got == [b"first", b"second", b"third"], "앞 60자가 같은 긴 이름도 둘 다 남기고, 빈 이름은 건너뛴다")
+    page = RP.render_html([T.Finding(name="대기건", code="", idx="4", verdict=T.V_PENDING, notes=["새 판을 올리면 끝남"])], {"today": "2026-11-09", "last_success": None, "mode": "full"})
+    ok("새 판을 올리면 끝남" in page, "비교 결과가 없는 배포 대기도 안내 메모를 보인다")
+
 
 sys.exit(1 if FAIL else 0)

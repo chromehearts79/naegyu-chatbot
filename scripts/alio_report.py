@@ -28,13 +28,22 @@ def save_bundle(wait_dir: Path, finding: Finding) -> str:
     digits = re.sub(r"\D", "", finding.file_date)
     folder = Path(wait_dir) / safe_name(f"{finding.name}_{digits}" if digits else finding.name, 60)
     folder.mkdir(parents=True, exist_ok=True)
+    used = set()
     for fname, data in finding.files:
         base = re.split(r"[\\/]", fname)[-1]  # ZIP 안 경로는 파일 이름만 쓴다
         stem, dot, ext = base.rpartition(".")
         if not dot:
             stem, ext = base, ""
         ext = safe_name(ext, 8)
-        target = folder / (safe_name(stem, 60) + ("." + ext if ext else ""))
+        stem = safe_name(stem, 60)
+        if not stem:  # 폴더 이름만 있는 ZIP 항목 등
+            continue
+        suffix = "." + ext if ext else ""
+        target, n = folder / (stem + suffix), 1
+        while target in used:  # 같은 이름이 겹치면 (2), (3) 을 붙여 덮어쓰지 않는다
+            n += 1
+            target = folder / f"{stem} ({n}){suffix}"
+        used.add(target)
         target.write_bytes(data)
     return str(folder)
 
