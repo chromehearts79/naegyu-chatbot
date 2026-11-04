@@ -62,7 +62,7 @@ python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/ (양식은 
 
 ## 매주 ALIO 확인 (쉬운 안내: docs/유지보수_안내.md)
 
-ALIO의 우리 내규가 배포한 판과 달라졌는지 매주 확인하는 루틴이다. AI와 외부 전송 없이 ALIO와 `release_url` 에만 접속한다. 윈도우 이전 뒤에 시작한다(맥 자동 실행은 없다).
+ALIO의 우리 내규가 배포한 판과 달라졌는지 매주 확인하는 루틴이다. AI와 외부 전송 없이 ALIO와 `release_url` 에만 접속한다. 예외로 정 담당 PC의 원문 비교는 kordoc 변환기가 저장소(`node_modules`)에 없으면 npm 에서 받는다(받는 것뿐이고 보내는 것은 없다). `npm i --no-save kordoc@4.24.42` 로 미리 깔아 두면 받지 않는다. 윈도우 이전 뒤에 시작한다(맥 자동 실행은 없다).
 
 ```bash
 python3 -X utf8 scripts/watch_alio.py --config 설정.json [--force]   # 한 번 확인(작업 스케줄러가 부른다)
