@@ -129,7 +129,7 @@ def is_due(now, last_success):
 
 
 def acquire_lock(path, now=None):
-    """잠금 파일을 만든다. 이미 있으면 False. 2시간 넘은 잠금은 지우고 다시 잡는다."""
+    """잠금 파일을 만든다. 이미 있으면 False. 2시간 넘은 잠금은 지우고 다시 잡는다. 권한 오류 등은 OSError 로 나간다."""
     path = Path(path)
     now = time.time() if now is None else now
     for _ in range(2):
@@ -283,7 +283,15 @@ def run_watch(cfg, now, http=None, get_url=None, notify=None, open_page=None, co
         notify("내규챗봇 ALIO 확인", "결과를 둘 폴더를 만들지 못했습니다")
         return 1
     lock = out_dir / ".lock"
-    if not acquire_lock(lock):
+    try:
+        got_lock = acquire_lock(lock)
+    except OSError as e:  # 잠금 파일을 만들 권한이 없으면 확인하지 못한 것이다
+        _log(out_dir, now, f"잠금을 만들지 못함\n{traceback.format_exc()}")
+        if _read(out_dir / ".last_fail_notice") != today:
+            _write(out_dir / ".last_fail_notice", today)
+            _safe(notify, "내규챗봇 ALIO 확인", f"확인 실패: 잠금 파일을 만들지 못했습니다({type(e).__name__})")
+        return 1
+    if not got_lock:
         return 0
     try:
         last = _read(out_dir / ".last_success")
@@ -297,7 +305,7 @@ def run_watch(cfg, now, http=None, get_url=None, notify=None, open_page=None, co
             _log(out_dir, now, "확인 실패\n" + traceback.format_exc())
             reason = str(e) or type(e).__name__
             try:
-                RP.write_outputs(out_dir, RP.render_html([], {"today": today, "last_success": last, "mode": cfg.get("mode"), "failure": reason}), [], today)
+                RP.write_outputs(out_dir, RP.render_html([], {"today": today, "last_success": last, "mode": cfg.get("mode"), "failure": reason}), None, today)
             except OSError:
                 pass
             if _read(out_dir / ".last_fail_notice") != today:  # 알림과 화면 열기는 하루 한 번(재시도는 막지 않음)
@@ -336,8 +344,9 @@ def main(argv=None):
     now = datetime.datetime.now()
     try:
         cfg = load_config(args.config)
-    except Exception:
+    except Exception as e:
         _log(Path(args.config).resolve().parent, now, "설정을 읽지 못함\n" + traceback.format_exc())
+        _safe(RP.notify, "내규챗봇 ALIO 확인", f"설정 파일을 읽지 못했습니다: {type(e).__name__}")
         return 1
     return run_watch(cfg, now, force=args.force)
 

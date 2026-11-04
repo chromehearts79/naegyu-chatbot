@@ -626,5 +626,68 @@ with tempfile.TemporaryDirectory() as td:
     cfg_w = json.loads((td / "out" / "config.json").read_text(encoding="utf-8"))
     ok(r.returncode == 0 and cfg_w["mode"] == "alert" and cfg_w["release_url"] == "https://x/release.json" and (td / "out" / "내규챗봇 ALIO 확인.xml").read_bytes()[:2] in (b"\xff\xfe", b"\xfe\xff"), "미리 보기: 설정과 UTF-16 작업 파일을 쓰고 등록은 하지 않는다")
 
+# 전체 검토 수정 1: 설정 오류·잠금 권한 오류로 조용히 멈추지 않는다
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    toasts = []
+    real_notify = RP.notify
+    RP.notify = lambda t, b, *a, **k: toasts.append(b) or True
+    try:
+        (td / "config.json").write_text("{깨진 설정", encoding="utf-8")
+        try:
+            code_cfg = W.main(["--config", str(td / "config.json")])
+        except Exception as e:  # noqa: BLE001
+            code_cfg = f"예외 {type(e).__name__}"
+        ok(code_cfg == 1 and toasts and toasts[-1].startswith("설정 파일을 읽지 못했습니다"), f"깨진 설정이면 예외 없이 1을 돌려주고 알린다({code_cfg}, {toasts})")
+        ok("설정을 읽지 못함" in (td / "실행기록.log").read_text(encoding="utf-8"), "깨진 설정도 실행기록에 남긴다")
+        RP.notify = lambda *a, **k: 1 / 0  # 알림이 터져도 main 은 끝난다
+        try:
+            code_cfg = W.main(["--config", str(td / "config.json")])
+        except Exception as e:  # noqa: BLE001
+            code_cfg = f"예외 {type(e).__name__}"
+        ok(code_cfg == 1, "알림이 실패해도 1을 돌려준다")
+    finally:
+        RP.notify = real_notify
+    cfg5 = {"mode": "alert", "repo": "", "release_url": "", "release_path": str(td / "none.json"), "docs_dir": str(td / "out5")}
+    notes5, opened5 = [], []
+    real_open = W.os.open
+
+    def deny_lock(path, *a, **k):
+        if str(path).endswith(".lock"):
+            raise PermissionError("잠금 폴더에 쓸 수 없음")
+        return real_open(path, *a, **k)
+
+    W.os.open = deny_lock
+    try:
+        try:
+            code5 = W.run_watch(cfg5, D(2026, 11, 9, 9, 5), notify=lambda t, b: notes5.append(b) or True, open_page=opened5.append)
+        except Exception as e:  # noqa: BLE001
+            code5 = f"예외 {type(e).__name__}"
+        ok(code5 == 1 and notes5 and notes5[-1].startswith("확인 실패"), f"잠금 폴더에 쓸 수 없으면 1을 돌려주고 알린다({code5})")
+        ok("PermissionError" in (td / "out5" / "실행기록.log").read_text(encoding="utf-8"), "잠금 오류를 실행기록에 남긴다")
+        n5 = len(notes5)
+        W.run_watch(cfg5, D(2026, 11, 9, 10, 5), notify=lambda t, b: notes5.append(b) or True, open_page=opened5.append)
+        ok(len(notes5) == n5, "같은 날 다시 잠금 오류가 나도 알림은 한 번")
+    finally:
+        W.os.open = real_open
+    (td / "out6").mkdir()
+    (td / "out6" / ".lock").write_text("1", encoding="utf-8")
+    notes6 = []
+    ok(W.run_watch(dict(cfg5, docs_dir=str(td / "out6")), D(2026, 11, 9, 9, 5), notify=lambda t, b: notes6.append(b) or True) == 0 and not notes6, "다른 실행이 잠금을 쥐고 있으면 지금처럼 조용히 끝난다")
+
+# 전체 검토 수정 11: 실패한 실행은 최근 결과.json 을 덮어쓰지 않는다
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    rel_path = td / "release.json"
+    rel_path.write_text(json.dumps(rel_of(ENTRY)), encoding="utf-8")
+    cfg7 = {"mode": "alert", "repo": "", "release_url": "", "release_path": str(rel_path), "docs_dir": str(td / "out")}
+    W.run_watch(cfg7, D(2026, 11, 9, 9, 5), http=Net([ROW_NEW], ATT_NEW, {"101": NEW}), notify=lambda t, b: True, open_page=lambda p: None)
+    before_json = (td / "out" / "최근 결과.json").read_text(encoding="utf-8")
+    down7 = Net([], {}, {})
+    down7.down = True
+    ok(W.run_watch(cfg7, D(2026, 11, 16, 9, 5), http=down7, notify=lambda t, b: True, open_page=lambda p: None) == 1, "(11) 다음 주 접속 실패")
+    ok((td / "out" / "최근 결과.json").read_text(encoding="utf-8") == before_json and json.loads(before_json)["findings"], "실패한 실행은 최근 결과.json 을 그대로 둔다")
+    ok("확인 실패" in (td / "out" / "이번 주 결과.html").read_text(encoding="utf-8"), "실패 화면은 그대로 쓴다")
+
 
 sys.exit(1 if FAIL else 0)

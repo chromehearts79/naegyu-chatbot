@@ -173,12 +173,14 @@ def render_html(findings: list, meta: dict) -> str:
     return "".join(parts)
 
 
-def write_outputs(out_dir: Path, html_text: str, findings: list, today: str) -> None:
-    """이번 주 결과, 기록\\날짜.html 보관본, 최근 결과.json 을 쓴다."""
+def write_outputs(out_dir: Path, html_text: str, findings: list | None, today: str) -> None:
+    """이번 주 결과, 기록\\날짜.html 보관본, 최근 결과.json 을 쓴다. findings 가 None 이면(실패한 실행) 최근 결과.json 은 그대로 둔다."""
     out_dir = Path(out_dir)
     (out_dir / "기록").mkdir(parents=True, exist_ok=True)
     (out_dir / "이번 주 결과.html").write_text(html_text, encoding="utf-8")
     (out_dir / "기록" / f"{today}.html").write_text(html_text, encoding="utf-8")
+    if findings is None:
+        return
     rows = []
     for f in findings:
         d = dataclasses.asdict(f)
