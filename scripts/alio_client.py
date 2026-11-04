@@ -65,16 +65,18 @@ def fetch_list(http=default_http):
         try:
             data = json.loads(raw.decode("utf-8"))["data"]
             result = data["result"]
-            meta = data.get("page") or {}
-            total_page = int(meta.get("totalPage") or 1)
-            total = int(meta["totalCount"]) if meta.get("totalCount") is not None else None
+            meta = data["page"]
+            total_page = int(meta["totalPage"])
+            total = int(meta["totalCount"])
         except (ValueError, KeyError, TypeError, AttributeError) as e:
             raise AlioError(f"목록 응답을 읽지 못했다: {e}") from e
         if not isinstance(result, list):
             raise AlioError("목록 응답의 data.result 가 목록이 아니다")
         for r in result:
+            if not isinstance(r, dict) or not str(r.get("idx") or "").strip():
+                raise AlioError("목록의 행을 읽지 못했다(행이 아니거나 idx 가 없다)")
             rows.append({
-                "idx": str(r.get("idx", "")),
+                "idx": str(r["idx"]).strip(),
                 "title": (r.get("title") or "").strip(),
                 "st_date": r.get("stDate") or "",
                 "mod": r.get("idate") or "",
@@ -85,7 +87,7 @@ def fetch_list(http=default_http):
         if total_page > MAX_PAGES:
             raise AlioError(f"목록 쪽 수가 너무 많다({total_page})")
         page += 1
-    if total is not None and len(rows) < total:
+    if len(rows) < total:
         raise AlioError(f"목록을 다 받지 못했다({len(rows)}/{total})")
     return rows
 

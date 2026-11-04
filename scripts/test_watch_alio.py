@@ -155,4 +155,16 @@ alio_client.urlopen = flaky
 ok(raises(lambda: alio_client.default_http("/x", None)) and len(calls) == 3, "접속 실패는 3번 시도 뒤 실패")
 alio_client.urlopen = keep
 
+def list_with(**kw):
+    d = {"result": [ROW], "page": {"totalPage": 1, "totalCount": 1}}
+    d.update(kw)
+    return lambda p, b: (json.dumps({"data": d}).encode(), "application/json")
+
+
+ok(raises(lambda: fetch_list(lambda p, b: (json.dumps({"data": {"result": [ROW]}}).encode(), ""))), "data.page 가 없으면 실패")
+ok(raises(lambda: fetch_list(list_with(page={"totalPage": 1}))), "totalCount 가 없으면 실패")
+ok(raises(lambda: fetch_list(list_with(result=[None]))), "행이 dict 가 아니면 AlioError")
+ok(raises(lambda: fetch_list(list_with(result=["x"]))), "행이 문자열이어도 AlioError")
+ok(raises(lambda: fetch_list(list_with(result=[{"title": "a"}]))), "idx 없는 행은 실패")
+
 sys.exit(1 if FAIL else 0)
