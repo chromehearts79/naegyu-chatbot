@@ -3,8 +3,10 @@
 예외를 내지 않는다. 고르지 못한 사정은 Bundle.problems 에 담아 사람 확인으로 넘긴다.
 """
 import io
+import lzma
 import re
 import zipfile
+import zlib
 from dataclasses import dataclass, field
 
 MAX_ZIP_MEMBERS = 2000
@@ -81,7 +83,8 @@ class _Collector:
                     with z.open(info) as f:
                         body = f.read(MAX_TOTAL_BYTES - self.total + 1)
                     self.feed(info.filename, body, depth + 1)
-        except (zipfile.BadZipFile, RuntimeError, NotImplementedError, ValueError, EOFError, OSError) as e:
+        except (zipfile.BadZipFile, RuntimeError, NotImplementedError, ValueError, EOFError, OSError,
+                zlib.error, lzma.LZMAError) as e:
             self.problems.append(f"ZIP을 읽지 못했습니다({base_name(name)}): {type(e).__name__} {e}")
 
 

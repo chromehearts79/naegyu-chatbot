@@ -84,4 +84,19 @@ alio_pick.MAX_TOTAL_BYTES, keep = 10, alio_pick.MAX_TOTAL_BYTES
 ok(pick_bundle([("규정(2026년도 2월 4일 개정).zip", mkzip([("규정(2026년도 2월 4일 개정).hwp", b"x" * 100)]))], "2026.02.04").problems, "크기 상한을 넘으면 문제로 넘긴다")
 alio_pick.MAX_TOTAL_BYTES = keep
 
+# 압축 자료가 깨진 ZIP: 목차는 멀쩡하고 안쪽 압축만 망가진 경우도 예외 없이 문제로 넘긴다
+bad_name = "규정(2026년도 2월 4일 개정).hwp"
+buf = io.BytesIO()
+with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+    zf.writestr(bad_name, bytes(range(256)) * 40)
+raw = bytearray(buf.getvalue())
+start = 30 + len(bad_name.encode("utf-8"))
+for i in range(start, start + 40):
+    raw[i] ^= 0xFF
+try:
+    broken = pick_bundle([("규정(2026년도 2월 4일 개정).zip", bytes(raw))], "2026.02.04")
+    ok(bool(broken.problems), "압축 자료가 깨진 ZIP은 예외 없이 문제로 넘긴다")
+except Exception as e:  # noqa: BLE001
+    ok(False, f"압축 자료가 깨진 ZIP에서 예외가 났다: {type(e).__name__} {e}")
+
 sys.exit(1 if FAIL else 0)
