@@ -728,4 +728,34 @@ with tempfile.TemporaryDirectory() as td:
     ok("확인 실패" in (td / "out" / "이번 주 결과.html").read_text(encoding="utf-8"), "실패 화면은 그대로 쓴다")
 
 
+# 전체 검토 수정 5: 규정명이 바뀌어도 기록 사슬이 이어진다
+NEWNAME, OLDNAME = "부정청구등 신고자 보호 운영지침", "부정청구등 신고자보호 운영지침"
+srcs5 = {f"Ⅲ-9-1. {NEWNAME}.hwp": b"bu"}
+ent5 = AR.source_entries(srcs5)
+rules5 = [{"code": "Ⅲ-9-1", "name": NEWNAME}]
+row5 = {"idx": "55", "title": NEWNAME, "st_date": "2026.11.02", "mod": "2026.11.09"}
+att5 = {"55": [{"file_no": "201", "name": f"{NEWNAME}(2026년도 11월 2일 개정).hwp"}]}
+seen5 = {"taken": "x", "rules": {"55": {"name": OLDNAME, "title": OLDNAME, "mod": "2026.01.01", "st_date": "2026.01.01", "file_no": "150", "file_date": "2026.01.01"}}}
+w5 = AR.refresh_seen(seen5, [row5], att5, {"201": b"bu"}.__getitem__, ent5, lambda *a: False, rules5)
+ok(seen5["rules"]["55"]["mod"] == "2026.11.09" and seen5["rules"]["55"]["name"] == NEWNAME and not w5, f"규정명이 바뀌어도 지문이 같으면 기록을 올리고 이름을 새로 고친다({w5})")
+rel5 = AR.build_release(rules5, srcs5, seen5, 8, "2026-11-04")
+items5 = [x for x in rel5["rules"] if x["idx"] == "55"]
+ok(len(items5) == 1 and items5[0]["code"] == "Ⅲ-9-1" and items5[0]["files"], "배포판 목록에 그 idx 항목이 하나뿐이고 code·files 가 채워진다")
+seen5b = {"taken": "x", "rules": {"55": {"name": "부정청구등신고자보호운영지침", "title": OLDNAME, "mod": "m", "st_date": "s", "file_no": "1", "file_date": "f"}}}
+items5b = [x for x in AR.build_release(rules5, srcs5, seen5b, 8, "d")["rules"] if x["idx"] == "55"]
+ok(len(items5b) == 1 and items5b[0]["code"] == "Ⅲ-9-1" and items5b[0]["name"] == NEWNAME, "배포판 목록은 띄어쓰기가 달라도 같은 내규로 맞춘다")
+
+# 전체 검토 수정 10: 바뀐 게 없으면 alio_seen.json 을 다시 쓰지 않는다
+with tempfile.TemporaryDirectory() as td:
+    sp = Path(td) / "seen.json"
+    base10 = {"taken": "2026-10-01", "rules": {"9387": dict(seen["rules"]["9387"])}}
+    AR._save_json(sp, base10)
+    raw10 = sp.read_bytes()
+    same10 = json.loads(raw10)
+    ok(AR.save_seen(same10, json.loads(raw10)["rules"], sp, "2026-11-04") is False and sp.read_bytes() == raw10, "바뀐 기록이 없으면 파일을 다시 쓰지 않는다(taken 도 그대로)")
+    chg10 = json.loads(raw10)
+    chg10["rules"]["9387"]["mod"] = "2026.12.01"
+    ok(AR.save_seen(chg10, json.loads(raw10)["rules"], sp, "2026-11-04") is True and json.loads(sp.read_text(encoding="utf-8"))["taken"] == "2026-11-04", "기록이 바뀌면 taken 을 고쳐 쓴다")
+
+
 sys.exit(1 if FAIL else 0)

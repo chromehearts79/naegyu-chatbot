@@ -116,10 +116,12 @@ def source_entries(sources):
 
 def build_release(rules, sources, seen, release_no, built):
     entries = source_entries(sources)
-    by_name = {v["name"]: (k, v) for k, v in seen.get("rules", {}).items()}
+    by_name = {}
+    for k, v in seen.get("rules", {}).items():  # 규정명이 바뀌어도 띄어쓰기·가운뎃점만 달라도 같은 내규로 본다
+        by_name.setdefault(norm_title(v["name"]), (k, v))
     out, used = [], set()
     for r in rules:
-        idx, s = by_name.get(r["name"], ("", {}))
+        idx, s = by_name.get(norm_title(r["name"]), ("", {}))
         used.add(idx)
         e = entries.get(r["code"], {"digests": [], "ext": ""})
         item = {"name": r["name"], "code": r["code"], "idx": idx, "ext": e["ext"],
@@ -152,7 +154,7 @@ def confirm(seen, row, values, file_date, reason, today, gone=False):
 def refresh_seen(seen, rows, attachments, fetch, entries, same_text, rules):
     """값이 달라진 내규는 현행 묶음이 새 원본과 같을 때만 기록을 올린다. 경고 목록을 돌려준다."""
     warns = []
-    code_of = {r["name"]: r["code"] for r in rules}
+    by_title = {norm_title(r["name"]): r for r in rules}
     for row in rows:
         e = seen["rules"].get(row["idx"])
         if e is None:
@@ -167,12 +169,13 @@ def refresh_seen(seen, rows, attachments, fetch, entries, same_text, rules):
         except AlioError as ex:
             warns.append(f"{name}: ALIO 파일을 받지 못해 옛 기록을 둠({ex})")
             continue
-        code = code_of.get(name)
+        rule = by_title.get(norm_title(row["title"])) or by_title.get(norm_title(name))  # 규정명이 바뀌었으면 ALIO 제목으로 먼저 찾는다
+        code = rule["code"] if rule else None
         if bundle.problems or bundle.date is None or not code or code not in entries:
             warns.append(f"{name}: 이 내규는 ALIO 파일과 달라 다음 확인 때 다시 잡힘")
             continue
         if same_as(bundle_digests(bundle.files), entries[code]["digests"]) or same_text(name, code, bundle.files):
-            e.update({"title": row["title"], "mod": v["mod"], "st_date": v["st_date"], "file_no": v["file_no"],
+            e.update({"name": rule["name"], "title": row["title"], "mod": v["mod"], "st_date": v["st_date"], "file_no": v["file_no"],
                       "file_date": format_date(bundle.date)})
             e.pop("confirmed", None)
         else:
@@ -182,6 +185,15 @@ def refresh_seen(seen, rows, attachments, fetch, entries, same_text, rules):
 
 def load_seen(path=SEEN):
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def save_seen(seen, before_rules, path=SEEN, today=None):
+    """기록이 달라졌을 때만 taken 을 고쳐 쓴다(안 바뀌었는데 쓰면 git 에 변경이 뜬다). 썼으면 True."""
+    if seen["rules"] == before_rules:
+        return False
+    seen["taken"] = today or date.today().isoformat()
+    _save_json(path, seen)
+    return True
 
 
 def _save_json(path, data):
@@ -318,8 +330,7 @@ def refresh():
     before = json.dumps(seen["rules"], sort_keys=True)
     before_rules = json.loads(before)
     warns = refresh_seen(seen, rows, atts, fetch_file, entries, same_text, _rules())
-    seen["taken"] = date.today().isoformat()
-    _save_json(SEEN, seen)
+    save_seen(seen, before_rules)
     write_release()
     for w in warns:
         print("경고:", w)
