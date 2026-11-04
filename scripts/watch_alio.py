@@ -292,6 +292,7 @@ def run_watch(cfg, now, http=None, get_url=None, notify=None, open_page=None, co
         page = out_dir / "이번 주 결과.html"
         try:
             findings, meta = _collect(cfg, now, http, get_url, compare, today, last, out_dir)
+            RP.write_outputs(out_dir, RP.render_html(findings, meta), findings, today)  # 못 쓰면 지난주 화면이 남으므로 실패로 본다
         except Exception as e:  # 접속 실패·형식 변화·그 밖의 모든 오류는 '확인 실패'
             _log(out_dir, now, "확인 실패\n" + traceback.format_exc())
             reason = str(e) or type(e).__name__
@@ -299,12 +300,11 @@ def run_watch(cfg, now, http=None, get_url=None, notify=None, open_page=None, co
                 RP.write_outputs(out_dir, RP.render_html([], {"today": today, "last_success": last, "mode": cfg.get("mode"), "failure": reason}), [], today)
             except OSError:
                 pass
-            if _read(out_dir / ".last_fail_notice") != today:  # 알림은 하루 한 번
+            if _read(out_dir / ".last_fail_notice") != today:  # 알림과 화면 열기는 하루 한 번(재시도는 막지 않음)
                 _write(out_dir / ".last_fail_notice", today)
                 _safe(notify, "내규챗봇 ALIO 확인", "확인 실패: " + reason)
-            _safe(open_page, page)
+                _safe(open_page, page)
             return 1
-        RP.write_outputs(out_dir, RP.render_html(findings, meta), findings, today)
         _write(out_dir / ".last_success", now.isoformat(timespec="seconds"))
         attn = [f for f in findings if f.verdict in T.ATTENTION]
         if attn:

@@ -524,4 +524,38 @@ with tempfile.TemporaryDirectory() as td:
     ok(got == [T.V_SUSPECT, T.V_NONE], "알릴 판정이 먼저 나온다")
 
 
+# 결과 화면을 쓰지 못하면(지난주 화면이 남음) 실패로 끝낸다. 실패 알림·화면 열기는 하루 한 번
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    rel_path = td / "release.json"
+    rel_path.write_text(json.dumps(rel_of(ENTRY)), encoding="utf-8")
+    cfg4 = {"mode": "alert", "repo": "", "release_url": "", "release_path": str(rel_path), "docs_dir": str(td / "out")}
+    notes, opened = [], []
+    go4 = lambda now: W.run_watch(cfg4, now, http=Net([ROW_SAME], ATT_SAME, {}), notify=lambda t, b: notes.append(b) or True, open_page=opened.append)  # noqa: E731
+    real_write = RP.write_outputs
+    calls = []
+
+    def bad_write(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("쓰기 실패")
+        return real_write(*a, **k)
+
+    RP.write_outputs = bad_write
+    try:
+        ok(go4(D(2026, 11, 9, 9, 5)) == 1 and not (td / "out" / ".last_success").exists(), "결과 화면을 쓰지 못하면 실패로 끝나고 성공 기록을 남기지 않는다")
+    finally:
+        RP.write_outputs = real_write
+    ok(notes and notes[-1].startswith("확인 실패") and len(opened) == 1, "결과 화면을 쓰지 못했다는 실패 알림을 띄운다")
+    ok("OSError" in (td / "out" / "실행기록.log").read_text(encoding="utf-8"), "쓰지 못한 까닭을 실행기록에 남긴다")
+    # 같은 날 또 실패: 알림도 화면 열기도 없음 / 다음 날: 둘 다 함
+    net_down = Net([], {}, {})
+    net_down.down = True
+    n0, o0 = len(notes), len(opened)
+    W.run_watch(cfg4, D(2026, 11, 9, 10, 5), http=net_down, notify=lambda t, b: notes.append(b) or True, open_page=opened.append)
+    ok(len(notes) == n0 and len(opened) == o0, "같은 날 다시 실패하면 알림도 화면 열기도 하지 않는다")
+    code4 = W.run_watch(cfg4, D(2026, 11, 10, 9, 5), http=net_down, notify=lambda t, b: notes.append(b) or True, open_page=opened.append)
+    ok(code4 == 1 and len(notes) == n0 + 1 and len(opened) == o0 + 1, "다음 날 실패하면 알림과 화면 열기를 다시 한다")
+
+
 sys.exit(1 if FAIL else 0)
