@@ -67,7 +67,18 @@ b = pick_bundle([("위임전결세칙(2026년도 7월 9일 개정).zip", outer)]
 ok(sorted(d for _, d in b.files) == [b"h", b"x"] and not b.problems, "ZIP 안 ZIP: 같은 날짜 한글·엑셀을 묶음으로 읽는다")
 
 b = pick_bundle([("규정(2024년도 12월 개정_1).hwp", b"a"), ("규정(2024년도 12월 개정_2).hwp", b"b")], "2024.12.09")
-ok(b.problems, "최신 날짜에 한글 문서가 둘이면 문제로 넘긴다")
+ok(not b.problems and b.files == [("규정(2024년도 12월 개정_2).hwp", b"b")], "같은 일자 첨부가 둘이면 나중에 올린 첨부를 읽는다")
+same = "상품권 구매 및 사용지침(2021년도 12월 개정).hwp"
+b = pick_bundle([(same, b"12.17"), (same, b"12.30")], "2021.12.30")
+ok(not b.problems and b.files == [(same, b"12.30")], "한 달에 두 번 개정해 이름까지 같아도 나중에 올린 첨부를 읽는다(상품권 사례)")
+b = pick_bundle([("좋은일자리위원회 설치 및 운영에 관한 지침(2018년도 6월 제정).hwp", b"6.11"), ("좋은일자리위원회 설치 및 운영지침(2018년도 6월 개정).hwp", b"6.28")], "2018.06.28")
+ok(not b.problems and [d for _, d in b.files] == [b"6.28"], "제정과 개정이 같은 달이어도 나중에 올린 첨부를 읽는다(좋은일자리 사례)")
+b = pick_bundle([("규정(2026년도 2월 4일 개정).hwp", b"h"), ("(별표)기준(2026년도 2월 4일 개정).xlsx", b"x")], "2026.02.04")
+ok(not b.problems and sorted(d for _, d in b.files) == [b"h", b"x"], "한글과 별표 엑셀이 따로 올라와도 같은 일자면 묶음이다")
+b = pick_bundle([("규정(2026년도 2월 4일 개정).hwp", b"old"), ("(별표)기준(2026년도 2월 4일 개정).xlsx", b"x"), ("규정(2026년도 2월 4일 개정).hwp", b"new")], "2026.02.04")
+ok(not b.problems and sorted(d for _, d in b.files) == [b"new", b"x"], "한글만 다시 올리면 새 한글과 기존 별표를 함께 읽는다")
+z2 = mkzip([("규정(2024년도 12월 개정_1).hwp", b"a"), ("규정(2024년도 12월 개정_2).hwp", b"b")])
+ok(pick_bundle([("규정(2024년도 12월 개정).zip", z2)], "2024.12.09").problems, "ZIP 안에서 겹치면 올린 순서를 알 수 없으니 문제로 넘긴다")
 b = pick_bundle([("규정(2026년도 2월 4일 개정).hwp", b"s"), ("규정(2026년도 2월 4일 개정).hwp", b"s")], "2026.02.04")
 ok(not b.problems and len(b.files) == 1, "이름과 내용이 같은 파일은 하나로 친다")
 ok(pick_bundle([("규정(2026년도 2월 4일 개정).hwp", b"s"), ("서식.hwp", b"f")], "2026.02.04").problems, "날짜 없는 이름이 있으면 문제로 넘긴다")
@@ -248,6 +259,13 @@ def one(rows, atts, rel, data=None, compare=None, mode="full", local=None):
 ok(one([ROW_SAME], ATT_SAME, rel_of(ENTRY)).verdict == T.V_NONE, "ALIO 값이 그대로면 변동 없음(파일을 받지 않음)")
 ok(one([ROW_SAME], {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 8월 12일 개정).hwp"}]}, rel_of(ENTRY), {"101": NEW}).verdict == T.V_SUSPECT, "게시일이 그대로여도 첨부 번호가 바뀌면 잡는다")
 ok(one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": OLD}).verdict == T.V_DONE, "지문이 배포판과 같으면 이미 반영")
+twice = [{"file_no": "1000", "name": "복무세칙(2026년도 11월 개정).hwp"}, {"file_no": "999", "name": "복무세칙(2026년도 11월 개정).hwp"}]
+ok(one([ROW_NEW], {"9387": twice}, rel_of(ENTRY), {"1000": OLD, "999": NEW}).verdict == T.V_DONE, "같은 달 첨부는 번호가 큰 쪽을 읽는다(받은 순서·글자 순서와 무관)")
+ok(AR.attachment_files(twice, {"1000": b"n", "999": b"o"}.__getitem__) == [(twice[1]["name"], b"o"), (twice[0]["name"], b"n")], "첨부는 번호 순서로 넘긴다")
+s = {"taken": "x", "rules": {"9387": dict(name="복무세칙", title="복무세칙", mod="old", st_date="old", file_no="1", file_date="old")}}
+ent2 = {"Ⅲ-3-1": {"digests": [AR.file_digest(OLD)], "ext": ".hwp"}}
+w = AR.refresh_seen(s, [ROW_NEW], {"9387": twice}, {"1000": OLD, "999": NEW}.__getitem__, ent2, lambda *a: False, [{"code": "Ⅲ-3-1", "name": "복무세칙"}])
+ok(not w and s["rules"]["9387"]["file_no"] == "1000", "새 판 기록도 번호가 큰 첨부를 기준으로 올린다")
 local = rel_of(dict(ENTRY, files=[AR.file_digest(NEW)]))
 f = one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, local=local)
 ok(f.verdict == T.V_PENDING and any("새 판을 올리면 끝남" in n for n in f.notes), "저장소 새 판과 같으면 배포 대기(비교 기준이 이미 새 판이라 비교보다 먼저)")

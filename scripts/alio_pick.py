@@ -51,15 +51,16 @@ def date_matches(d, st_date):
 
 class _Collector:
     def __init__(self):
-        self.cands = {}  # (이름, 내용) -> 같은 것은 하나로
+        self.cands = {}  # (이름, 내용) -> 몇 번째 첨부에서 왔는지. 같은 것은 하나로
         self.problems = []
         self.total = 0
+        self.order = 0
 
     def add(self, name, data):
         self.total += len(data)
         if self.total > MAX_TOTAL_BYTES:
             raise ValueError("크기 상한을 넘었습니다")
-        self.cands[(name, data)] = None
+        self.cands[(name, data)] = self.order
 
     def feed(self, name, data, depth):
         ext = "." + base_name(name).lower().rsplit(".", 1)[-1]
@@ -88,10 +89,20 @@ class _Collector:
             self.problems.append(f"ZIP을 읽지 못했습니다({base_name(name)}): {type(e).__name__} {e}")
 
 
+def _from_last_attachment(cands):
+    """같은 일자 파일이 여러 첨부에 있으면 가장 나중에 올린 첨부의 것만 남긴다."""
+    if not cands:
+        return []
+    last = max(order for _, _, order in cands)
+    return [c for c in cands if c[2] == last]
+
+
 def pick_bundle(attachments, st_date):
+    """attachments 는 올린 순서(첨부 번호 오름차순)로 받는다."""
     c = _Collector()
     try:
-        for name, data in attachments:
+        for order, (name, data) in enumerate(attachments):
+            c.order = order
             c.feed(name, data, 1)
     except ValueError as e:
         c.problems.append(str(e))
@@ -107,8 +118,12 @@ def pick_bundle(attachments, st_date):
     if not dated:
         return Bundle(None, [], problems)
     newest = max(t[0] for t in dated)
-    files = sorted(((n, d) for t, n, d in dated if t == newest), key=lambda x: x[0])
-    if sum(n.lower().endswith(HANGUL) for n, _ in files) > 1:
+    latest = [(n, d, c.cands[(n, d)]) for t, n, d in dated if t == newest]
+    # 파일 이름이 월까지만 있으면 한 달에 두 번 개정한 판이 같은 일자로 보인다. 첨부 번호가 큰 쪽이 나중 판이다.
+    chosen = (_from_last_attachment([x for x in latest if x[0].lower().endswith(HANGUL)])
+              + _from_last_attachment([x for x in latest if not x[0].lower().endswith(HANGUL)]))
+    files = sorted(((n, d) for n, d, _ in chosen), key=lambda x: x[0])
+    if sum(n.lower().endswith(HANGUL) for n, _ in files) > 1:  # 한 ZIP 안에서 겹치면 올린 순서를 알 수 없다
         problems.append(f"{format_date(newest)} 일자 한글 문서가 둘 이상입니다")
     if not date_matches(newest, st_date):
         problems.append(f"목록 날짜({st_date})와 파일 이름 날짜({format_date(newest)})가 다릅니다")

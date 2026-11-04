@@ -128,7 +128,9 @@ b = pick_bundle([("위임전결세칙(2026년도 7월 9일 개정).zip", outer)]
 ok(sorted(d for _, d in b.files) == [b"h", b"x"] and not b.problems, "ZIP 안 ZIP: 같은 날짜 한글·엑셀을 묶음으로 읽는다")
 
 b = pick_bundle([("규정(2024년도 12월 개정_1).hwp", b"a"), ("규정(2024년도 12월 개정_2).hwp", b"b")], "2024.12.09")
-ok(b.problems, "최신 날짜에 한글 문서가 둘이면 문제로 넘긴다")
+ok(not b.problems and b.files == [("규정(2024년도 12월 개정_2).hwp", b"b")], "같은 일자 첨부가 둘이면 나중에 올린 첨부를 읽는다")
+z2 = mkzip([("규정(2024년도 12월 개정_1).hwp", b"a"), ("규정(2024년도 12월 개정_2).hwp", b"b")])
+ok(pick_bundle([("규정(2024년도 12월 개정).zip", z2)], "2024.12.09").problems, "ZIP 안에서 겹치면 올린 순서를 알 수 없으니 문제로 넘긴다")
 b = pick_bundle([("규정(2026년도 2월 4일 개정).hwp", b"s"), ("규정(2026년도 2월 4일 개정).hwp", b"s")], "2026.02.04")
 ok(not b.problems and len(b.files) == 1, "이름과 내용이 같은 파일은 하나로 친다")
 ok(pick_bundle([("규정(2026년도 2월 4일 개정).hwp", b"s"), ("서식.hwp", b"f")], "2026.02.04").problems, "날짜 없는 이름이 있으면 문제로 넘긴다")
@@ -155,7 +157,7 @@ Expected: `ModuleNotFoundError: No module named 'alio_pick'`, `exit=1`
 
 - [ ] **Step 4: `scripts/alio_pick.py` 를 만든다**
 
-날짜 정규식은 `((?:19|20)?\d{2})\s*년도?\s*(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?` 이고, 경로를 뗀 파일 이름의 **마지막** 일치를 쓴다(두 자리 연도는 2000을 더함). ZIP은 `zipfile.ZipFile(..., metadata_encoding="cp949")` 로 열고 확장자로만 판단한다(`.hwpx` 는 열지 않는다). 후보를 모아 `problems` 로 넘기는 경우: 날짜 없는 후보, 후보 없음, 최신 날짜의 한글 문서(hwp·hwpx)가 둘 이상, 목록 날짜 불일치, `BadZipFile`·암호(`RuntimeError`)·`NotImplementedError`, 개수·크기·깊이 상한 초과. 이름과 내용이 같은 후보는 하나로 친다.
+날짜 정규식은 `((?:19|20)?\d{2})\s*년도?\s*(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?` 이고, 경로를 뗀 파일 이름의 **마지막** 일치를 쓴다(두 자리 연도는 2000을 더함). ZIP은 `zipfile.ZipFile(..., metadata_encoding="cp949")` 로 열고 확장자로만 판단한다(`.hwpx` 는 열지 않는다). 후보를 모아 `problems` 로 넘기는 경우: 날짜 없는 후보, 후보 없음, 한 ZIP 안에서 최신 날짜의 한글 문서(hwp·hwpx)가 둘 이상, 목록 날짜 불일치, `BadZipFile`·암호(`RuntimeError`)·`NotImplementedError`, 개수·크기·깊이 상한 초과. 이름과 내용이 같은 후보는 하나로 친다. 날짜가 같은 파일이 여러 첨부에 있으면 종류(한글·엑셀)별로 가장 나중 첨부의 것을 읽는다. `attachments` 는 첨부 번호 오름차순으로 받는다.
 
 - [ ] **Step 5: 시험이 통과하는지 확인한다**
 
@@ -292,6 +294,7 @@ git commit -m "ALIO 목록·첨부·파일 받기"
   - `bundle_digests(files) -> list[str]`
   - `same_as(digests: list[str], entry_files: list[str]) -> bool` (비어 있지 않고 모두 포함)
   - `norm_title(s: str) -> str` (NFC, 공백·`·ㆍ.` 제거)
+  - `attachment_files(atts: list[dict], fetch) -> list[tuple[str, bytes]]` (번호 오름차순으로 받아 `pick_bundle` 에 넘길 목록)
   - `values_of(row: dict, attachments: list[dict]) -> dict` (`{"mod", "st_date", "file_no"}`, `file_no` 는 번호 최대, 없으면 `""`)
   - `source_entries(sources: dict[str, bytes]) -> dict[str, dict]` (코드 → `{"digests": [...], "ext": ".hwp"}`. 파일 이름 앞의 코드로 묶어 위임전결 엑셀을 같은 내규에 넣는다. `ext` 는 한글 문서 확장자)
   - `build_release(rules: list[dict], sources: dict[str, bytes], seen: dict, release_no: int, built: str) -> dict`
@@ -371,7 +374,7 @@ Expected: `ModuleNotFoundError: No module named 'alio_release'`
 
 `CODE = r"^([ⅠⅡⅢⅣ][\d\-]*)\.\s*(.+)$"` 로 파일 이름의 코드를 읽는다(파일 이름은 NFC로 맞춘 뒤). 엑셀 칸은 표준 `zipfile`·`xml.etree` 로 읽는다(공유 문자열 포함, 값의 공백은 `re.sub(r"\s+", " ", v).strip()`). 시험 대상이 되는 함수는 파일을 읽지 않는 순수 함수로 둔다. `update_rules` 는 CLI 함수 안에서만 import 한다(부 담당 PC에는 없다).
 
-`seed` 명령: ALIO 목록과 첨부 전체를 받아 내규마다 `pick_bundle` 을 돌리고, `data/rules.json` 이름과 `norm_title` 로 맞춘다. 다음 중 하나라도 어긋나면 파일을 쓰지 않고 까닭을 출력하고 `exit 1`: 대응 안 되는 내규가 있음, `pick_bundle` 문제가 있음(단 `KNOWN_TIES` 두 내규의 '한글 문서가 둘 이상' 하나뿐인 경우는 ALIO 값만 기록하고 지문 비교에서 뺀다), `st_date >= "2025.10"` 인 내규 중 지문이 다른 것이 있음, 지문이 다른 수가 `EXPECT_DIFF = 23` 가 아님. 통과하면 `knowledge/alio_seen.json`, `dist/release.json`, `reports/alio_seed_report.md`(지문이 다른 23건 목록과 '같은 달 첨부가 둘이라 지문을 비교하지 못함' 2건, 내규관리부서 확인용)를 쓴다. 이미 `alio_seen.json` 이 있으면 `--force` 없이는 거부한다. 판 번호는 `knowledge/site.json` 의 `release.no`.
+`seed` 명령: ALIO 목록과 첨부 전체를 받아 내규마다 `pick_bundle` 을 돌리고, `data/rules.json` 이름과 `norm_title` 로 맞춘다. 다음 중 하나라도 어긋나면 파일을 쓰지 않고 까닭을 출력하고 `exit 1`: 대응 안 되는 내규가 있음, `pick_bundle` 문제가 있음, `st_date >= "2025.10"` 인 내규 중 지문이 다른 것이 있음, 지문이 다른 수가 `EXPECT_DIFF = 24` 가 아님. 통과하면 `knowledge/alio_seen.json`, `dist/release.json`, `reports/alio_seed_report.md`(지문이 다른 24건 목록, 내규관리부서 확인용)를 쓴다. 이미 `alio_seen.json` 이 있으면 `--force` 없이는 거부한다. 판 번호는 `knowledge/site.json` 의 `release.no`.
 
 `refresh` 명령: 받기에 실패하면 경고를 출력하고 옛 기록으로 `dist/release.json` 만 쓰고 `exit 0`. `same_text` 는 `alio_compare.compare_rule(...).whole_same` 를 쓴다(Task 5). 함수 안에서 import 한다.
 
@@ -383,7 +386,7 @@ Expected: `✗` 없음, `exit=0`
 - [ ] **Step 5: 처음 기록을 실제로 만든다**
 
 Run: `python3 -X utf8 scripts/alio_release.py seed; echo exit=$?`
-Expected: `규정 71건`, `2025.10 이후 지문 같음 26건`, `지문 다름 23건`, `담당자 확인 2건`, `exit=0`. 위임전결세칙은 '지문 같음' 쪽이어야 한다. 수치가 다르면(그 사이 ALIO에 새 개정이 올라왔을 수 있음) 고치지 말고 멈춰서 사용자에게 알린다.
+Expected: `규정 71건`, `2025.10 이후 지문 같음 26건`, `지문 다름 24건`, `exit=0`. 위임전결세칙은 '지문 같음' 쪽이어야 한다. 수치가 다르면(그 사이 ALIO에 새 개정이 올라왔을 수 있음) 고치지 말고 멈춰서 사용자에게 알린다.
 
 - [ ] **Step 6: 커밋한다**
 

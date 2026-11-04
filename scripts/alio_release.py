@@ -25,10 +25,7 @@ SEEN = ROOT / "knowledge" / "alio_seen.json"
 RELEASE = ROOT / "dist" / "release.json"
 REPORT = ROOT / "reports" / "alio_seed_report.md"
 SCHEMA = 1
-EXPECT_DIFF = 23  # 처음 기록 때 내부 원본과 지문이 다른 내규 수(설계 5장 실측, 아래 두 건 제외)
-# 오래된 내규인데 같은 달 한글 첨부가 둘이다. 지문 비교는 못 하지만 ALIO 값은 기록할 수 있고, 다음 개정은 날짜가 달라 겹치지 않는다
-KNOWN_TIES = {"상품권 구매 및 사용지침", "좋은일자리위원회 설치 및 운영지침"}
-TIE_MSG = "일자 한글 문서가 둘 이상입니다"
+EXPECT_DIFF = 24  # 처음 기록 때 내부 원본과 지문이 다른 내규 수(설계 5장 실측)
 NEW_SINCE = "2025.10"  # 이 달 이후 개정분은 모두 지문이 같아야 한다
 CODE = re.compile(r"^([ⅠⅡⅢⅣ][\d\-]*)\.\s*(.+)$")
 HANGUL = (".hwp", ".hwpx")
@@ -151,6 +148,11 @@ def confirm(seen, row, values, file_date, reason, today, gone=False):
         e["confirmed"]["gone"] = True
 
 
+def attachment_files(atts, fetch):
+    """첨부를 번호 순서(올린 순서)로 받아 pick_bundle 에 넘길 목록을 만든다."""
+    return [(a["name"], fetch(a["file_no"])) for a in sorted(atts, key=lambda a: int(a["file_no"]))]
+
+
 def refresh_seen(seen, rows, attachments, fetch, entries, same_text, rules):
     """값이 달라진 내규는 현행 묶음이 새 원본과 같을 때만 기록을 올린다. 경고 목록을 돌려준다."""
     warns = []
@@ -165,7 +167,7 @@ def refresh_seen(seen, rows, attachments, fetch, entries, same_text, rules):
             continue
         name = e["name"]
         try:
-            bundle = pick_bundle([(a["name"], fetch(a["file_no"])) for a in atts], row["st_date"])
+            bundle = pick_bundle(attachment_files(atts, fetch), row["st_date"])
         except AlioError as ex:
             warns.append(f"{name}: ALIO 파일을 받지 못해 옛 기록을 둠({ex})")
             continue
@@ -239,7 +241,7 @@ def seed(force=False):
         print(f"ALIO 확인 실패: {e}")
         return 1
     by_title = {norm_title(r["name"]): r for r in rules}
-    problems, diff, same_new, seen_rules, ties = [], [], 0, {}, []
+    problems, diff, same_new, seen_rules = [], [], 0, {}
     print(f"규정 {len(rows)}건")
     matched = set()
     for row in rows:
@@ -249,22 +251,15 @@ def seed(force=False):
             continue
         matched.add(rule["code"])
         try:
-            files = [(a["name"], fetch_file(a["file_no"])) for a in atts[row["idx"]]]
+            files = attachment_files(atts[row["idx"]], fetch_file)
         except AlioError as e:
             problems.append(f"{row['title']}: 파일을 받지 못함({e})")
             continue
         bundle = pick_bundle(files, row["st_date"])
-        tie_only = (rule["name"] in KNOWN_TIES and bundle.date is not None and len(bundle.problems) == 1
-                    and TIE_MSG in bundle.problems[0])
-        if (bundle.problems and not tie_only) or bundle.date is None:
+        if bundle.problems or bundle.date is None:
             problems.append(f"{row['title']}: " + " / ".join(bundle.problems or ["현행 묶음을 고르지 못함"]))
             continue
         v = values_of(row, atts[row["idx"]])
-        if tie_only:
-            seen_rules[row["idx"]] = {"name": rule["name"], "title": row["title"], "mod": v["mod"], "st_date": v["st_date"],
-                                      "file_no": v["file_no"], "file_date": format_date(bundle.date)}
-            ties.append((rule, row, bundle))
-            continue
         same = same_as(bundle_digests(bundle.files), entries.get(rule["code"], {"digests": []})["digests"])
         seen_rules[row["idx"]] = {"name": rule["name"], "title": row["title"], "mod": v["mod"], "st_date": v["st_date"],
                                   "file_no": v["file_no"], "file_date": format_date(bundle.date)}
@@ -280,7 +275,6 @@ def seed(force=False):
     new_total = sum(r["st_date"] >= NEW_SINCE for r in rows)
     print(f"{NEW_SINCE} 이후 지문 같음 {same_new}건 (이 기간 {new_total}건)")
     print(f"지문 다름 {len(diff)}건")
-    print(f"담당자 확인 {len(ties)}건")
     if len(diff) != EXPECT_DIFF:
         problems.append(f"지문이 다른 수가 {EXPECT_DIFF}건이 아님({len(diff)}건)")
     if problems:
@@ -295,16 +289,12 @@ def seed(force=False):
     for rule, row, bundle in diff:
         names = ", ".join(n for n, _ in bundle.files)
         lines.append(f"| {rule['name']} | {rule['code']} | {row['st_date']} | {format_date(bundle.date)} | {names} | {entries.get(rule['code'], {}).get('ext', '')} |")
-    lines += ["", "## 같은 달 첨부가 둘이라 지문을 비교하지 못함", "",
-              "| 내규 | 코드 | ALIO 목록 날짜 | ALIO 파일 |", "|---|---|---|---|"]
-    for rule, row, bundle in ties:
-        lines.append(f"| {rule['name']} | {rule['code']} | {row['st_date']} | {', '.join(n for n, _ in bundle.files)} |")
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     _save_json(SEEN, {"taken": date.today().isoformat(), "rules": seen_rules})
     write_release()
     jeon = next((r for r in rules if "위임전결" in r["name"]), None)
-    if jeon and all(d[0] is not jeon for d in diff) and all(t[0] is not jeon for t in ties):
+    if jeon and all(d[0] is not jeon for d in diff):
         print(f"{jeon['name']}: 지문 같음")
     print(f"기록 {len(seen_rules)}건을 썼습니다: {SEEN.relative_to(ROOT)}, {RELEASE.relative_to(ROOT)}, {REPORT.relative_to(ROOT)}")
     return 0

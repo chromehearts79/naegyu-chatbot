@@ -14,7 +14,7 @@ import alio_report as RP  # noqa: E402
 import alio_types as T  # noqa: E402
 from alio_client import AlioError, default_http, fetch_attachments, fetch_file, fetch_list  # noqa: E402
 from alio_pick import HANGUL, format_date, pick_bundle  # noqa: E402
-from alio_release import bundle_digests, norm_title, same_as, values_of  # noqa: E402
+from alio_release import attachment_files, bundle_digests, norm_title, same_as, values_of  # noqa: E402
 
 KEYS = ("mod", "st_date", "file_no")
 
@@ -53,7 +53,7 @@ def judge(rows, attachments, release, local_release, fetch_file, compare, mode):
         out.append(f)
         if entry and _same_values(entry, values):
             continue  # 파일을 받지 않는다
-        bundle = pick_bundle([(a["name"], fetch_file(a["file_no"])) for a in atts], row["st_date"])
+        bundle = pick_bundle(attachment_files(atts, fetch_file), row["st_date"])
         f.files = bundle.files
         if bundle.date:
             f.file_date = format_date(bundle.date)
