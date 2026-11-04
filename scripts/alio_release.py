@@ -315,13 +315,16 @@ def refresh():
             return False
 
     entries = source_entries(_load_sources())
+    before = json.dumps(seen["rules"], sort_keys=True)
+    before_rules = json.loads(before)
     warns = refresh_seen(seen, rows, atts, fetch_file, entries, same_text, _rules())
     seen["taken"] = date.today().isoformat()
     _save_json(SEEN, seen)
     write_release()
     for w in warns:
         print("경고:", w)
-    print(f"ALIO 기록을 고쳤습니다(경고 {len(warns)}건)")
+    changed = sum(1 for k, v in seen["rules"].items() if before_rules.get(k) != v)
+    print(f"ALIO 기록: 바뀐 내규 {changed}건, 경고 {len(warns)}건")
     return 0
 
 

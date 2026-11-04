@@ -201,7 +201,19 @@ def finish(accept):
     MANIFEST.write_text(json.dumps({"taken": datetime.date.today().isoformat(), "files": cur}, ensure_ascii=False, indent=1) + "\n")
     print(f"원본 파일 기록 갱신: {len(cur)}개 ({MANIFEST.relative_to(ROOT)})")
     # ALIO 기록을 올리고 dist/release.json 을 만든다(실패해도 개정 반영은 멈추지 않는다)
-    print(run(sys.executable, "scripts/alio_release.py", "refresh", check=False).strip())
+    refresh_alio()
+
+
+def refresh_alio(runner=subprocess.run):
+    """ALIO 기록을 올린다. 실패해도 멈추지 않고 경고만 낸다."""
+    r = runner([sys.executable, "-X", "utf8", "scripts/alio_release.py", "refresh"], capture_output=True, text=True, encoding="utf-8", cwd=ROOT)
+    if r.stdout.strip():
+        print(r.stdout.strip())
+    if r.returncode != 0:
+        print("경고: ALIO 기록 갱신 실패, 직접 alio_release.py refresh 를 실행하세요")
+        tail = (r.stderr or "").strip().splitlines()[-5:]
+        for l in tail:
+            print("  " + l)
 
 
 def init():

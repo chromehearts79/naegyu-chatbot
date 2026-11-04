@@ -583,6 +583,18 @@ if MD_DIR.exists():
     ok(one([row_again], {"9387": [{"file_no": "102", "name": "복무세칙(2026년도 11월 2일 개정).hwp"}]}, rel_of(dict(ENTRY, mod=ROW_NEW["mod"], st_date=ROW_NEW["st_date"], file_no="101", confirmed={"date": "d", "reason": "r"})), {"102": NEW}).verdict == T.V_SUSPECT, "확인함 뒤 ALIO 값이 다시 바뀌면 다시 잡는다")
     src = (ROOT / "scripts" / "update_rules.py").read_text(encoding="utf-8")
     ok('"scripts/alio_release.py", "refresh"' in src and src.index("원본 파일 기록 갱신") < src.index('"scripts/alio_release.py", "refresh"'), "finish 끝에서 ALIO 기록을 올리고 release.json을 만든다")
+    import io as _io  # noqa: E402
+    import contextlib  # noqa: E402
+    import types  # noqa: E402
+    import update_rules as UR  # noqa: E402
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        UR.refresh_alio(lambda *a, **k: types.SimpleNamespace(returncode=1, stdout="", stderr="Traceback\nImportError: x"))
+    ok("ALIO 기록 갱신 실패" in buf.getvalue() and "ImportError: x" in buf.getvalue(), "refresh 가 실패해도 finish 는 멈추지 않고 경고를 보인다")
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        UR.refresh_alio(lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="ALIO 기록: 바뀐 내규 0건, 경고 0건\n", stderr=""))
+    ok("경고:" not in buf.getvalue() and "바뀐 내규 0건" in buf.getvalue(), "성공하면 refresh 출력만 보인다")
 
 
 sys.exit(1 if FAIL else 0)
