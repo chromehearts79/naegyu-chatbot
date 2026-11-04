@@ -219,4 +219,66 @@ s = seen1()
 AR.confirm(s, R1, {"mod": "2026.11.09", "st_date": "2026.11.02", "file_no": "101"}, "2026.11.02", "내부 파일로 반영", "2026-11-16")
 ok(s["rules"]["9387"]["file_no"] == "101" and s["rules"]["9387"]["confirmed"] == {"date": "2026-11-16", "reason": "내부 파일로 반영"}, "확인함: 지금 값과 사유를 남긴다")
 
+import alio_types as T  # noqa: E402
+import watch_alio as W  # noqa: E402
+
+OLD, NEW = b"old file", b"new file"
+ENTRY = {"name": "복무세칙", "code": "Ⅲ-3-1", "idx": "9387", "ext": ".hwp", "mod": "2026.08.19", "st_date": "2026.08.12", "file_no": "100", "file_date": "2026.08.12", "files": [AR.file_digest(OLD)]}
+ROW_SAME = {"idx": "9387", "title": "복무세칙", "st_date": "2026.08.12", "mod": "2026.08.19"}
+ROW_NEW = {"idx": "9387", "title": "복무세칙", "st_date": "2026.11.02", "mod": "2026.11.09"}
+ATT_SAME = {"9387": [{"file_no": "100", "name": "복무세칙(2026년도 8월 12일 개정).hwp"}]}
+ATT_NEW = {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 11월 2일 개정).hwp"}]}
+
+
+def rel_of(*entries):
+    return {"schema": 1, "release_no": 7, "built": "2026-11-04", "rules": list(entries)}
+
+
+def cmp_res(**kw):
+    base = dict(changed_units=[], stale_cards=[], related_cards=[], calcs=[], added_units=[], before_after=[], outside_diff=[], whole_same=False)
+    base.update(kw)
+    return T.CompareResult(**base)
+
+
+def one(rows, atts, rel, data=None, compare=None, mode="full", local=None):
+    res = W.judge(rows, atts, rel, local, (data or {}).__getitem__, compare or (lambda *a: cmp_res(changed_units=["제1조"])), mode)
+    return res[0] if res else None
+
+
+ok(one([ROW_SAME], ATT_SAME, rel_of(ENTRY)).verdict == T.V_NONE, "ALIO 값이 그대로면 변동 없음(파일을 받지 않음)")
+ok(one([ROW_SAME], {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 8월 12일 개정).hwp"}]}, rel_of(ENTRY), {"101": NEW}).verdict == T.V_SUSPECT, "게시일이 그대로여도 첨부 번호가 바뀌면 잡는다")
+ok(one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": OLD}).verdict == T.V_DONE, "지문이 배포판과 같으면 이미 반영")
+local = rel_of(dict(ENTRY, files=[AR.file_digest(NEW)]))
+f = one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, local=local)
+ok(f.verdict == T.V_PENDING and any("새 판을 올리면 끝남" in n for n in f.notes), "저장소 새 판과 같으면 배포 대기(비교 기준이 이미 새 판이라 비교보다 먼저)")
+local = rel_of(dict(ENTRY, mod=ROW_NEW["mod"], st_date=ROW_NEW["st_date"], file_no="101"))
+ok(one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, local=local).verdict == T.V_PENDING, "저장소 기록에 확인함이 남아 있으면 배포 대기")
+ok(one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, compare=lambda *a: cmp_res(whole_same=True)).verdict == T.V_SAME_TEXT, "전체 글자가 같으면 글자 변화 없음")
+ok(one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, compare=lambda *a: cmp_res(outside_diff=["별지"])).verdict == T.V_OUTSIDE, "조문은 같고 전체 글자가 다르면 조문 밖 변화(별지만 바뀐 경우)")
+f = one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, compare=lambda *a: cmp_res(changed_units=["제19조"], stale_cards=["a"]))
+ok(f.verdict == T.V_SUSPECT and f.compare.stale_cards == ["a"] and f.files and f.target_name == "Ⅲ-3-1. 복무세칙.hwp" and f.days is None, "개정 의심: 비교 결과와 원본 폴더에 넣을 이름")
+ok(f.values == {"mod": "2026.11.09", "st_date": "2026.11.02", "file_no": "101"} and f.title == "복무세칙" and f.file_date == "2026.11.02", "확인함에 쓸 ALIO 값을 함께 둔다")
+called = []
+f = one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, compare=lambda *a: called.append(a), mode="alert")
+ok(f.verdict == T.V_SUSPECT and not called and any("정 담당 PC에서 비교" in n for n in f.notes), "부 담당 PC는 비교하지 않고 개정 의심으로 알린다")
+f = one([ROW_NEW], ATT_NEW, rel_of(ENTRY), {"101": NEW}, compare=lambda *a: cmp_res(error="변환 실패"))
+ok(f.verdict == T.V_SUSPECT and any("변환 실패" in n for n in f.notes), "비교가 실패해도 개정 의심은 그대로 알리고 사유를 적는다")
+f = one([ROW_NEW], {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 8월 12일 개정).hwpx"}]}, rel_of(ENTRY), {"101": NEW}, compare=lambda *a: cmp_res(changed_units=["제1조"]))
+ok(f.verdict == T.V_CHECK, "목록 날짜와 파일 날짜가 다르면 담당자 확인")
+row_repost = dict(ROW_NEW, st_date="2026.08.12")
+f = one([row_repost], ATT_SAME | {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 8월 12일 개정).hwpx"}]}, rel_of(ENTRY), {"101": NEW})
+ok(any("날짜가 그대로라 재게시일 수 있음" in n for n in f.notes) and any("형식이 달라 차이가 과장될 수 있음" in n for n in f.notes), "재게시·형식 차이 안내")
+ok(one([ROW_NEW], {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 11월 2일 개정).zip"}]}, rel_of(ENTRY), {"101": b"broken"}).verdict == T.V_CHECK, "손상된 ZIP은 그 내규만 담당자 확인")
+res = W.judge([ROW_NEW, dict(ROW_SAME, idx="2", title="다른 세칙")], {"9387": [{"file_no": "101", "name": "복무세칙(2026년도 11월 2일 개정).zip"}], "2": []}, rel_of(ENTRY, dict(ENTRY, idx="2", name="다른 세칙", file_no="")), None, {"101": b"broken"}.__getitem__, lambda *a: None, "full")
+ok([x.verdict for x in res] == [T.V_CHECK, T.V_NONE], "손상된 ZIP이 있어도 나머지 내규는 계속 판정한다")
+f = one([{"idx": "555", "title": "새 지침", "st_date": "2026.11.02", "mod": "2026.11.09"}], {"555": [{"file_no": "9", "name": "새 지침(2026년도 11월 2일 제정).hwp"}]}, rel_of(), {"9": NEW}, compare=lambda *a: cmp_res(added_units=["제1조", "제2조"]))
+ok(f.verdict == T.V_NEW and len(f.compare.added_units) == 2, "배포판에 없으면 새 내규(조문 수)")
+res = W.judge([], {}, rel_of(ENTRY), None, {}.__getitem__, lambda *a: None, "full")
+ok([x.verdict for x in res] == [T.V_GONE], "배포판에 있는데 목록에 없으면 목록에서 사라짐")
+ok(W.judge([], {}, rel_of(dict(ENTRY, confirmed={"date": "d", "reason": "유효", "gone": True})), None, {}.__getitem__, lambda *a: None, "full") == [], "사라짐을 확인함으로 끝냈으면 다시 알리지 않는다")
+res = W.judge([dict(ROW_NEW, idx="42")], {"42": ATT_NEW["9387"]}, rel_of(ENTRY), None, {"101": NEW}.__getitem__, lambda *a: cmp_res(changed_units=["제1조"]), "full")
+ok([x.verdict for x in res] == [T.V_SUSPECT], "idx가 바뀌어도 이름으로 맞추고 사라짐을 함께 내지 않는다")
+ok(raises(lambda: W.check_sanity([], rel_of(ENTRY, ENTRY)), T.WatchFailure) and raises(lambda: W.check_sanity([ROW_SAME], rel_of(ENTRY, ENTRY, ENTRY)), T.WatchFailure), "받은 목록이 배포판의 절반 미만이면 확인 실패")
+W.check_sanity([ROW_SAME], rel_of(ENTRY, ENTRY))
+
 sys.exit(1 if FAIL else 0)
