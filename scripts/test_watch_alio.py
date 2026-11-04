@@ -406,4 +406,122 @@ with tempfile.TemporaryDirectory() as td:
     ok("새 판을 올리면 끝남" in page, "비교 결과가 없는 배포 대기도 안내 메모를 보인다")
 
 
+import csv  # noqa: E402
+D = datetime.datetime
+ok(W.monday_nine(D(2026, 11, 9, 8, 59)) == D(2026, 11, 2, 9, 0) and W.monday_nine(D(2026, 11, 9, 9, 0)) == D(2026, 11, 9, 9, 0) and W.monday_nine(D(2026, 11, 12, 14, 0)) == D(2026, 11, 9, 9, 0), "가장 최근 월요일 9시")
+ok(W.is_due(D(2026, 11, 9, 9, 0), "2026-11-02T09:00:00") and not W.is_due(D(2026, 11, 10, 9, 0), "2026-11-09T09:30:00"), "이번 주 성공 기록이 있으면 돌지 않는다")
+ok(W.is_due(D(2026, 11, 25, 9, 0), "2026-11-02T09:00:00") and W.is_due(D(2026, 11, 9, 9, 0), None) and W.is_due(D(2026, 11, 9, 9, 0), "깨진 값"), "몇 주 건너뛰거나 기록이 없거나 깨졌으면 돈다")
+
+
+class Net:
+    """가짜 ALIO. rows·attachments·files 를 바꿔 가며 쓴다."""
+
+    def __init__(self, rows, atts, files):
+        self.rows, self.atts, self.files, self.fail_idx, self.down = rows, atts, files, None, False
+        self.calls = []
+
+    def __call__(self, path, body):
+        self.calls.append(path)
+        if self.down:
+            raise AlioError("접속 실패")
+        if path == "/item/itemReportListSusi.json":
+            res = [{"title": r["title"], "stDate": r["st_date"], "idate": r["mod"], "idx": r["idx"], "bidType": "K", "tableName": "COMM_RULE", "idxName": "RULE_NO"} for r in self.rows]
+            return json.dumps({"data": {"result": res, "page": {"totalPage": 1, "totalCount": len(res)}}}).encode(), "application/json"
+        if "itemBoard21110" in path:
+            idx = path.split("&idx=")[1].split("&")[0]
+            if idx == self.fail_idx:
+                raise AlioError("시간 초과")
+            return "".join(f'<a href="/download/rulefiledown.json?fileNo={a["file_no"]}">{a["name"]}</a>' for a in self.atts[idx]).encode(), "text/html"
+        return self.files[path.split("fileNo=")[1]], "application/octet-stream"
+
+
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    rel_path = td / "release.json"
+    rel_path.write_text(json.dumps(rel_of(ENTRY)), encoding="utf-8")
+    cfg = {"mode": "alert", "repo": "", "release_url": "", "release_path": str(rel_path), "docs_dir": str(td / "out")}
+    notes, opened = [], []
+    NOW = D(2026, 11, 9, 9, 5)
+    go = lambda net, now=NOW, **k: W.run_watch(cfg, now, http=net, notify=lambda t, b: notes.append(b) or True, open_page=opened.append, **k)  # noqa: E731
+
+    net = Net([ROW_SAME], ATT_SAME, {})
+    ok(go(net) == 0 and notes[-1] == "이번 주 변동 없음" and not opened, "변동 없으면 알림만 띄우고 화면은 열지 않는다")
+    ok(not any("fileNo" in c for c in net.calls) and any("itemBoard" in c for c in net.calls), "첨부 목록은 보고 파일은 받지 않는다")
+    n = len(net.calls)
+    ok(go(net, NOW + datetime.timedelta(hours=1)) == 0 and len(net.calls) == n, "이번 주에 성공했으면 조용히 끝난다")
+
+    net = Net([ROW_NEW], ATT_NEW, {"101": NEW})
+    ok(go(net, D(2026, 11, 16, 9, 5)) == 0 and opened and "복무세칙" in notes[-1], "개정 의심이면 알리고 결과 화면을 연다")
+    ok(any((td / "out" / "대기").iterdir()), "받은 파일을 대기 폴더에 둔다")
+    ok((td / "out" / "이번 주 결과.html").exists() and (td / "out" / "기록.csv").exists(), "결과와 기록을 남긴다")
+
+    # 1건만 시간 초과: 전체 실패
+    notes.clear()
+    net = Net([ROW_SAME, dict(ROW_SAME, idx="2", title="다른 세칙")], {"9387": ATT_SAME["9387"], "2": []}, {})
+    net.fail_idx = "2"
+    last = (td / "out" / ".last_success").read_text(encoding="utf-8")
+    ok(go(net, D(2026, 11, 23, 9, 5)) == 1, "첨부 목록 1건만 실패해도 실행 전체가 실패한다")
+    page = (td / "out" / "이번 주 결과.html").read_text(encoding="utf-8")
+    ok("확인 실패" in page and "이번 주 변동 없음" not in page and notes and notes[-1] != "이번 주 변동 없음", "실패가 변동 없음으로 보이지 않는다")
+    ok((td / "out" / ".last_success").read_text(encoding="utf-8") == last, "실패하면 성공 기록을 남기지 않아 다음 로그인 때 다시 돈다")
+    with open(td / "out" / "기록.csv", encoding="utf-8-sig", newline="") as fh:
+        hist = list(csv.DictReader(fh))
+    ok(hist and all(not r["해소된 날"] for r in hist), "실패한 실행은 열린 항목을 해소로 바꾸지 않는다")
+    notes.clear()
+    ok(go(net, D(2026, 11, 23, 10, 5)) == 1 and not notes, "같은 날 다시 실패하면 알림을 또 띄우지 않는다")
+    net.fail_idx = None
+    net.rows, net.atts = [ROW_SAME], ATT_SAME
+    ok(go(net, D(2026, 11, 25, 9, 0)) == 0, "다음에 접속되면 밀린 확인을 한다")
+    with open(td / "out" / "기록.csv", encoding="utf-8-sig", newline="") as fh:
+        ok(all(r["해소된 날"] for r in csv.DictReader(fh)), "변동이 사라지면 해소된 날이 적힌다")
+
+    # 잠금
+    lock = td / "out" / ".lock"
+    lock.write_text("x", encoding="utf-8")
+    net = Net([ROW_SAME], ATT_SAME, {})
+    ok(go(net, D(2026, 11, 30, 9, 5)) == 0 and not net.calls, "다른 실행이 돌고 있으면 그냥 끝난다")
+    lock.write_text("x", encoding="utf-8")
+    ok(W.acquire_lock(lock, now=lock.stat().st_mtime + 7201) is True, "2시간 넘은 잠금은 무시한다")
+    W.release_lock(lock)
+
+    # 배포판 못 읽음
+    bad_cfg = dict(cfg, release_path=str(td / "없음.json"))
+    ok(raises(lambda: W.load_release(bad_cfg), T.WatchFailure), "배포판 목록을 못 읽으면 확인 실패")
+    (td / "옛형식.json").write_text('{"schema": 99, "rules": []}', encoding="utf-8")
+    ok(raises(lambda: W.load_release(dict(cfg, release_path=str(td / "옛형식.json"))), T.WatchFailure), "형식이 다른 배포판 목록은 확인 실패")
+    (td / "깨짐.json").write_text("{", encoding="utf-8")
+    ok(raises(lambda: W.load_release(dict(cfg, release_path=str(td / "깨짐.json"))), T.WatchFailure), "깨진 배포판 목록은 확인 실패")
+    rel2, note = W.load_release(dict(cfg, release_url="https://x/release.json"), get_url=lambda u: (_ for _ in ()).throw(OSError("down")))
+    ok(rel2["release_no"] == 7 and note == "배포판을 읽지 못해 이 PC의 마지막 빌드와 비교함", "주소를 못 읽으면 이 PC 빌드로 비교하고 알린다")
+    rel3, note = W.load_release(dict(cfg, release_url="https://x/release.json"), get_url=lambda u: json.dumps(rel_of(ENTRY)).encode())
+    ok(rel3["rules"] and note == "", "주소를 먼저 읽는다")
+
+# 대기 폴더를 못 만들어도(파일이 막고 있음) 그 건에 메모만 달고 계속한다
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    rel_path = td / "release.json"
+    rel_path.write_text(json.dumps(rel_of(ENTRY)), encoding="utf-8")
+    cfg2 = {"mode": "alert", "repo": "", "release_url": "", "release_path": str(rel_path), "docs_dir": str(td / "out")}
+    (td / "out").mkdir()
+    (td / "out" / "대기").write_text("파일", encoding="utf-8")
+    notes, opened = [], []
+    code2 = W.run_watch(cfg2, D(2026, 11, 16, 9, 5), http=Net([ROW_NEW], ATT_NEW, {"101": NEW}), notify=lambda t, b: notes.append(b) or True, open_page=opened.append)
+    page = (td / "out" / "이번 주 결과.html").read_text(encoding="utf-8")
+    ok(code2 == 0 and "파일을 저장하지 못함" in page and "개정 의심" in page, "파일을 저장하지 못해도 판정은 그대로 두고 메모를 단다")
+    ok(notes and "복무세칙" in notes[-1] and opened, "저장에 실패해도 알림과 화면 열기는 한다")
+
+# 알릴 판정이 먼저, 같은 판정은 붙어서 나온다
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    e2 = dict(ENTRY, name="다른 세칙", idx="2", code="Ⅲ-3-2", mod="2026.08.19", st_date="2026.08.12", file_no="200")
+    rel_path = td / "release.json"
+    rel_path.write_text(json.dumps(rel_of(ENTRY, e2)), encoding="utf-8")
+    cfg3 = {"mode": "alert", "repo": "", "release_url": "", "release_path": str(rel_path), "docs_dir": str(td / "out")}
+    row2 = {"idx": "2", "title": "다른 세칙", "st_date": "2026.08.12", "mod": "2026.08.19"}
+    net = Net([row2, ROW_NEW], dict(ATT_NEW, **{"2": [{"file_no": "200", "name": "다른 세칙(2026년도 8월 12일 개정).hwp"}]}), {"101": NEW})
+    W.run_watch(cfg3, D(2026, 11, 16, 9, 5), http=net, notify=lambda t, b: True, open_page=lambda p: None)
+    got = [x["verdict"] for x in json.loads((td / "out" / "최근 결과.json").read_text(encoding="utf-8"))["findings"]]
+    ok(got == [T.V_SUSPECT, T.V_NONE], "알릴 판정이 먼저 나온다")
+
+
 sys.exit(1 if FAIL else 0)
