@@ -175,5 +175,11 @@ if (ROOT / "data" / "rules.json").exists():
     doms = {c["id"]: c["domain"] for c in cards}
     ok(s1 == s2 and len(s1) == 20 and len({doms[i] for i in s1}) >= 2, "고정 시드로 분야를 섞어 고른다")
     ok("11434" not in (ROOT / "scripts" / "blind_check.py").read_text(encoding="utf-8"), "로컬 모델 호출이 없다")
+    import subprocess  # noqa: E402
+    wdir = ROOT / "reports" / "blind_work"
+    before = sorted(x.name for x in wdir.iterdir()) if wdir.exists() else None
+    bad = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "scripts" / "blind_check.py"), "prepare", cards[0]["id"], "없는카드이름"], capture_output=True, text=True, encoding="utf-8")
+    after = sorted(x.name for x in wdir.iterdir()) if wdir.exists() else None
+    ok(bad.returncode != 0 and "없는카드이름" in (bad.stderr + bad.stdout) and before == after, "prepare 에 맞지 않는 인자가 있으면 오류로 멈추고 작업 파일을 건드리지 않는다")
 
 sys.exit(1 if FAIL else 0)

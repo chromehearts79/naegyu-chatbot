@@ -246,6 +246,10 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.cmd == "prepare":
         cards = load_domains()[1]
+        known = {c["id"] for c in cards} | {c["domain"] for c in cards}
+        unmatched = [x for x in a.ids if x not in known]
+        if unmatched:
+            sys.exit("맞는 카드나 분야가 없습니다: " + ", ".join(unmatched) + "\n철자를 확인해 다시 실행하세요. 문제 파일은 만들지 않았습니다.")
         ids = [c["id"] for c in cards if c["id"] in a.ids or c["domain"] in a.ids]
         print(prepare(ids))
     elif a.cmd == "first":
