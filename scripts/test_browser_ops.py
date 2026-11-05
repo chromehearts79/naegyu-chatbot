@@ -386,4 +386,34 @@ try:
 finally:
     WC._collect = real_collect
 
+# ---------- 확인함 댓글 ----------
+import confirm_ci as CC2  # noqa: E402
+ok(CC2.parse_reason("확인함: 재게시입니다") == "재게시입니다" and CC2.parse_reason(" 확인함 : 사유 ") == "사유" and CC2.parse_reason("확인함:") == "" and CC2.parse_reason("좋아요") is None, "확인함 댓글을 읽는다")
+ok(CC2.allowed("OWNER") and CC2.allowed("COLLABORATOR") and CC2.allowed("MEMBER") and not CC2.allowed("NONE") and not CC2.allowed("CONTRIBUTOR"), "쓰기 권한이 있는 사람만")
+ok(CC2.idx_of("x " + WC.marker("9387")) == "9387" and CC2.idx_of("없음") is None, "이슈에서 내규를 찾는다")
+latest = {"findings": [{"name": "복무세칙", "idx": "9387", "title": "복무세칙", "verdict": T.V_SUSPECT, "values": {"mod": "m2", "st_date": "s2", "file_no": "2"}, "file_date": "f2"}]}
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    sp = td / "seen.json"
+    sp.write_text(json.dumps({"taken": "x", "rules": {"9387": {"name": "복무세칙", "title": "복무세칙", "mod": "m1", "st_date": "s1", "file_no": "1", "file_date": "f1"}}}), encoding="utf-8")
+    (td / "대기" / "복무세칙_20261102").mkdir(parents=True)
+    body = WC.marker("9387")
+
+    def call(comment, who, g, b=body):
+        return CC2.handle(comment, who, b, "2026-11-16", latest, sp, g, 7, td)
+
+    g = FakeGh()
+    ok(call("확인함: 아무거나", "NONE", g) == "무시" and g.calls == [] and json.loads(sp.read_text(encoding="utf-8"))["rules"]["9387"]["mod"] == "m1", "외부인 댓글에는 아무 일도 없다")
+    ok(call("좋아요", "OWNER", g) == "무시" and g.calls == [], "다른 댓글은 무시한다")
+    ok(call("확인함: 사유", "OWNER", g, "표시 없음") == "무시" and g.calls == [], "내규 표시가 없는 이슈는 답 없이 무시한다")
+    ok(call("확인함:", "OWNER", g) == "다시 요청" and json.loads(sp.read_text(encoding="utf-8"))["rules"]["9387"]["mod"] == "m1" and "comment" in g.calls[-1], "사유가 비면 다시 적어 달라고 답한다")
+    g = FakeGh()
+    r = call("확인함: 재게시", "OWNER", g)
+    s = json.loads(sp.read_text(encoding="utf-8"))["rules"]["9387"]
+    ok(r == "기록함" and s["mod"] == "m2" and s["confirmed"]["reason"] == "재게시" and any("close" in c for c in g.calls), "기록하고 이슈를 닫는다")
+    ok(g.calls[0] == ["issue", "comment", "7", "--body-file", "-"] and "재게시" in g.stdin[0] and g.calls[-1] == ["issue", "close", "7"], "댓글을 먼저 달고 마지막에 닫는다")
+    ok(not (td / "대기" / "복무세칙_20261102").exists(), "대기 폴더도 지운다")
+    g = FakeGh()
+    ok(call("확인함: 사유", "OWNER", g, WC.marker("555")) == "대상 없음" and "comment" in g.calls[-1] and not any("close" in c for c in g.calls), "최근 결과에 없는 내규는 기록하지 않는다")
+
 sys.exit(1 if FAIL else 0)
