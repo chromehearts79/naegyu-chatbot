@@ -290,4 +290,100 @@ with tempfile.TemporaryDirectory() as td:
     ok(json.loads((Path(td) / "reports" / "alio_watch" / "last_run.json").read_text(encoding="utf-8"))["ok"] is False, "실패해도 실행 기록을 남긴다")
     ok(WC.run_ci(fake_http_down, FakeGh(broken=True), None, datetime.datetime(2026, 11, 9, 9, 0), Path(td), sleep=lambda s: None) == 1, "이슈까지 못 쓰면 작업을 실패로 끝낸다")
 
+# ---- 고침 1회차: 대기 폴더 보호, 실패 댓글 겹침, 성공 경로, 설정 실패 ----
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    (td / "대기" / "복무세칙").mkdir(parents=True)
+    (td / "대기" / "복무세칙_20260101").mkdir()
+    ok(WC.drop_wait("복무세칙", td) == 1 and [x.name for x in (td / "대기").iterdir()] == ["복무세칙"], "이름만 있는 사람이 만든 폴더는 지우지 않는다(drop_wait)")
+    SW = T.Finding(name="복무세칙", code="", idx="1", verdict=T.V_SUSPECT, file_date="2026.11.02", files=[("a.hwp", b"x")])
+    WC.save_wait(SW, td)
+    ok(sorted(x.name for x in (td / "대기").iterdir()) == ["복무세칙", "복무세칙_20261102"], "이름만 있는 폴더는 save_wait 에도 남는다")
+FAILISS = {"number": 3, "title": "확인 실패: ALIO 매주 확인", "body": WC._fail_marker("watch"), "createdAt": "2026-11-02T00:00:00Z", "lastCommentDate": "2026-11-09"}
+ok(WC.failure_actions("또 실패", [FAILISS], "2026-11-09", []) == [], "같은 날 실패 댓글을 겹쳐 달지 않는다")
+ok([a["kind"] for a in WC.failure_actions("또 실패", [dict(FAILISS, lastCommentDate="2026-11-02")], "2026-11-09", [])] == ["comment"], "다른 날이면 실패 댓글을 단다")
+
+NOW = datetime.datetime(2026, 11, 9, 9, 0)
+
+
+class StateGh(FakeGh):
+    """이슈 목록과 댓글 날짜를 기억하는 가짜 gh"""
+    def __init__(self, issues, fail_on=None):
+        super().__init__(issues)
+        self.fail_on = fail_on
+
+    def __call__(self, args, stdin=None):
+        if self.fail_on and args[:2] == ["issue", self.fail_on]:
+            self.calls.append(args)
+            raise RuntimeError("gh 실패")
+        out = super().__call__(args, stdin)
+        if args[:2] == ["issue", "comment"]:
+            for i in self.issues:
+                if str(i["number"]) == args[2]:
+                    i.setdefault("comments", []).append({"createdAt": "2026-11-09T01:00:00Z"})
+        if args[:2] == ["issue", "create"]:
+            return "https://github.com/x/y/issues/12"
+        return out
+
+
+def stub_collect(findings):
+    real = WC._collect
+    WC._collect = lambda h, c, t: findings()
+    return real
+
+
+def mk_issues():
+    return [{"number": 4, "title": "개정 의심: 옛규정", "body": WC.marker("5"), "createdAt": "2026-11-02T00:00:00Z", "comments": []},
+            {"number": 3, "title": "확인 실패: ALIO 매주 확인", "body": WC._fail_marker("watch"), "createdAt": "2026-11-02T00:00:00Z", "comments": []},
+            {"number": 1, "title": "매주 확인 기록", "body": "", "createdAt": "2026-11-02T00:00:00Z", "comments": []}]
+
+
+def mk_findings():
+    return [T.Finding(name="복무세칙", code="Ⅲ-3-1", idx="9387", verdict=T.V_SUSPECT, mod="2026.11.02", file_date="2026.11.02", files=[("a.hwp", b"x")]),
+            T.Finding(name="옛규정", code="", idx="5", verdict=T.V_NONE)]
+
+
+real_collect = stub_collect(mk_findings)
+try:
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        (td / "대기" / "옛규정_20261001").mkdir(parents=True)
+        (td / "대기" / "옛규정").mkdir()
+        g = StateGh(mk_issues())
+        rc = WC.run_ci(None, g, None, NOW, td, assignees=["담당"])
+        closes = [c[2] for c in g.calls if c[:2] == ["issue", "close"]]
+        lr = json.loads((td / "reports" / "alio_watch" / "last_run.json").read_text(encoding="utf-8"))
+        ok(rc == 0 and lr["ok"] is True and lr["today"] == "2026-11-09", "성공하면 0 과 ok:true 기록")
+        ok(sorted(closes) == ["3", "4"], "해소된 이슈와 열린 확인 실패 이슈를 닫는다")
+        ok(sorted(x.name for x in (td / "대기").iterdir()) == ["복무세칙_20261102", "옛규정"], "닫힌 내규의 날짜 폴더만 지우고 새로 받은 폴더를 둔다")
+        ok((td / "reports" / "alio_watch" / "latest.json").exists() and "a.hwp" not in (td / "reports" / "alio_watch" / "latest.json").read_text(encoding="utf-8"), "latest.json 에는 파일 내용이 없다")
+        rc2 = WC.run_ci(None, g, None, NOW, td, assignees=["담당"])
+        rec = [c for c in g.calls if c[:3] == ["issue", "comment", "1"]]
+        ok(rc2 == 0 and len(rec) == 1, "같은 날 두 번 돌아도 기록 댓글은 한 번")
+    with tempfile.TemporaryDirectory() as td:
+        g = StateGh(mk_issues(), fail_on="create")
+        rc = WC.run_ci(None, g, None, NOW, Path(td), assignees=[])
+        lr = json.loads((Path(td) / "reports" / "alio_watch" / "last_run.json").read_text(encoding="utf-8"))
+        ok(rc == 1 and lr["ok"] is False, "이슈 일부를 못 쓰면 ok:false 와 1")
+    # 설정 실패(비교 모듈을 못 불러옴)도 실패 이슈와 기록으로 끝난다
+    WC._collect = lambda h, c, t: c("x", "", [])
+    saved = (WC.gh_default, WC.default_http, WC.ROOT, WC.time.sleep, sys.modules.get("alio_compare", "none"))
+    with tempfile.TemporaryDirectory() as td:
+        g = StateGh([])
+        WC.gh_default, WC.default_http, WC.ROOT = g, None, Path(td)
+        WC.time.sleep = lambda s: None
+        sys.modules["alio_compare"] = None
+        try:
+            rc = WC.main([])
+        finally:
+            WC.gh_default, WC.default_http, WC.ROOT, WC.time.sleep = saved[:4]
+            if saved[4] == "none":
+                sys.modules.pop("alio_compare", None)
+            else:
+                sys.modules["alio_compare"] = saved[4]
+        lr = json.loads((Path(td) / "reports" / "alio_watch" / "last_run.json").read_text(encoding="utf-8"))
+        ok(rc == 1 and lr["ok"] is False and any(c[:2] == ["issue", "create"] and "확인 실패" in c[3] for c in g.calls), "비교 모듈을 못 불러와도 확인 실패 이슈를 만들고 1 로 끝난다")
+finally:
+    WC._collect = real_collect
+
 sys.exit(1 if FAIL else 0)

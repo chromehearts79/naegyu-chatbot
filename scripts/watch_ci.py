@@ -224,6 +224,8 @@ def failure_actions(reason: str, open_issues, today: str, assignees: list, kind:
     reason = clean_md(reason)[:2000]
     for iss in open_issues:
         if mark in (iss.get("body") or ""):
+            if iss.get("lastCommentDate", "") == today or kst_date(iss.get("createdAt", "")) == today:
+                return []  # 같은 날 다시 돌아도 같은 알림을 겹쳐 달지 않는다
             return [{"kind": "comment", "number": iss["number"], "body": f"{today} 다시 확인했지만 또 실패했습니다.\n\n사유: {reason}"}]
     if kind == "release":
         title = "새 판 실패: 새 판 만들기"
@@ -296,7 +298,7 @@ def drop_wait(name: str, root: Path) -> int:
         if not d.is_dir() or d.is_symlink():
             continue
         m = re.fullmatch(r"(.*)_(\d+)", d.name)
-        if (m and RP.safe_name(f"{name}_{m.group(2)}", 60) == d.name) or d.name == RP.safe_name(name, 60):
+        if (m and RP.safe_name(f"{name}_{m.group(2)}", 60) == d.name):
             shutil.rmtree(d)
             n += 1
     return n
@@ -381,8 +383,9 @@ def _succeed(findings, gh, today, root, out, weekly, assignees) -> None:
     _write_json(out / "last_run.json", {"today": today, "ok": True, "counts": counts, "total": len(findings)})
 
 
-def run_ci(http, gh, compare, now, root: Path, weekly: bool = True, tries: int = 2, wait: int = 300, sleep=time.sleep, assignees: list | None = None) -> int:
+def run_ci(http, gh, compare, now, root: Path, weekly: bool = True, tries: int = 2, wait: int = 300, sleep=None, assignees: list | None = None) -> int:
     """매주 확인을 한 번 돈다. 0 이면 성공, 1 이면 확인 실패. 예외를 밖으로 내지 않는다."""
+    sleep = sleep or time.sleep
     try:
         root, assignees = Path(root), list(assignees or [])
         today, out = now.strftime("%Y-%m-%d"), Path(root) / "reports" / "alio_watch"
@@ -438,8 +441,11 @@ def main(argv=None) -> int:
             print(f"실패 이슈를 쓰지 못했습니다: {e}", file=sys.stderr)
             return 1
         return 0
-    from alio_compare import compare_rule
-    return run_ci(default_http, gh_default, compare_rule, now, ROOT, weekly=not args.no_weekly, assignees=assignees)
+
+    def compare(*a):  # 불러오기 실패도 run_ci 의 실패 처리(이슈·기록)로 가게 늦게 부른다
+        from alio_compare import compare_rule
+        return compare_rule(*a)
+    return run_ci(default_http, gh_default, compare, now, ROOT, weekly=not args.no_weekly, assignees=assignees)
 
 
 if __name__ == "__main__":
