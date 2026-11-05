@@ -1,0 +1,21 @@
+name: 준비
+description: 파이썬과 노드를 설치하고, 원본 한글 파일을 변환해 시험할 수 있게 준비한다(지문이 다르면 실패)
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+        cache-dependency-path: |
+          requirements.txt
+          scripts/requirements-bounds.txt
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+        cache: npm
+    - name: 저장소 준비(패키지 설치, 한글 파일 변환, 지문 확인)
+      shell: bash
+      env:
+        PYTHONUTF8: "1"
+      run: python3 -X utf8 scripts/setup_project.py --full

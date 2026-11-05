@@ -1,0 +1,40 @@
+name: ALIO 매주 확인
+on:
+  schedule:
+    - cron: '0 0 * * 1'   # 월요일 00:00 UTC = 한국 시간 월요일 오전 9시
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: naegyu-write
+  cancel-in-progress: false
+env:
+  PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+  NAEGYU_ASSIGNEES: ${{ vars.NAEGYU_ASSIGNEES }}
+jobs:
+  watch:
+    if: github.event.repository.fork != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: setup
+        uses: ./.github/actions/setup
+      - id: watch
+        name: ALIO 확인과 이슈 내기
+        run: python3 -X utf8 scripts/watch_ci.py
+      - id: commit
+        if: always()
+        uses: ./.github/actions/commit
+        with:
+          paths: |
+            대기
+            reports/alio_watch
+          message: ALIO 매주 확인 기록
+      - name: 준비나 기록 올리기가 실패했음을 알리기
+        if: failure() && (steps.setup.outcome == 'failure' || steps.commit.outcome == 'failure')
+        run: python3 -X utf8 scripts/watch_ci.py --report-failure "준비 실패 또는 기록 올리기 실패"

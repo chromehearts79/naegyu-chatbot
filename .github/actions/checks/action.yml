@@ -1,0 +1,36 @@
+name: 시험 묶음
+description: 문답 검사, 화면 만들기, 모든 시험을 순서대로 돌린다. 하나라도 실패하면 실패한다
+runs:
+  using: composite
+  steps:
+    - name: 문답 카드 검사
+      shell: bash
+      env:
+        PYTHONUTF8: "1"
+      run: python3 -X utf8 scripts/check_knowledge.py
+    - name: 화면과 묶음 만들기(양식 떼기 포함)
+      shell: bash
+      env:
+        PYTHONUTF8: "1"
+      run: python3 -X utf8 scripts/update_rules.py build
+    - name: 매주 확인 시험
+      shell: bash
+      env:
+        PYTHONUTF8: "1"
+      run: python3 -X utf8 scripts/test_watch_alio.py
+    - name: 브라우저 운영 시험
+      shell: bash
+      env:
+        PYTHONUTF8: "1"
+      run: python3 -X utf8 scripts/test_browser_ops.py
+    - name: 서식 받기 시험
+      shell: bash
+      env:
+        PYTHONUTF8: "1"
+      run: python3 -X utf8 scripts/test_forms.py
+    - name: 계산·검색 엔진 시험
+      shell: bash
+      run: node scripts/test_engine.js
+    - name: 화면 시험
+      shell: bash
+      run: node --max-old-space-size=8192 scripts/ui_test.js dist/index.html

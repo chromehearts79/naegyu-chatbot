@@ -4,6 +4,7 @@
   python3 scripts/update_rules.py convert   # 2단계: 그 파일만 변환 → 규정 DB 다시 만들기 → 개정 감지 보고서 → 그 내규의 서식 대장 다시 읽기
   (3단계: 카드 고치기 — 사람 또는 AI가 reports/change_report.md 를 보고 카드를 고친다)
   python3 scripts/update_rules.py finish 복무세칙 [규정명 …]   # 4단계: 확인한 규정을 승인하고 양식 다시 떼기·검사, 시범본·지식 묶음 다시 만들기
+  python3 scripts/update_rules.py build     # 판 번호·지문·원본 기록은 두고, 낱말 경계·양식·화면·지식 묶음·검수표만 다시 만든다(GitHub 시험·새 판용)
   python3 scripts/update_rules.py init      # 처음 한 번: 지금 원본 파일들을 기준으로 기록
 
 원본 폴더: iCloud 내규챗봇 폴더(파일 이름 '코드. 규정명.hwp', 예: 'Ⅲ-3-1. 복무세칙.hwp').
@@ -181,6 +182,17 @@ def finish(accept):
     site_path.write_text(json.dumps(site, ensure_ascii=False, indent=2) + "\n")
     print(f"판 번호: 제{site['release']['no']}판")
     print(run(sys.executable, "scripts/check_changes.py").strip())
+    build_all()
+    # 원본 파일 기록 갱신(다음 개정 때 바뀐 파일만 고르기 위해)
+    cur = {n: sha(p) for n, p in sources().items()}
+    MANIFEST.write_text(json.dumps({"taken": datetime.date.today().isoformat(), "files": cur}, ensure_ascii=False, indent=1) + "\n")
+    print(f"원본 파일 기록 갱신: {len(cur)}개 ({MANIFEST.relative_to(ROOT)})")
+    # ALIO 기록을 올리고 dist/release.json 을 만든다(실패해도 개정 반영은 멈추지 않는다)
+    refresh_alio()
+
+
+def build_all():
+    """판 번호·지문·원본 기록은 건드리지 않고 화면과 묶음을 다시 만든다. GitHub 시험과 새 판에서도 쓴다."""
     print(run(sys.executable, "scripts/check_approval_table.py").strip())
     # 내규나침반 낱말 경계: 바뀐 원문에 맞춰 다시 만든다(없으면 build_web.py 가 묶지 않는다)
     py = kiwi_python()
@@ -198,12 +210,6 @@ def finish(accept):
     print(run(sys.executable, "scripts/build_web.py").strip())
     print(run(sys.executable, "scripts/export_gpts.py").strip())
     print(run(sys.executable, "scripts/review_workbook.py", "export").strip().splitlines()[-1])
-    # 원본 파일 기록 갱신(다음 개정 때 바뀐 파일만 고르기 위해)
-    cur = {n: sha(p) for n, p in sources().items()}
-    MANIFEST.write_text(json.dumps({"taken": datetime.date.today().isoformat(), "files": cur}, ensure_ascii=False, indent=1) + "\n")
-    print(f"원본 파일 기록 갱신: {len(cur)}개 ({MANIFEST.relative_to(ROOT)})")
-    # ALIO 기록을 올리고 dist/release.json 을 만든다(실패해도 개정 반영은 멈추지 않는다)
-    refresh_alio()
 
 
 def refresh_alio(runner=subprocess.run):
@@ -212,7 +218,7 @@ def refresh_alio(runner=subprocess.run):
     if r.stdout.strip():
         print(r.stdout.strip())
     if r.returncode != 0:
-        print("경고: ALIO 기록 갱신 실패, 직접 alio_release.py refresh 를 실행하세요")
+        print("경고: ALIO 기록 갱신 실패. 합친 뒤 GitHub이 자동으로 다시 합니다. Claude 웹에서는 늘 이렇게 나오니 그대로 넘어가세요")
         tail = (r.stderr or "").strip().splitlines()[-5:]
         for l in tail:
             print("  " + l)
@@ -232,6 +238,8 @@ if __name__ == "__main__":
         convert()
     elif cmd == "finish":
         finish(sys.argv[2:])
+    elif cmd == "build":
+        build_all()
     elif cmd == "init":
         init()
     else:

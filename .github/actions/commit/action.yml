@@ -1,0 +1,42 @@
+name: 기록 커밋
+description: 지정한 파일만 커밋하고 올린다. 바뀐 것이 없으면 아무것도 하지 않는다
+inputs:
+  paths:
+    description: 커밋할 경로(공백이나 줄바꿈으로 나눔). 이 경로만 올린다
+    required: true
+  message:
+    description: 커밋 메시지(끝에 [skip ci] 가 붙는다)
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PATHS: ${{ inputs.paths }}
+        MESSAGE: ${{ inputs.message }}
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+        set -f
+        for p in $PATHS; do
+          # 폴더 전체가 지워졌을 수 있으니, 있거나 이미 추적 중인 경로만 올린다
+          if [ -e "$p" ] || git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
+            git add -A -- "$p"
+          fi
+        done
+        set +f
+        if git diff --cached --quiet; then
+          echo "바뀐 기록이 없어 커밋하지 않습니다."
+          exit 0
+        fi
+        git commit -m "$MESSAGE [skip ci]"
+        for attempt in 1 2; do
+          if git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"; then
+            exit 0
+          fi
+          git rebase --abort 2>/dev/null || true
+          echo "올리기에 실패해 다시 시도합니다($attempt)."
+        done
+        echo "기록을 올리지 못했습니다." >&2
+        exit 1

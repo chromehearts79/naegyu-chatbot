@@ -1,0 +1,33 @@
+name: 시험
+on:
+  pull_request:
+permissions:
+  contents: read
+  pull-requests: write
+env:
+  PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: setup
+        uses: ./.github/actions/setup
+      - id: checks
+        uses: ./.github/actions/checks
+      - id: number
+        name: 판 번호 검사
+        if: always() && steps.setup.outcome == 'success'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 -X utf8 scripts/release_ci.py check-number "$BASE_SHA"
+      - name: 실패를 댓글로 알리기
+        if: failure() && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "시험에 실패했습니다. 이 글을 합치지 말고 Claude 웹에 이 글을 보여 주세요. 실패한 이유는 이 글 아래 Checks 탭(또는 Details 링크)의 빨간 단계에서 볼 수 있습니다."

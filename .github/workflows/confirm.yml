@@ -1,0 +1,38 @@
+name: 확인함 댓글
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: naegyu-write
+  cancel-in-progress: false
+env:
+  PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  confirm:
+    if: github.event.repository.fork != true && !github.event.issue.pull_request && contains(github.event.comment.body, '확인함') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 확인함 처리
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ASSOCIATION: ${{ github.event.comment.author_association }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: python3 -X utf8 scripts/confirm_ci.py
+      - uses: ./.github/actions/commit
+        with:
+          paths: |
+            knowledge/alio_seen.json
+            대기
+          message: 확인함 기록

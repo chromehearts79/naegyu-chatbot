@@ -1,0 +1,61 @@
+name: 새 판 만들기
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '대기/**'
+      - 'reports/alio_watch/**'
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: naegyu-write
+  cancel-in-progress: false
+env:
+  PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+  NAEGYU_ASSIGNEES: ${{ vars.NAEGYU_ASSIGNEES }}
+jobs:
+  release:
+    if: github.event.repository.fork != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: setup
+        uses: ./.github/actions/setup
+      - id: checks
+        uses: ./.github/actions/checks
+      # ALIO가 막혀도 새 판은 만든다. 다음 주 확인이 스스로 맞춘다.
+      - id: refresh
+        name: ALIO 기록 갱신
+        continue-on-error: true
+        run: python3 -X utf8 scripts/alio_release.py refresh
+      - id: weekly
+        name: ALIO 판정(댓글 없이)
+        continue-on-error: true
+        run: python3 -X utf8 scripts/watch_ci.py --no-weekly
+      - id: commit
+        uses: ./.github/actions/commit
+        with:
+          paths: |
+            knowledge/alio_seen.json
+            대기
+            reports/alio_watch
+          message: ALIO 기록 갱신
+      - id: publish
+        name: 새 판 올리기
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python3 -X utf8 scripts/release_ci.py publish "$BEFORE_SHA"
+      - name: ALIO 기록 갱신 실패를 알리기(새 판은 이미 나감)
+        if: always() && steps.refresh.outcome == 'failure' && steps.publish.outcome == 'success'
+        run: |
+          echo "::warning::ALIO 기록 갱신이 실패했습니다. 새 판은 만들었고, 다음 주 확인이 다시 맞춥니다."
+          python3 -X utf8 scripts/watch_ci.py --report-failure "ALIO 기록 갱신에 실패했습니다(새 판은 만들었습니다). 다음 주 확인이 스스로 다시 맞춥니다." --kind release
+      - name: 새 판 실패를 알리기
+        if: failure()
+        run: python3 -X utf8 scripts/watch_ci.py --report-failure "새 판 만들기가 중간에 멈췄습니다. Actions 탭에서 실패한 실행의 빨간 단계를 확인하세요." --kind release
