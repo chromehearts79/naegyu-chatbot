@@ -182,4 +182,112 @@ if (ROOT / "data" / "rules.json").exists():
     after = sorted(x.name for x in wdir.iterdir()) if wdir.exists() else None
     ok(bad.returncode != 0 and "없는카드이름" in (bad.stderr + bad.stdout) and before == after, "prepare 에 맞지 않는 인자가 있으면 오류로 멈추고 작업 파일을 건드리지 않는다")
 
+import datetime  # noqa: E402
+import alio_report as RP  # noqa: E402
+import alio_types as T  # noqa: E402
+import watch_ci as WC  # noqa: E402
+
+
+def cmp_res(**kw):
+    base = dict(changed_units=[], stale_cards=[], related_cards=[], calcs=[], added_units=[], before_after=[], outside_diff=[], whole_same=False)
+    base.update(kw)
+    return T.CompareResult(**base)
+
+
+ok(WC.kst_date("2026-11-08T16:00:00Z") == "2026-11-09", "GitHub 시각을 한국 날짜로 바꾼다")
+F = T.Finding(name="복무세칙", code="Ⅲ-3-1", idx="9387", verdict=T.V_SUSPECT, title="복무세칙", st_date="2026.11.02", mod="2026.11.09", file_date="2026.11.02", ext=".hwp", values={"mod": "2026.11.09", "st_date": "2026.11.02", "file_no": "101"}, target_name="Ⅲ-3-1. 복무세칙.hwp", saved_dir="대기/복무세칙_20261102", days=3, notes=["날짜가 그대로라 재게시일 수 있음"],
+              compare=cmp_res(changed_units=["제19조"], stale_cards=["a", "b"], related_cards=["c"], calcs=["가족수당"], before_after=[("제19조", "옛 글", "새 글")]))
+body = WC.issue_body(F, "2026-11-09")
+ok(WC.marker("9387") in body and "제19조" in body and "2장" in body and "가족수당" in body and "대기/복무세칙_20261102" in body and "Ⅲ-3-1. 복무세칙.hwp" in body and "claude.ai/code" in body and "재게시" in body, "이슈 글: 조문·문답·계산기·파일 위치·넣을 이름·참고·다음 할 일")
+ok("확인함:" in body, "이슈 글에 확인함 방법이 있다")
+ok(WC.issue_title(F) == "개정 의심: 복무세칙", "이슈 제목")
+dirty = "복무@홍길동 `코드` <script>\n줄바꿈 | [링크](x)"
+c = WC.clean_md(dirty)
+ok("@홍" not in c and "`" not in c and "<script" not in c and "\n" not in c and "](" not in c, "ALIO 글자를 무해하게 만든다")
+ok(WC.clean_md("대기/복무_세칙.v-2") == "대기/복무_세칙.v-2", "경로에 쓰는 글자는 그대로 둔다")
+F2 = T.Finding(name=dirty, code="", idx="1", verdict=T.V_NEW, title=dirty, st_date="2026.11.02", mod="2026.11.09")
+b2 = WC.issue_body(F2, "2026-11-09")
+ok("@홍" not in b2 and "<script" not in b2 and "@" not in WC.issue_title(F2), "지저분한 이름도 글을 깨지 않고 알림을 보내지 않는다")
+F3 = T.Finding(name="큰 내규", code="X", idx="2", verdict=T.V_SUSPECT, title="큰 내규", compare=cmp_res(changed_units=["별표"], before_after=[("별표", "옛" * 50000, "새" * 50000)]))
+b3 = WC.issue_body(F3, "2026-11-09")
+ok(len(b3) <= 60000 and "잘렸" in b3 and WC.marker("2") in b3 and "다음에 할 일" in b3, "긴 글은 한도 안으로 자르고 알린다")
+b4 = WC.issue_body(F3, "2026-11-09", limit=800)
+ok(len(b4) <= 800 and WC.marker("2") in b4 and "다음에 할 일" in b4 and "claude.ai/code" in b4, "아주 작은 한도에서도 표지와 다음 할 일은 남는다")
+
+OPEN = {"number": 7, "title": "개정 의심: 복무세칙", "body": WC.marker("9387"), "createdAt": "2026-11-02T00:00:00Z", "lastCommentDate": "2026-11-02"}
+none = T.Finding(name="복무세칙", code="Ⅲ-3-1", idx="9387", verdict=T.V_NONE, title="복무세칙")
+acts = WC.plan_actions([F], [], "2026-11-09", ["담당"])
+ok([a["kind"] for a in acts] == ["create"] and acts[0]["assignees"] == ["담당"] and acts[0]["labels"] == ["개정 의심"], "새 개정 의심은 이슈를 만들고 담당자를 지정한다")
+kinds = [a["kind"] for a in WC.plan_actions([F], [OPEN], "2026-11-09", [])]
+ok(kinds == ["edit", "comment"], "그대로면 글을 고치고 매주 댓글을 단다")
+ok([a["kind"] for a in WC.plan_actions([F], [dict(OPEN, lastCommentDate="2026-11-09")], "2026-11-09", [])] == ["edit"], "같은 날 다시 돌려도 댓글이 겹치지 않는다")
+ok([a["kind"] for a in WC.plan_actions([F], [OPEN], "2026-11-09", [], weekly=False)] == ["edit"], "합친 뒤 판정에서는 댓글을 달지 않는다")
+ok([a["kind"] for a in WC.plan_actions([none], [OPEN], "2026-11-09", [])] == ["close"], "해소되면 닫는다")
+ok([a["kind"] for a in WC.plan_actions([], [OPEN], "2026-11-09", [])] == ["close"], "목록에서 없어진 내규의 이슈도 닫는다")
+ok(WC.plan_actions([none], [{"number": 9, "title": "다른 글", "body": "안녕", "createdAt": "2026-11-02T00:00:00Z", "lastCommentDate": ""}], "2026-11-09", []) == [], "사람이 쓴 다른 이슈는 건드리지 않는다")
+ok(WC.plan_actions([none], [], "2026-11-09", []) == [], "변동 없으면 이슈 일이 없다")
+for v in (T.V_DONE, T.V_SAME_TEXT):
+    ok(WC.plan_actions([T.Finding(name="a", code="", idx="5", verdict=v)], [], "2026-11-09", []) == [], f"{v} 는 이슈를 만들지 않는다")
+ok("미반영 공지" in WC.week_comment(T.Finding(name="a", code="", idx="5", verdict=T.V_SUSPECT, days=RP.LATE_DAYS + 1), "2026-11-09") and "미반영 공지" not in WC.week_comment(T.Finding(name="a", code="", idx="5", verdict=T.V_SUSPECT, days=RP.LATE_DAYS - 1), "2026-11-09"), "14일이 넘으면 미반영 공지를 안내한다")
+ok("이번 주 변동 없음" in WC.heartbeat_text([none], "2026-11-09") and "복무세칙" in WC.heartbeat_text([F, none], "2026-11-09"), "매주 기록 문구")
+ok([a["kind"] for a in WC.heartbeat_actions([none], None, "2026-11-09")] == ["create"], "기록 이슈가 없으면 만든다")
+PIN = {"number": 1, "title": "매주 확인 기록", "body": "", "createdAt": "2026-11-02T00:00:00Z", "lastCommentDate": "2026-11-02"}
+ok([a["kind"] for a in WC.heartbeat_actions([none], PIN, "2026-11-09")] == ["comment"] and WC.heartbeat_actions([none], dict(PIN, lastCommentDate="2026-11-09"), "2026-11-09") == [], "기록 댓글은 하루 한 번")
+fa = WC.failure_actions("ALIO 접속 실패", [], "2026-11-09", ["담당"])
+ok(fa[0]["kind"] == "create" and "확인 실패" in fa[0]["title"] and "ALIO 접속 실패" in fa[0]["body"], "실패하면 실패 이슈를 만든다")
+ok([a["kind"] for a in WC.failure_actions("또 실패", [{"number": 3, "title": "확인 실패", "body": fa[0]["body"], "createdAt": "2026-11-02T00:00:00Z", "lastCommentDate": "2026-11-02"}], "2026-11-09", [])] == ["comment"], "실패 이슈를 겹쳐 만들지 않는다")
+ok("새 판" in WC.failure_actions("시험 실패", [], "2026-11-09", [], kind="release")[0]["title"], "새 판 실패는 따로 알린다")
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    F.files = [("복무:세칙(2026).hwp", b"x")]
+    p = WC.save_wait(F, td)
+    ok(p.startswith("대기/") and any((td / p).iterdir()), "받은 파일을 대기 폴더에 두고 저장소 기준 경로를 돌려준다")
+    (td / "대기" / "복무세칙_시행_20261102").mkdir()
+    F.file_date = "2026.11.09"
+    p2 = WC.save_wait(F, td)
+    names = sorted(x.name for x in (td / "대기").iterdir())
+    ok(names == ["복무세칙_20261109", "복무세칙_시행_20261102"] and p2.endswith("복무세칙_20261109"), "같은 내규의 옛 폴더만 지운다")
+    ok(WC.drop_wait("복무세칙", td) == 1 and [x.name for x in (td / "대기").iterdir()] == ["복무세칙_시행_20261102"], "해소되면 그 내규 폴더만 지운다")
+    F.file_date = "2026.11.02"
+    F.files = []
+
+
+class FakeGh:
+    def __init__(self, issues=None, broken=False, no_assign=False):
+        self.calls, self.issues, self.broken, self.no_assign, self.stdin = [], issues or [], broken, no_assign, []
+
+    def __call__(self, args, stdin=None):
+        self.calls.append(args)
+        self.stdin.append(stdin)
+        if self.broken or (self.no_assign and "--assignee" in args):
+            raise RuntimeError("gh 실패")
+        return json.dumps(self.issues) if args[:2] == ["issue", "list"] else ""
+
+
+g = FakeGh(no_assign=True)
+WC.apply_actions(WC.plan_actions([F], [], "2026-11-09", ["없는아이디"]), g)
+ok(len(g.calls) == 2 and "--assignee" not in g.calls[-1] and "담당자 지정" in (g.stdin[-1] or ""), "담당자 지정이 안 돼도 이슈는 만들고 글에 적는다")
+g = FakeGh()
+WC.apply_actions([{"kind": "create", "title": "t", "body": "b", "labels": [], "assignees": []}, {"kind": "edit", "number": 4, "title": "t", "body": "b"}, {"kind": "comment", "number": 4, "body": "c"}, {"kind": "close", "number": 4}], g)
+ok(g.calls == [["issue", "create", "--title", "t", "--body-file", "-"], ["issue", "edit", "4", "--title", "t", "--body-file", "-"], ["issue", "comment", "4", "--body-file", "-"], ["issue", "close", "4"]], "gh 명령 모양")
+try:
+    WC.apply_actions([{"kind": "create", "title": "t", "body": "b", "labels": [], "assignees": []}], FakeGh(broken=True))
+    ok(False, "담당자 없이 만들기가 실패하면 알린다")
+except RuntimeError:
+    ok(True, "담당자 없이 만들기가 실패하면 알린다")
+
+
+def fake_http_down(path, body):
+    raise WC.AlioError("접속 실패")
+
+
+with tempfile.TemporaryDirectory() as td:
+    g, sleeps = FakeGh(), []
+    rc = WC.run_ci(fake_http_down, g, None, datetime.datetime(2026, 11, 9, 9, 0), Path(td), sleep=sleeps.append)
+    joined = json.dumps(g.calls, ensure_ascii=False)
+    ok(rc == 1 and "확인 실패" in joined and "이번 주 변동 없음" not in joined, "ALIO 접속 실패는 변동 없음으로 끝나지 않는다")
+    ok(sleeps == [300], "실패하면 5분 뒤 한 번 더 돌린다")
+    ok(json.loads((Path(td) / "reports" / "alio_watch" / "last_run.json").read_text(encoding="utf-8"))["ok"] is False, "실패해도 실행 기록을 남긴다")
+    ok(WC.run_ci(fake_http_down, FakeGh(broken=True), None, datetime.datetime(2026, 11, 9, 9, 0), Path(td), sleep=lambda s: None) == 1, "이슈까지 못 쓰면 작업을 실패로 끝낸다")
+
 sys.exit(1 if FAIL else 0)
