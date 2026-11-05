@@ -14,7 +14,9 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = Path(__file__).resolve().parent
+REPO = Path.cwd()  # main() 이 명령을 실행한 곳의 저장소로 바꾼다
+TEXT_EXTS = {".md", ".json", ".py", ".txt", ".yml", ".yaml", ".cjs", ".js", ".html", ".csv"}
 
 ALLOWED_PHONES = {"02-123-4567", "044-200-7752"}
 ALLOWED_EMAILS = {"noreply@anthropic.com"}
@@ -82,35 +84,43 @@ def _looks_binary(data):
 
 
 def scan_md_dir(md_dir):
-    """내규 변환본(data/md)을 본다. [ 로 시작하는 변환본은 올리지 않으므로 보지 않는다."""
+    """내규 변환본(data/md)을 본다. [ 로 시작하는 변환본은 올리지 않으므로 보지 않는다.
+    읽지 못한 변환본은 점검하지 못한 것이므로 문제로 알린다."""
     found = []
     md_dir = Path(md_dir)
     for p in sorted(md_dir.rglob("*.md")):
         if p.name.startswith("["):
             continue
-        data = p.read_bytes()
-        if _looks_binary(data):
+        name = f"{md_dir.name}/{p.relative_to(md_dir).as_posix()}"
+        try:
+            data = p.read_bytes()
+        except OSError as e:
+            found.append(f"{name}: 읽지 못해 점검하지 못함 ({e})")
             continue
-        found += scan_text(f"{md_dir.name}/{p.relative_to(md_dir).as_posix()}", data.decode("utf-8"))
+        if _looks_binary(data):
+            found.append(f"{name}: 글 파일인데 UTF-8 글로 읽지 못해 점검하지 못함")
+            continue
+        found += scan_text(name, data.decode("utf-8"))
     return found
 
 
 # ---------- git ----------
 def git(*args, text=True):
-    r = subprocess.run(["git", "-c", "core.quotepath=false", *args], cwd=ROOT, capture_output=True)
+    r = subprocess.run(["git", "-c", "core.quotepath=false", *args], cwd=REPO, capture_output=True)
     if r.returncode != 0:
         raise SystemExit("git 실패: " + r.stderr.decode("utf-8", "replace").strip())
     return r.stdout.decode("utf-8", "replace") if text else r.stdout
 
 
-def tracked_files():
-    return [p for p in git("ls-files", "-z").split("\0") if p]
+def tracked_files(staged):
+    """올라갈 파일 목록. 기본은 HEAD(올리면 나가는 것), --staged 면 인덱스."""
+    if staged:
+        return [p for p in git("ls-files", "-z").split("\0") if p]
+    return [p for p in git("ls-tree", "-r", "-z", "--name-only", "HEAD").split("\0") if p]
 
 
 def read_file(path, staged):
-    if staged:
-        return git("show", ":" + path, text=False)
-    return (ROOT / path).read_bytes()
+    return git("show", (":" if staged else "HEAD:") + path, text=False)
 
 
 # ---------- 파일 정보 ----------
@@ -148,21 +158,18 @@ def file_infos(paths, staged):
     with tempfile.TemporaryDirectory() as td:
         local = {}
         for i, p in enumerate(kinds):
-            if staged:
-                f = Path(td) / f"{i}{Path(p).suffix}"
-                try:
-                    f.write_bytes(read_file(p, True))
-                except SystemExit as e:
-                    lines[p] = f"읽지 못함 ({e})"
-                    continue
-                local[p] = f
-            else:
-                local[p] = ROOT / p
+            f = Path(td) / f"{i}{Path(p).suffix}"
+            try:
+                f.write_bytes(read_file(p, staged))
+            except (OSError, SystemExit) as e:
+                lines[p] = f"읽지 못함 ({e})"
+                continue
+            local[p] = f
         hwps = [p for p in local if p.lower().endswith(".hwp")]
         if hwps:
             try:
-                r = subprocess.run(["node", str(ROOT / "scripts" / "file_info.cjs"), *[str(local[p]) for p in hwps]],
-                                   cwd=ROOT, capture_output=True, timeout=120)
+                r = subprocess.run(["node", str(SCRIPTS / "file_info.cjs"), *[str(local[p]) for p in hwps]],
+                                   cwd=SCRIPTS, capture_output=True, timeout=120)
                 by_local = {str(local[p]): p for p in hwps}
                 if r.returncode != 0:
                     raise RuntimeError(r.stderr.decode("utf-8", "replace").strip() or "node 실행 실패")
@@ -188,26 +195,43 @@ def file_infos(paths, staged):
 
 
 def main(argv):
+    global REPO
     staged = "--staged" in argv
     history = "--history" in argv
     problems = []
+    try:
+        REPO = Path(git("rev-parse", "--show-toplevel").strip())
+        files = tracked_files(staged)
+    except SystemExit as e:
+        print(f"✗ 점검하지 못했습니다: {e}")
+        return 1
+    warnings = []
+    if not staged:
+        dirty = [ln[3:] for ln in git("status", "--porcelain", "--untracked-files=no").splitlines()]
+        if dirty:
+            warnings.append(f"저장하지 않은(커밋 전) 바뀐 파일 {len(dirty)}개가 있습니다. 이 점검은 HEAD(올라갈 내용)를 봤으므로 이 바뀐 내용은 보지 않았습니다: "
+                            + ", ".join(dirty[:5]) + (" …" if len(dirty) > 5 else ""))
 
-    files = tracked_files()
     for p in forbidden_paths(files):
         problems.append(f"올리면 안 되는 파일: {p}")
-    scanned = skipped = 0
+    scanned = 0
+    skipped = {}  # 확장자 -> 경로들
     for p in files:
         try:
             data = read_file(p, staged)
-        except (OSError, SystemExit):
-            skipped += 1
+        except (OSError, SystemExit) as e:
+            problems.append(f"{p}: 읽지 못해 점검하지 못함 ({e})")
             continue
         if _looks_binary(data):
-            skipped += 1
+            ext = Path(p).suffix.lower()
+            if ext in TEXT_EXTS:
+                problems.append(f"{p}: 글 파일인데 UTF-8 글로 읽지 못해 점검하지 못함")
+            else:
+                skipped.setdefault(ext or "(확장자 없음)", []).append(p)
             continue
         scanned += 1
         problems += scan_text(p, data.decode("utf-8"))
-    md_dir = ROOT / "data" / "md"
+    md_dir = REPO / "data" / "md"
     if md_dir.is_dir():
         problems += scan_md_dir(md_dir)
 
@@ -221,8 +245,16 @@ def main(argv):
             for a in {x.strip() for x in line.split("|") if x.strip()}:
                 authors[a] = authors.get(a, 0) + 1
 
-    print(f"점검 대상: {'스테이지에 올린 내용' if staged else '작업 폴더'}의 글 파일 {scanned}개"
-          f"(글이 아닌 파일 {skipped}개는 건너뜀), 내규 변환본 폴더 data/md" + (", 기록 전체(HEAD)" if history else ""))
+    print(f"점검 대상: {'스테이지에 올린 내용' if staged else 'HEAD(올라갈 내용)'}의 글 파일 {scanned}개, 내규 변환본 폴더 data/md"
+          + (", 기록 전체(HEAD)" if history else ""))
+    for w in warnings:
+        print("\n! 주의: " + w)
+    nskip = sum(len(v) for v in skipped.values())
+    if nskip:
+        print(f"\n글 내용을 보지 않은 글 아닌 파일 {nskip}개(확장자별). 한글·엑셀은 아래 작성 정보로만 봅니다:")
+        for ext, ps in sorted(skipped.items()):
+            shown = ", ".join(ps[:3]) + (f" 외 {len(ps) - 3}개" if len(ps) > 3 else "")
+            print(f"  - {ext} {len(ps)}개: {shown}")
     if problems:
         print(f"\n✗ 걸린 것 {len(problems)}건 — 올리기 전에 사람이 보고 정해야 합니다.")
         for line in problems:
@@ -237,8 +269,15 @@ def main(argv):
 
     infos = file_infos(files, staged)
     print(f"\n한글·엑셀 파일 작성 정보 {len(infos)}개(보여 주기만 하며 막지 않습니다):")
+    notes = []
     for p, line in infos:
+        line = line.encode("utf-8", "replace").decode("utf-8")  # 깨진 글자(짝 없는 서로게이트)가 있어도 출력이 멈추지 않게
         print(f"  - {p}: {line}")
+        notes += scan_text(p + " 작성 정보", line)
+    if notes:
+        print("\n! 참고: 작성 정보 안에 개인정보·키 꼴이 있습니다(실패로 치지 않으니 사람이 보고 정하세요):")
+        for n in notes:
+            print("  - " + n)
     print(f"\n파일 수: 올라갈 파일 {len(files)}개")
     return 1 if problems else 0
 

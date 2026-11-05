@@ -10,8 +10,7 @@ function readable(buf) {
   const out = [];
   for (const part of text.split("\u0000")) {
     const s = part.replace(/[\u0000-\u001f]/g, "").trim();
-    // 속성 표의 숫자 부분이 깨진 글자로 읽힌 덩어리는 빼고, 한글·영문·숫자·기호로만 된 줄을 둔다.
-    if (s.length >= 2 && /^[0-9A-Za-z가-힣 ,.:;\-_()\/·]+$/.test(s)) out.push(s);
+    if (s.length >= 2) out.push(s);
   }
   return out;
 }

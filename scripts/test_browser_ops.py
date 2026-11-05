@@ -63,4 +63,75 @@ with tempfile.TemporaryDirectory() as td:
     (td / "복무세칙.md").write_text("hong" + "@example.go.kr", encoding="utf-8")
     ok(len(CU.scan_md_dir(td)) == 1, "올라갈 내규 변환본은 본다")
 
+import subprocess  # noqa: E402
+
+
+def run_check(repo, *flags):
+    r = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "scripts" / "check_upload.py"), *flags], cwd=repo, capture_output=True)
+    return r.returncode, r.stdout.decode("utf-8", "replace")
+
+
+def git_in(repo, *args):
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t" + "@example.invalid", *args], cwd=repo, check=True, capture_output=True)
+
+
+def make_repo(td, files):
+    td = Path(td)
+    git_in(td, "init", "-q")
+    for rel, data in files.items():
+        f = td / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data)
+    git_in(td, "add", "-f", "--", *files)
+    git_in(td, "commit", "-q", "-m", "t")
+    return td
+
+
+addr = ("hong" + "@example.go.kr").encode()
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"a.txt": "깨끗".encode()})
+    code, out = run_check(r)
+    ok(code == 0 and "✓" in out, "깨끗한 저장소는 통과한다")
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"a.md": b"mail " + addr})
+    code, out = run_check(r)
+    ok(code == 1 and "a.md 1번째 줄" in out, "올라간 파일에 메일 꼴이 있으면 실패하고 파일과 줄을 알린다")
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"docs/[x]/b.md": b"ok"})
+    code, out = run_check(r)
+    ok(code == 1 and "docs/[x]/b.md" in out, "안쪽 폴더의 [ 파일도 실패")
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"c.txt": "연락처 ".encode("cp949") + addr})
+    code, out = run_check(r)
+    ok(code == 1 and "c.txt" in out and "점검하지 못함" in out, "UTF-8이 아닌 글 파일은 건너뛰지 않고 실패")
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"d.bin": b"\x00\x01\x02", "e.zzz": b"\x00\x01"})
+    code, out = run_check(r)
+    ok(code == 0 and "d.bin" in out and "e.zzz" in out and ".bin 1개" in out, "글 아닌 알 수 없는 파일은 통과하되 건너뛴 목록에 이름이 나온다")
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"f.md": b"clean"})
+    (r / "f.md").write_bytes(b"mail " + addr)
+    code, out = run_check(r)
+    ok(code == 0 and "주의" in out and "f.md" in out, "작업 폴더에서만 고친 내용은 HEAD 를 보므로 통과하되 경고한다")
+    git_in(r, "add", "f.md")
+    code, out = run_check(r, "--staged")
+    ok(code == 1 and "f.md 1번째 줄" in out, "--staged 는 인덱스를 본다")
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"g.md": b"mail " + addr})
+    (r / "g.md").write_bytes(b"clean")
+    git_in(r, "commit", "-qam", "fix")
+    code, out = run_check(r)
+    ok(code == 0, "지금 내용이 깨끗하면 기본 점검은 통과")
+    code, out = run_check(r, "--history")
+    ok(code == 1 and "기록" in out and "t" + "@example.invalid" in out, "--history 는 지난 기록의 메일 꼴을 잡고 작성자 목록을 보인다")
+with tempfile.TemporaryDirectory() as td:
+    r = make_repo(td, {"h.md": b"x"})
+    (r / "data" / "md").mkdir(parents=True)
+    (r / "data" / "md" / "i.md").write_bytes("깨".encode("cp949") * 3 + b"\xff")
+    code, out = run_check(r)
+    ok(code == 1 and "i.md" in out, "읽지 못한 내규 변환본도 문제로 알린다")
+with tempfile.TemporaryDirectory() as td:
+    code, out = run_check(td)
+    ok(code == 1 and "점검하지 못했습니다" in out, "git 저장소가 아니면 통과시키지 않는다")
+
 sys.exit(1 if FAIL else 0)
