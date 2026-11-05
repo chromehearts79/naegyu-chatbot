@@ -251,7 +251,7 @@ def main():
         lines += ["## 새로 생긴 조문·별표", ""] + [f"- {unit_label(n, u)}" + (" (카드 있음)" if (n, u) in cited else " — 카드 없음, 필요하면 새 카드 작성") for n, u in added] + [""]
     lines += ["## 처리 순서", "",
               "1. 위 카드의 답·근거를 새 원문에 맞게 고친다(`python3 scripts/show_rule.py <규정명>`).",
-              "2. `python3 scripts/check_knowledge.py` 오류 0건, `python3 scripts/blind_check.py <카드 id…>` 로 다시 검증.",
+              "2. `python3 scripts/check_knowledge.py` 오류 0건, `python3 scripts/blind_check.py prepare <카드 id…>` 로 다시 검증.",
               "   '다시 확인할 계산기'가 있으면 그 계산기 숫자(web/engine.js)와 근거표(knowledge/calc_basis.json)도 새 원문대로 고친다.",
               "3. 그 규정의 카드를 다 확인했으면 `python3 scripts/check_changes.py --accept <규정명>`.",
               "4. `python3 scripts/build_web.py` 로 다시 묶는다. 확인 전 카드는 화면에 '규정 개정 · 재검수 전'으로 표시된다.", ""]

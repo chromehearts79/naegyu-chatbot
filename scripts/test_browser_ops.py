@@ -134,4 +134,46 @@ with tempfile.TemporaryDirectory() as td:
     code, out = run_check(td)
     ok(code == 1 and "점검하지 못했습니다" in out, "git 저장소가 아니면 통과시키지 않는다")
 
+if (ROOT / "data" / "rules.json").exists():
+    import blind_check as B  # noqa: E402
+    from check_knowledge import load_domains  # noqa: E402
+    cards = load_domains()[1]
+    usable = [c for c in cards if len(c["facts"]) >= 2 and all(len(str(f["value"])) >= 4 for f in c["facts"])]
+    card, card2 = usable[0], usable[1]
+    keep = (B.WORK, B.OUT_MD, B.OUT_JSON)
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        B.WORK, B.OUT_MD, B.OUT_JSON = td / "work", td / "b.md", td / "b.json"
+        B.OUT_JSON.write_text(json.dumps([{"card": cards[-1]["id"], "label": "옛", "mine": "a", "theirs": "a", "cite": "x", "step1": "일치", "step1_note": "", "verdict": "일치"}], ensure_ascii=False), encoding="utf-8")
+        q = json.loads(B.prepare([card["id"], card2["id"]]).read_text(encoding="utf-8"))
+        raw = json.dumps(q, ensure_ascii=False)
+        ok(q[0]["card"] == card["id"] and "prompt" in q[0], "문제 파일을 만든다")
+        ok(all(str(f["value"]) not in raw for c in (card, card2) for f in c["facts"] if len(str(f["value"])) >= 6 and not any(str(f["value"]) in x["context"] for x in q)), "문제 파일에 문답의 답이 들어가지 않는다")
+        right = [f["value"] for f in card["facts"]]
+        rows, jq = B.first_pass({card["id"]: right}, "시험AI")
+        ok(all(r["step1"] == B.compare(r["mine"], r["theirs"])[0] == "일치" for r in rows) and jq is None, "답이 같으면 지금 규칙대로 일치")
+        ok(B.remaining() == [card2["id"]], "끝난 만큼 쌓고 남은 카드를 안다")
+        try:
+            B.finish({}, "시험AI")
+            ok(False, "남은 카드가 있으면 마무리하지 않는다")
+        except ValueError:
+            ok(True, "남은 카드가 있으면 마무리하지 않는다")
+        B.first_pass({card2["id"]: [f["value"] for f in card2["facts"]]}, "시험AI")
+        res = B.finish({}, "시험AI")
+        out = json.loads(B.OUT_JSON.read_text(encoding="utf-8"))
+        ok(any(r["card"] == card["id"] and r["ai"] == "시험AI" for r in out) and res["일치"] >= 1 and not (td / "work").exists(), "채점 결과에 AI 이름을 남기고 작업 파일을 지운다")
+        ok(any(r["card"] == cards[-1]["id"] for r in out), "고르지 않은 카드의 지난 결과를 그대로 둔다")
+        B.prepare([card["id"]])
+        rows, jq = B.first_pass({card["id"]: ["없음"] * len(card["facts"])}, "시험AI")
+        ok(jq is not None and json.loads(jq.read_text(encoding="utf-8")) and all(r["step1"] == "판정 필요" for r in rows), "어긋나면 2차 문제를 만든다")
+        keys = [x["key"] for x in json.loads(jq.read_text(encoding="utf-8"))]
+        B.finish({k: {"판정": "아니오", "이유": "시험"} for k in keys}, "시험AI")
+        out = json.loads(B.OUT_JSON.read_text(encoding="utf-8"))
+        ok(any(r["card"] == card["id"] and r["verdict"] == "확인 필요" for r in out), "2차에서 아니오면 확인 필요")
+    B.WORK, B.OUT_MD, B.OUT_JSON = keep
+    s1, s2 = B.sample_cards(20), B.sample_cards(20)
+    doms = {c["id"]: c["domain"] for c in cards}
+    ok(s1 == s2 and len(s1) == 20 and len({doms[i] for i in s1}) >= 2, "고정 시드로 분야를 섞어 고른다")
+    ok("11434" not in (ROOT / "scripts" / "blind_check.py").read_text(encoding="utf-8"), "로컬 모델 호출이 없다")
+
 sys.exit(1 if FAIL else 0)
