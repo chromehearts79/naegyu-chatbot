@@ -19,20 +19,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from alio_types import CompareResult  # noqa: E402
 import check_changes as cc  # noqa: E402
 from check_knowledge import load_domains  # noqa: E402
+from kordoc_tool import KORDOC, kordoc_cmd  # noqa: E402,F401  (다른 곳에서 alio_compare.KORDOC 으로 부른다)
 
-KORDOC = "kordoc@4.24.42"
 NEW_CODE = "Ⅳ-99"  # 분류 코드가 아직 없는 새 내규의 임시 파일 이름용
 HERE = Path(__file__).resolve().parent
 MD_DIR = cc.ROOT / "data" / "md"
-
-
-def kordoc_cmd():
-    """저장소에 kordoc 이 깔려 있으면 그것을(바깥 접속 없음), 없으면 npx 로 받아 쓴다.
-    윈도우에서는 which 가 .cmd 를 찾는다. npx 가 없으면 None 이 들어간다."""
-    local = shutil.which("kordoc", path=str(cc.ROOT / "node_modules" / ".bin"))
-    if local:
-        return [local]
-    return [shutil.which("npx"), "-y", KORDOC]
 
 
 def _popen_flags(name=None):

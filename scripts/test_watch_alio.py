@@ -315,7 +315,7 @@ if MD_DIR.exists():
     real_which = C.shutil.which
     C.shutil.which = lambda name, *a, **k: "/x/bin/npx" if name == "npx" else None
     try:
-        ok(C.KORDOC == "kordoc@4.24.42" and C.kordoc_cmd() == ["/x/bin/npx", "-y", "kordoc@4.24.42"], "kordoc 판을 고정한다(저장소에 없으면 npx)")
+        ok(C.KORDOC == "kordoc@4.24.1" and C.kordoc_cmd() == ["/x/bin/npx", "-y", "kordoc@4.24.1"], "kordoc 판을 고정한다(저장소에 없으면 npx)")
     finally:
         C.shutil.which = real_which
     seen_path = []

@@ -21,8 +21,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from kordoc_tool import kordoc_cmd  # noqa: E402
 # 시험할 때는 NAEGYU_SRC 로 다른 폴더를 줄 수 있다
-SRC = Path(os.environ.get("NAEGYU_SRC") or Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "내규챗봇")
+SRC = Path(os.environ.get("NAEGYU_SRC") or ROOT / "원본")
 MD = ROOT / "data" / "md"
 MANIFEST = ROOT / "knowledge" / "source_files.json"
 OUT = ROOT / "reports" / "update"
@@ -122,7 +124,7 @@ def convert():
         (MD / (Path(old).stem + ".md")).unlink(missing_ok=True)
     if todo:
         print(f"\n변환 중: {len(todo)}개 …")
-        run("npx", "-y", "kordoc", "--jobs", "4", "-d", str(MD), *[str(SRC / n) for n in todo])
+        run(*kordoc_cmd(), "--jobs", "4", "-d", str(MD), *[str(SRC / n) for n in todo])
     print(run(sys.executable, "scripts/build_db.py").strip())
     out = run(sys.executable, "scripts/check_changes.py").strip()
     print(out)
@@ -183,7 +185,7 @@ def finish(accept):
     # 내규나침반 낱말 경계: 바뀐 원문에 맞춰 다시 만든다(없으면 build_web.py 가 묶지 않는다)
     py = kiwi_python()
     if not py:
-        sys.exit("형태소 분석기가 없습니다. 한 번만 설치해 주세요: python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements-bounds.txt")
+        sys.exit("형태소 분석기가 없습니다. python3 -X utf8 scripts/setup_project.py --full 을 실행해 주세요")
     print(run(py, "scripts/build_bounds.py").strip())
     # 서식 받기: 대장이 원문과 맞는지 → 원본에서 양식을 다시 떼기 → 떼어 낸 양식이 원본 별지와 같은지 검사(다르면 멈춘다)
     print(run(sys.executable, "scripts/build_forms.py", "--check").strip())

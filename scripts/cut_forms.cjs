@@ -6,7 +6,7 @@ const fs = require("fs"), path = require("path"), zlib = require("zlib"), crypto
 let CFB;
 try { CFB = require("cfb"); } catch (e) { console.error("cfb 가 없습니다. 먼저 실행: npm i --no-save jsdom@24.1.3 cfb@1.2.2"); process.exit(2); }
 const ROOT = path.resolve(__dirname, "..");
-const SRC = process.env.NAEGYU_SRC || path.join(require("os").homedir(), "Library/Mobile Documents/com~apple~CloudDocs/내규챗봇");
+const SRC = process.env.NAEGYU_SRC || path.join(ROOT, "원본");
 const OUT = path.join(ROOT, "data", "forms");
 
 const T = { HEAD: 66, TEXT: 67, CS: 68, LS: 69, RANGE: 70, CTRL: 71 };
