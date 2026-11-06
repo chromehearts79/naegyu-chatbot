@@ -20,7 +20,8 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
 
 세션을 열면 시작 훅이 `python3 -X utf8 scripts/setup_project.py --full --allow-changes` 를 이미 돌린다. 끝났는지만 확인하고(`data/` 가 있고 `python3 scripts/update_rules.py status` 가 돈다), 아니면 돌린다.
 - 처음 시작이면 `python3 -X utf8 scripts/setup_project.py --full`. 개정 작업 도중에 다시 열었으면 `--full --allow-changes`(지문과 달라도 멈추지 않고 보여 주기만 한다).
-- 지문(`knowledge/source_snapshot.json`)은 절대 저절로 다시 찍지 않는다. 처음 시작인데 바뀐 단위가 0이 아니거나 다시 확인할 문답이 있다고 나오면 멈추고 사용자에게 알린다.
+- 지문(`knowledge/source_snapshot.json`)은 절대 저절로 다시 찍지 않는다.
+- **처음 시작(진행 중인 개정이 없을 때)의 멈춤 신호:** 시작 훅(`--allow-changes`)이 "저장된 지문과 다른 조문이 …" 또는 "다시 확인해야 할 문답이 …"를 출력했으면 멈추고 사용자에게 알린다. 확인하려면 `python3 -X utf8 scripts/setup_project.py --full` 을 한 번 더 돌린다. 지문과 다르면 종료 코드가 0이 아니다(시험해 확인함: 훅 뒤의 일반 실행도 다시 비교해 1로 끝난다). 0이 아니면 멈춘다.
 
 ## 1단계 — 파일 받기와 확인
 
@@ -86,7 +87,7 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
    - 맨 끝에 "합치기 버튼(Merge pull request)을 누르면 새 판이 만들어집니다."
 3. **연다.** 지금 가진 도구로 연다. 열 수 없으면 위 글 전체를 대화에 써서 보여 주고, 눌러야 할 버튼을 알린다: Claude 웹에서는 `Create PR`, GitHub 화면에서는 `Compare & pull request`.
 4. **Claude 는 합치지 않는다.** 합치는 것은 담당자가 GitHub 에서 `Merge pull request` 를 눌러서 한다. 시험 결과(Checks)가 모두 통과한 것을 확인하라고 알린다.
-5. PR 에 "판 번호를 올리지 않았다"는 시험 실패 글이 달리면(다른 PR 이 먼저 합쳐졌거나 `finish` 를 건너뛴 경우) 합치지 말라고 알린다. 글이 Claude 웹에 보이면 `knowledge/site.json` 의 `release.no` 를 알려 준 값 이상으로 올리고(필요하면 4단계를 다시) 같은 갈래에 커밋한다.
+5. PR 에 "시험에 실패했습니다. 이 글을 합치지 말고 …" 댓글이 달리면 합치지 말라고 알린다. 원인은 Checks 의 실패한 단계에서 본다. `판 번호 검사` 단계가 실패했으면 판 번호를 올리지 않은 것이다(다른 PR 이 먼저 합쳐졌거나 `finish` 를 건너뜀). 그 단계의 글을 Claude 웹에 보여 주면 `knowledge/site.json` 의 `release.no` 를 알려 준 값 이상으로 올리고(필요하면 4단계를 다시) 같은 갈래에 커밋한다.
 6. 다음 할 일을 짧게 안내한다.
    - 합친 뒤: 몇 분 뒤 GitHub 의 Releases 에 새 판이 생긴다. 받는 파일은 `naegyu-chatbot-vN.html`(직원에게 보일 챗봇). 이것을 망연계로 내부망에 옮긴다. 인터넷망용 GPTs 묶음(`gpts-vN.zip`)과 소관부서 검수표(`review-workbooks-vN.zip`)도 같은 곳에 있다.
    - 개정 중 발견한 오기·충돌을 `reports/rule_fix_candidates.md` 에 적었다면 내규관리부서에 전달

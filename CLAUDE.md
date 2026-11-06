@@ -11,7 +11,7 @@
 ## 지켜야 할 것
 
 - **`git add -A` 와 `git add .` 를 쓰지 않는다.** 파일을 지정해서 올린다. 이름이 `[` 로 시작하는 파일(`원본/[…]`, `대기/**/[…]`)과 `knowledge/contacts.json`, `reports/contacts/` 는 올리지 않는다.
-- **`main` 에 직접 올리지 않는다.** 클라우드 세션에서도, 맥 등 자기 PC에서도 갈래(`claude/…` 또는 작업 이름)를 만들어 올리고 Pull Request 로 합친다. 합치는 것은 사람이다. 직접 올리면 시험 없이 새 판 흐름이 돌 수 있다.
+- **`main` 에 직접 올리지 않는다.** 클라우드 세션에서도, 맥 등 자기 PC에서도 갈래(`claude/…` 또는 작업 이름)를 만들어 올리고 Pull Request 로 합친다. 합치는 것은 사람이다. 직접 올리면 시험 없이 새 판 흐름이 돌 수 있다. **유일한 예외:** 담당자가 GitHub 화면에서 `대기/<내규명>_직접/` 에 파일을 올리는 것은 `main` 에 바로 올려도 된다(새 판 만들기가 `대기/**` 변화를 무시하고, 개정을 합치기 전에는 챗봇에 영향이 없다).
 - **kordoc 판은 `4.24.1` 에 고정**이다(`package.json`, 잠금 파일). 이 판만 지금 변환본과 71개 모두 같게 나온다. 최신판은 내규 일부에서 항 나누기가 어긋난다. 임의로 올리지 않는다. 올려야 하면: 새 판으로 `원본/` 전체를 다시 변환하고(`setup_project.py` 가 지문과 다르면 멈춘다), 바뀐 단위 수와 다시 확인할 문답을 사용자에게 보여 주고, 허락받은 뒤에만 지문(`knowledge/source_snapshot.json`)을 다시 찍는다. 지문을 저절로 다시 찍지 않는다.
 - 판정 이름은 `scripts/alio_types.py` 의 상수를 쓴다. 판정 규칙(`watch_alio.judge`)과 재확인 비교 규칙(`blind_check.compare`)은 바꾸기 전에 사용자와 정한다.
 - 새 코드는 `encoding="utf-8"`, Python 3.11 에서 돌아야 한다(f-string 식 안에 역슬래시나 같은 따옴표를 쓰지 않는다). 시험은 `python3 -X utf8 scripts/test_watch_alio.py`, `scripts/test_browser_ops.py`, `scripts/test_forms.py`, `node scripts/test_engine.js` 등. 통과는 `✗` 없음과 종료 코드 0.
