@@ -2,53 +2,69 @@
 
 우체국금융개발원 내규를 근거 조문과 함께 답하는 챗봇. 답은 미리 만들어 검증해 두고, 직원 PC에서는 찾아서 보여주기만 한다(서버·고사양 PC 불필요).
 
+## 시작하는 법
+
+담당자는 설치할 것이 없습니다. 브라우저로 GitHub 와 Claude 웹(`claude.ai/code`)을 씁니다. 처음이면 `docs/담당자_시작_안내.md`, 평소 일은 `docs/유지보수_안내.md` 를 봅니다. Claude 가 읽는 주의점은 `CLAUDE.md` 입니다.
+
+```
+GitHub Actions(자동)                    Claude 웹(담당자 + AI)                 GitHub(담당자)
+매주 월요일 ALIO 확인 → 알림 글(이슈)  →  "내규 개정 반영" → 카드 고침 → Pull Request  →  Merge pull request → 새 판(Release)
+```
+
+PC에서 직접 돌릴 때(개발·점검)는 저장소를 받은 뒤 `python3 -X utf8 scripts/setup_project.py --full` 로 준비합니다(패키지 설치, `원본/` 변환, 지문 대조). 클라우드 세션은 시작할 때 `--full --allow-changes` 를 자동으로 돌립니다(`.claude/settings.json`).
+
 ## 폴더 역할
 
 | 무엇 | 위치 |
 |---|---|
-| 프로그램 코드 | 이 폴더 (`~/Projects/naegyu-chatbot`, git으로 관리) |
-| 내규 원본 (hwp, hwpx, xlsx) | iCloud `내규챗봇` 폴더 |
-| 변환본, 규정 DB | `data/` (git에 올리지 않음, 원본에서 다시 만든다) |
-| 문답 카드 | `knowledge/<분야>/*.json` — 지금은 `birth_childcare`(출산·육아), `service`(복무·휴가) |
-| 검증 결과 | `reports/` |
-| 시범본 | `dist/index.html` (그대로 열면 됨, 인터넷 없이 동작) |
+| 프로그램 코드 | `scripts/`, 화면 `web/` |
+| 내규 원본 (hwp, hwpx, xlsx) | `원본/` (`[` 로 시작하는 참고 파일은 올리지 않음) |
+| 매주 확인이 받아 둔 개정 파일 | `대기/<내규명>_<숫자 날짜>/` (사람이 올린 것은 `대기/<내규명>_직접/`) |
+| 변환본, 규정 DB | `data/` (git에 올리지 않음, 준비 스크립트가 원본에서 다시 만든다) |
+| 문답 카드 | `knowledge/<분야>/*.json` |
+| 검증 결과, 매주 확인 기록 | `reports/` |
+| 시범본 | `dist/index.html` (git에 올리지 않음, 새 판은 GitHub Releases 에서 받는다) |
+| 자동 작업 | `.github/workflows/` (시험, 매주 확인, 확인함 댓글, 새 판 만들기) |
+| 개정 반영 스킬 | `.claude/skills/naegyu-update/SKILL.md` |
+| 안내 문서 | `docs/` |
 
-내규 원본의 기준은 ALIO가 아니라 iCloud 폴더의 파일이다. ALIO 게시는 시행일보다 약 1주 늦다. ALIO ZIP에는 개정 이력이 함께 들어 있어 파일 이름의 가장 최근 일자를 현행본으로 읽어야 한다(맨 앞 항목은 옛 판). 2025년 10월 이후 개정분의 현행본은 내부 원본과 파일이 같다.
+내규 원본의 기준은 ALIO 가 아니라 `원본/` 의 파일이다. ALIO 게시는 시행일보다 약 1주 늦다. ALIO ZIP에는 개정 이력이 함께 들어 있어 파일 이름의 가장 최근 일자를 현행본으로 읽어야 한다(맨 앞 항목은 옛 판). 2025년 10월 이후 개정분의 현행본은 내부 원본과 파일이 같다.
 
 ## 만드는 순서
 
 ```bash
-scripts/convert.sh                   # 1. 한글 원본 → data/md (kordoc)
-python3 scripts/build_db.py          # 2. 조문 단위 규정 DB → data/rules.json
-python3 scripts/check_knowledge.py   # 3. 문답 카드 프로그램 검사 → reports/check_report.md
-python3 scripts/blind_check.py [분야]      # 4. 독립 검증(로컬 ollama qwen3.5:35b) → reports/blind_check.md
+python3 -X utf8 scripts/setup_project.py --full   # 0. 준비: 패키지 설치, 원본/ → data/md 변환(kordoc 4.24.1), 규정 DB, 지문 대조
+python3 scripts/check_knowledge.py   # 1. 문답 카드 프로그램 검사 → reports/check_report.md
+python3 scripts/blind_check.py prepare <카드 id…>   # 2. 독립 재확인: 문제 파일을 쓰고, 다른 AI가 답 파일을 쓰면 first/finish 로 채점 → reports/blind_check.md (스킬 참고)
 python3 scripts/check_approval_table.py    #    위임전결기준 표의 ○ 칸과 카드 전결권자 대조 → reports/approval_table_check.md
 python3 scripts/check_changes.py           #    규정 개정 감지 → reports/change_report.md (아래 '규정이 개정되면')
-node scripts/test_engine.js -v       # 5. 검색·계산기 시험
+node scripts/test_engine.js -v       # 3. 검색·계산기 시험
 python3 scripts/build_forms.py <규정명…> | --check   #    서식 대장(별지 번호·제목·부르는 조문) → knowledge/forms.json
-node scripts/cut_forms.cjs                 #    원본 .hwp·.hwpx 에서 별지 한 장씩 떼기 → data/forms (npm i --no-save jsdom@24.1.3 cfb@1.2.2)
+node scripts/cut_forms.cjs                 #    원본 .hwp·.hwpx 에서 별지 한 장씩 떼기 → data/forms
 python3 scripts/check_forms.py             #    떼어 낸 양식이 원본 별지와 같은지 검사
-python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/ (양식은 압축해 싣는다)
+python3 scripts/build_web.py         # 4. 시범본 묶기 → dist/ (양식은 압축해 싣는다)
 ```
+
+'독립 재확인'은 AI 호출을 이 저장소가 하지 않고 파일로 주고받는다. 답은 Claude 하위 작업이 쓰고(`prepare` 로 문제 파일, `first`·`finish` 로 채점), 답 파일에는 답한 AI 이름이 남는다. 작업 파일은 `reports/blind_work/` 에 쌓이고 `finish` 가 지운다.
 
 ## 규정이 개정되면 (쉬운 안내: docs/유지보수_안내.md)
 
-가장 쉬운 방법: Claude 에게 개정본 파일을 주며 "내규 개정 반영해줘" → 단계마다 버튼(스킬 `skills/naegyu-update`, 설치 위치 `~/.claude/skills/naegyu-update`).
-도구: `python3 scripts/update_rules.py status | convert | finish <규정명…>` — 바뀐 파일만 골라 변환·비교하고, 승인 뒤 새 판을 만든다.
+가장 쉬운 방법: GitHub 알림 글을 보고 `claude.ai/code` 에서 "내규 개정 반영"이라고 말한다. 스킬(`.claude/skills/naegyu-update`)이 단계마다 설명하고 마지막에 Pull Request 를 연다. 합치는 것은 사람이다. 합치면 시험을 다시 돌린 뒤 GitHub Releases 에 새 판이 생긴다.
+도구: `python3 scripts/update_rules.py status | convert | finish <규정명…>` — 바뀐 파일만 골라 변환·비교하고, 승인 뒤 새 판 번호를 올리고 화면을 만든다.
 
 아래는 그 안에서 일어나는 일이다.
 
-1. 개정된 한글 원본을 내규 폴더에 넣고 `scripts/convert.sh`, `python3 scripts/build_db.py` 를 다시 돌린다.
+1. 개정된 한글 원본을 `원본/` 에 넣고(`update_rules.py convert` 가 변환과 DB 만들기를 한다) 다시 돌린다.
 2. `python3 scripts/check_changes.py` → `reports/change_report.md`
    - 카드를 확인한 시점의 조문·항·별표·부칙 원문 지문(`knowledge/source_snapshot.json`)과 새 원문을 비교한다.
    - **다시 확인할 카드**: 인용한 조(항까지 적었으면 그 항)가 바뀌었거나 없어진 카드. 바뀐 글자를 diff 로 보여 준다.
    - **참고 카드**: 같은 조의 다른 항만 바뀐 카드. **새 조문**: 카드가 없을 수 있는 신설 조문.
    - 인용 문구가 그대로 남는 개정(예: 같은 항에 "다만, 수습 직원은 10일" 추가)도 잡는다. `check_knowledge.py` 만으로는 못 잡는다.
    - **다시 확인할 계산기**: 계산기 숫자의 근거 조문(`knowledge/calc_basis.json`)이 바뀐 계산기. 숫자는 `web/engine.js` 안에 있어 카드만 고쳐서는 바뀌지 않는다.
-3. 다시 확인할 카드를 새 원문에 맞게 고치고 `check_knowledge.py`(오류 0건), `blind_check.py <카드 id…>` 로 검증한다. 필요하면 새 조문 카드를 만든다.
+3. 다시 확인할 카드를 새 원문에 맞게 고치고 `check_knowledge.py`(오류 0건), `blind_check.py prepare <카드 id…>` 로 독립 재확인을 한다. 필요하면 새 조문 카드를 만든다.
    다시 확인할 계산기가 있으면 `web/engine.js` 의 그 계산기 숫자와 `knowledge/calc_basis.json` 의 근거 문구(has)를 새 원문대로 고친다. 근거 문구가 원문에서 사라지면 `check_knowledge.py` 가 오류로 알린다.
 4. 그 규정의 카드를 다 확인했으면 `python3 scripts/check_changes.py --accept <규정명>` 으로 지문을 갱신한다.
-5. `python3 scripts/build_web.py` 로 묶는다. 아직 확인 못 한 카드는 화면에 **"규정 개정 · 재검수 전"**과 바뀐 조문이 표시되고, 위 안내 줄에 그 개수가 나온다. 근거 조문이 바뀐 계산기는 숫자를 고칠 때까지 계산하지 않는다. 화면을 만든 지 90일이 지나면 "최신판인지 확인하세요" 안내가 뜬다.
+5. `python3 scripts/build_web.py` 로 묶는다(새 판을 만들 때는 GitHub 가 한다). 아직 확인 못 한 카드는 화면에 **"규정 개정 · 재검수 전"**과 바뀐 조문이 표시되고, 위 안내 줄에 그 개수가 나온다. 근거 조문이 바뀐 계산기는 숫자를 고칠 때까지 계산하지 않는다. 화면을 만든 지 90일이 지나면 "최신판인지 확인하세요" 안내가 뜬다.
 
 미리 보기: `python3 scripts/check_changes.py --rules <개정본 rules.json>`, `python3 scripts/build_web.py --rules <개정본> --out <폴더>` 는 실제 결과 파일을 건드리지 않는다.
 
@@ -62,19 +78,21 @@ python3 scripts/build_web.py         # 6. 시범본 묶기 → dist/ (양식은 
 
 ## 매주 ALIO 확인 (쉬운 안내: docs/유지보수_안내.md)
 
-ALIO의 우리 내규가 배포한 판과 달라졌는지 매주 확인하는 루틴이다. AI와 외부 전송 없이 ALIO와 `release_url` 에만 접속한다. 예외로 정 담당 PC의 원문 비교는 kordoc 변환기가 저장소(`node_modules`)에 없으면 npm 에서 받는다(받는 것뿐이고 보내는 것은 없다). `npm i --no-save kordoc@4.24.42` 로 미리 깔아 두면 받지 않는다. 윈도우 이전 뒤에 시작한다(맥 자동 실행은 없다).
+ALIO 의 우리 내규가 우리 판과 달라졌는지 GitHub Actions 가 매주 월요일 오전(한국 시간 9시 전후)에 확인한다(`.github/workflows/watch.yml`, 손으로도 돌릴 수 있다). AI는 쓰지 않는다. 접속하는 곳은 ALIO 뿐이다. ALIO 에 접속하는 일은 Actions 에서만 한다(Claude 클라우드 세션은 막혀 있다).
+
+- 달라진 내규는 `대기/<내규명>_<파일 날짜>/` 에 받아 두고, 원문을 비교해 내규별 이슈 하나를 만들거나 고친다. 매주 고정 이슈 `매주 확인 기록` 에 댓글을 단다. 실패하면 `확인 실패` 이슈. 이슈에 `확인함: 사유` 댓글을 달면 `confirm.yml` 이 알림을 끝낸다. 알림 지정은 저장소 변수 `NAEGYU_ASSIGNEES`.
+- 합친 뒤(`release.yml`)는 시험을 다시 돌리고 통과하면 새 판(Release)을 만든다. 실패하면 `새 판 실패` 이슈.
+- 판정 규칙은 `watch_alio.judge`, 원문 비교는 `alio_compare.compare_rule`. 이슈·기록을 내는 쪽은 `watch_ci.py`, 새 판은 `release_ci.py`.
 
 ```bash
-python3 -X utf8 scripts/watch_alio.py --config 설정.json [--force]   # 한 번 확인(작업 스케줄러가 부른다)
-python3 -X utf8 scripts/alio_confirm.py --config 설정.json            # 담당자 '확인함'(확인함.bat)
-python -X utf8 scripts/install_watch.py --mode full|alert [--repo 폴더] [--url 주소] [--dry-run]   # 작업 스케줄러 등록
-python -X utf8 scripts/install_watch.py --pack 부담당.zip              # 부 담당 PC용 묶음
-python3 -X utf8 scripts/test_watch_alio.py                             # 시험
+python3 -X utf8 scripts/test_watch_alio.py     # 시험
+python3 -X utf8 scripts/test_browser_ops.py    # 브라우저 운영 시험(이슈 글, 워크플로, 안내 문서)
+python3 -X utf8 scripts/check_upload.py --staged   # 올리기 전 개인정보·키 점검
 ```
 
-- `scripts/alio_types.py`(판정 이름·자료 꼴), `alio_client.py`(ALIO 접속), `alio_pick.py`(현행 묶음 고르기), `alio_release.py`(기록·배포판 목록), `alio_report.py`(결과 화면·기록), `watch_alio.py`(판정과 실행), `alio_compare.py`(정 담당 PC의 원문 비교), `alio_confirm.py`(확인함), `install_watch.py`(설치). 앞의 다섯과 `watch_alio.py`, `install_watch.py` 는 저장소 없이도 돈다(부 담당 PC).
-- `knowledge/alio_seen.json`: 배포한 판을 만들 때 ALIO에서 본 값(게시일·목록 날짜·최신 첨부)과 담당자 확인함 기록. `update_rules.py finish` 가 올린다.
-- `dist/release.json`: 내규별 이름·ALIO 값·원본 지문을 담은 배포판 목록. 새 판과 함께 만들어 배포하며, 공개 내규의 이름·날짜·지문만 들어 있다. 설정의 `release_url` 이 이 파일의 배포 주소다.
+- `scripts/alio_types.py`(판정 이름·자료 꼴), `alio_client.py`(ALIO 접속), `alio_pick.py`(현행 묶음 고르기), `alio_release.py`(기록·배포판 목록), `alio_report.py`, `watch_alio.py`, `alio_compare.py`, `alio_confirm.py`(확인함).
+- `knowledge/alio_seen.json`: 새 판을 만들 때 ALIO 에서 본 값(게시일·목록 날짜·최신 첨부)과 담당자 확인함 기록. 새 판을 합친 뒤 GitHub 가 올린다.
+- **예비: PC에서 돌리기.** `scripts/install_watch.py` 는 윈도우 PC 작업 스케줄러에 같은 확인을 등록하는 옛 방법이다. 지금 운영에서는 쓰지 않고, GitHub 을 쓸 수 없을 때를 위해 코드만 남겨 둔다(`python -X utf8 scripts/install_watch.py --mode full|alert [--repo 폴더] [--url 주소] [--dry-run]`, `--pack 부담당.zip`). 이 방식은 `watch_alio.py --config 설정.json` 으로 한 번 확인하고 `alio_confirm.py` 로 확인함을 한다.
 
 ## 검색 시험 (`node scripts/test_engine.js`)
 
