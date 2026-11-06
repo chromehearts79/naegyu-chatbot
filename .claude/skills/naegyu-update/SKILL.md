@@ -73,6 +73,7 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
    - **끝의 `경고: ALIO 기록 갱신 실패`(또는 비슷한 경고)는 정상이다.** 클라우드 세션은 ALIO 에 접속할 수 없다. 사용자에게 "놀라지 않으셔도 됩니다. 합친 뒤 GitHub 가 알아서 다시 합니다"라고 알린다.
    - 양식 검사(check_forms)가 "다름"으로 멈추면: 그 별지의 `download` 를 `false`, `cutNote` 에 까닭을 적고 finish 를 다시 돌린 뒤 사용자에게 알린다.
    - 나침반 시험(test_engine.js [4])이 실패하면 낱말 경계가 이미 고친 경우를 되살린 것이다. 실패한 낱말을 보고 `knowledge/word_splits.json` 을 고치거나 사용자에게 알린다.
+   - `finish` 를 다시 돌려야 하면, 돌리기 전에 첫 실행이 만든 `reports/release_changes.md` 를 임시 폴더에 복사해 두었다가, 다시 돌린 뒤 그 파일을 되돌린다. 두 번째 실행은 이 파일을 "바뀐 것 없음" 내용으로 덮어쓰기 때문이다.
    - 형태소 분석기가 없다고 멈추면 `python3 -X utf8 scripts/setup_project.py --full` 을 돌리고 다시 한다.
 2. 화면 점검: `node --max-old-space-size=8192 scripts/ui_test.js dist/index.html`. 계산기·예시 질문 항목까지 모두 통과해야 한다.
 3. 결과를 알린다: 판 번호, 카드 수 변화, 시험 결과, "재검수 전" 카드 0장·멈춘 계산기 0종, 양식 수.
