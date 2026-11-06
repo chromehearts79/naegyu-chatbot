@@ -5,9 +5,6 @@ on:
 permissions:
   contents: write
   issues: write
-concurrency:
-  group: naegyu-write
-  cancel-in-progress: false
 env:
   PYTHONUTF8: "1"
   GH_TOKEN: ${{ github.token }}
@@ -16,9 +13,14 @@ jobs:
     if: github.event.repository.fork != true && !github.event.issue.pull_request && contains(github.event.comment.body, '확인함') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: naegyu-write
+      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:

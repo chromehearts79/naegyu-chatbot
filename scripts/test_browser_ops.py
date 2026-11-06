@@ -435,7 +435,9 @@ with tempfile.TemporaryDirectory() as td:
     (td / "dist" / "gpts" / "지시문.md").write_text("c", encoding="utf-8")
     (td / "reports" / "review" / "검수표_x.xlsx").write_bytes(b"d"); (td / "reports" / "change_report.md").write_text("e", encoding="utf-8")
     names = sorted(p.name for p in RC.assets(12, td / "dist", td / "reports", td / "out"))
-    ok(names == sorted(["내규챗봇_제12판.html", "내규챗봇_제12판_artifact.html", "GPTs_제12판.zip", "검수표_제12판.zip", "바뀐_내용_제12판.md"]), "새 판 파일을 모은다")
+    ok(names == sorted(["naegyu-chatbot-v12.html", "naegyu-chatbot-v12-artifact.html", "gpts-v12.zip", "review-workbooks-v12.zip", "changes-v12.md"]), "새 판 파일은 영문 이름으로 모은다(GitHub이 한글 이름을 깨뜨린다)")
+    lab = RC.asset_args(12, [td / "out" / n for n in names])
+    ok(len(lab) == 5 and any(a.endswith("naegyu-chatbot-v12.html#내규챗봇_제12판.html") for a in lab) and any(a.endswith("review-workbooks-v12.zip#검수표_제12판.zip") for a in lab) and any(a.endswith("changes-v12.md#바뀐_내용_제12판.md") for a in lab), "한글 이름표를 `파일#이름표` 로 붙인다")
     (td / "dist" / "index.html").unlink()
     try:
         RC.assets(12, td / "dist", td / "reports", td / "out2")
@@ -443,6 +445,74 @@ with tempfile.TemporaryDirectory() as td:
     except FileNotFoundError:
         ok(True, "빠진 파일이 있으면 새 판을 만들지 않는다")
 ok("12" in RC.notes(12, "요약") and "망연계" in RC.notes(12, "요약") and "검수표" in RC.notes(12, "요약") and "요약" in RC.notes(12, "요약"), "새 판 안내에 판 번호·망연계·검수표·요약이 있다")
+
+class FakeGit:
+    """git 호출을 흉내 낸다: tags, site.json(커밋별), 태그 이후 바뀐 파일, 커밋 메시지."""
+    def __init__(self, no, tags, changed, msg="합치기 설명", head="HEADSHA"):
+        self.no, self.tags, self.changed, self.msg, self.head, self.calls = no, tags, changed, msg, head, []
+
+    def __call__(self, *a):
+        self.calls.append(a)
+        if a[0] == "tag":
+            return "\n".join(self.tags)
+        if a[0] == "show":
+            return json.dumps({"release": {"no": self.no}})
+        if a[0] in ("diff", "ls-files"):
+            return "\n".join(self.changed)
+        if a[0] == "log":
+            return self.msg + " [skip ci]\n"
+        if a[0] == "rev-parse":
+            return self.head + "\n"
+        raise AssertionError(a)
+
+
+class FakeGh2:
+    def __init__(self, issues=()):
+        self.calls, self.issues = [], list(issues)
+
+    def __call__(self, args, stdin=None):
+        self.calls.append((list(args), stdin))
+        if args[:2] == ["issue", "list"]:
+            return json.dumps(self.issues)
+        return ""
+
+
+def pub(no, tags, changed, env=None, issues=()):
+    g, gh, reports = FakeGit(no, tags, changed), FakeGh2(issues), []
+    made = lambda n, out: [Path("/x") / f for f in RC.asset_names(n)]  # noqa: E731
+    rc = RC.publish({"GITHUB_SHA": "TESTEDSHA"} if env is None else env, g, gh, reports.append, made)
+    return rc, g, gh, reports
+
+
+def created(gh):
+    return [c for c in gh.calls if c[0][:2] == ["release", "create"]]
+
+
+import watch_ci as WCI  # noqa: E402
+rc, g, gh, rep = pub(6, ["v5"], ["knowledge/service/a.json", "knowledge/site.json"])
+cre = created(gh)
+ok(rc == 0 and len(cre) == 1 and cre[0][0][2] == "v6" and cre[0][0][cre[0][0].index("--target") + 1] == "TESTEDSHA", "새 판의 번호와 대상 커밋은 시험한 커밋(GITHUB_SHA)에서 나온다")
+ok(("show", "TESTEDSHA:knowledge/site.json") in g.calls and ("log", "-1", "--format=%B", "TESTEDSHA") in g.calls and ("diff", "--name-only", "v5", "TESTEDSHA") in g.calls, "번호·설명·바뀐 파일을 시험한 커밋 기준으로 읽는다")
+ok("합치기 설명" in cre[0][1] and "[skip ci]" not in cre[0][1] and "naegyu-chatbot-v6.html" in cre[0][1], "새 판 안내에 그 커밋의 설명과 실제 파일 이름이 있다")
+ok(any(a.endswith("naegyu-chatbot-v6.html#내규챗봇_제6판.html") for a in cre[0][0]), "한글 이름표를 붙여 올린다")
+rc, g, gh, rep = pub(6, ["v5", "v6"], ["knowledge/alio_seen.json", "reports/alio_watch/latest.json", "대기/x/a.txt"])
+ok(rc == 0 and not created(gh) and not rep, "태그가 생긴 뒤 다시 돌리면(기록 파일만 바뀜) 그냥 지나간다")
+rc, g, gh, rep = pub(6, ["v5", "v6"], ["knowledge/service/a.json"])
+ok(rc == 1 and not created(gh) and len(rep) == 1 and "판 번호" in rep[0], "번호를 안 올린 문답 변경은 Release 를 건드리지 않고 알린다")
+rc, g, gh, rep = pub(1, [], [])
+ok(rc == 0 and len(created(gh)) == 1, "첫 판은 만든다")
+rc, g, gh, rep = pub(7, ["v6"], ["knowledge/service/a.json"], env={}, issues=[{"number": 9, "title": "t", "body": WCI._fail_marker("release"), "createdAt": "2026-11-01T00:00:00Z"}])
+ok(("rev-parse", "HEAD") in g.calls and any(c[0] == ["issue", "close", "9"] for c in gh.calls), "성공하면 열린 새 판 실패 이슈를 닫는다(GITHUB_SHA 가 없으면 HEAD)")
+rc, g, gh, rep = pub(7, ["v6"], ["knowledge/service/a.json"], issues=[{"number": 4, "title": "t", "body": "다른 이슈", "createdAt": "2026-11-01T00:00:00Z"}])
+ok(not any(c[0][:2] == ["issue", "close"] for c in gh.calls), "다른 이슈는 닫지 않는다")
+ok(RC.pending_edition(6, ["v5"]) and RC.pending_edition(1, []) and not RC.pending_edition(6, ["v5", "v6"]) and not RC.pending_edition(5, ["v6"]), "아직 못 만든 판을 알아본다")
+reps = []
+RC.check_pending(FakeGit(6, ["v5"], []), FakeGh2(), reps.append, {})
+RC.check_pending(FakeGit(6, ["v6"], []), FakeGh2(), reps.append, {})
+ok(len(reps) == 1 and "제6판" in reps[0] and "Run workflow" in reps[0], "check-pending 은 못 만든 판만 알린다")
+fg = FakeGit(5, ["v5"], ["knowledge/service/a.json"])
+ok(RC.check_number("BASE", fg) == 1 and ("diff", "--name-only", "BASE", "HEAD") in fg.calls, "check-number 는 기준 커밋과 비교한다")
+
 wf = {n: (ROOT / ".github" / "workflows" / n).read_text(encoding="utf-8") for n in ("watch.yml", "confirm.yml", "check.yml", "release.yml")}
 ok(not any("pull_request_target" in t for t in wf.values()), "pull_request_target 을 쓰지 않는다")
 ok(all("permissions:" in t for t in wf.values()), "권한을 적어 둔다")
@@ -454,6 +524,14 @@ ok(all("naegyu-write" in wf[n] for n in ("watch.yml", "confirm.yml", "release.ym
 chk = (ROOT / ".github" / "actions" / "checks" / "action.yml").read_text(encoding="utf-8")
 ok("--no-weekly" in wf["release.yml"] and "test_browser_ops.py" in chk, "합친 뒤 판정은 댓글 없이, 시험 묶음에 새 시험 포함")
 ok(chk.index("update_rules.py build") < chk.index("test_forms.py"), "양식 시험은 양식을 뗀 뒤에 돈다")
+ok(all("queue: max" in wf[n] for n in ("watch.yml", "confirm.yml", "release.yml")), "밀린 실행이 조용히 취소되지 않게 queue: max")
+ok("refs/heads/main" in wf["watch.yml"] and "refs/heads/main" in wf["release.yml"], "main 이 아닌 갈래에서는 새 판·매주 확인이 돌지 않는다")
+ok("ref: main" in wf["watch.yml"] and "ref: main" in wf["confirm.yml"], "매주 확인과 확인함은 늘 main 끝에서 시작한다")
+rel = wf["release.yml"]
+ok(rel.index("release_ci.py publish") < rel.index("alio_release.py refresh") and "BEFORE" not in rel and "check-pending" in wf["watch.yml"], "새 판은 기록 작업보다 먼저 올리고, 매주 확인이 못 만든 판을 알린다")
+ok(rel.count("--report-failure") == 1 and "::warning::" in rel, "ALIO 기록 갱신 실패는 경고 표시만 한다")
+ok(all("concurrency:" in wf[n].split("jobs:", 1)[1] for n in ("watch.yml", "confirm.yml", "release.yml")), "겹침 방지는 작업 단위로 건다")
+ok(all("failure() || cancelled()" in wf[n] for n in ("watch.yml", "release.yml")), "시간 초과나 취소도 이슈로 알린다")
 src = (ROOT / "scripts" / "update_rules.py").read_text(encoding="utf-8")
 ok("def build_all" in src and "합친 뒤 GitHub" in src, "화면 만들기를 나누고 ALIO 경고를 쉬운 말로 고친다")
 

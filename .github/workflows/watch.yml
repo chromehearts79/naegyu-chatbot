@@ -6,26 +6,33 @@ on:
 permissions:
   contents: write
   issues: write
-concurrency:
-  group: naegyu-write
-  cancel-in-progress: false
 env:
   PYTHONUTF8: "1"
   GH_TOKEN: ${{ github.token }}
   NAEGYU_ASSIGNEES: ${{ vars.NAEGYU_ASSIGNEES }}
 jobs:
   watch:
-    if: github.event.repository.fork != true
+    if: github.event.repository.fork != true && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    concurrency:
+      group: naegyu-write
+      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - id: setup
+        timeout-minutes: 20
         uses: ./.github/actions/setup
+      - name: 못 만든 새 판이 있는지 확인
+        if: always()
+        run: python3 -X utf8 scripts/release_ci.py check-pending
       - id: watch
         name: ALIO 확인과 이슈 내기
+        timeout-minutes: 20
         run: python3 -X utf8 scripts/watch_ci.py
       - id: commit
         if: always()
@@ -35,6 +42,6 @@ jobs:
             대기
             reports/alio_watch
           message: ALIO 매주 확인 기록
-      - name: 준비나 기록 올리기가 실패했음을 알리기
-        if: failure() && (steps.setup.outcome == 'failure' || steps.commit.outcome == 'failure')
-        run: python3 -X utf8 scripts/watch_ci.py --report-failure "준비 실패 또는 기록 올리기 실패"
+      - name: 실패나 시간 초과를 알리기(같은 날 같은 알림은 겹치지 않는다)
+        if: failure() || cancelled()
+        run: python3 -X utf8 scripts/watch_ci.py --report-failure "준비나 확인이 끝까지 되지 않았습니다(실패 또는 시간 초과). Actions 탭에서 실패한 실행의 빨간 단계를 확인하세요."
