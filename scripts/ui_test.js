@@ -345,7 +345,7 @@ w.DATA.meta.site.calcOff = [];
   const wrap = d.querySelector(".wrap"), btn = (m) => d.querySelector(`#modes button[data-mode=${m}]`);
   btn("compass").click();
   ok(wrap.classList.contains("compassing") && btn("compass").getAttribute("aria-pressed") === "true" && d.querySelector("#ask-btn").textContent === "찾기" &&
-    /내규 71개 원문/.test(d.querySelector("#compass-help").textContent) && d.querySelector("#examples").classList.contains("ask-only"),
+    /내규 \d+개 원문/.test(d.querySelector("#compass-help").textContent) && d.querySelector("#examples").classList.contains("ask-only"),
     "나침반 고르면 '찾기' 단추와 안내가 나오고 예시 질문은 숨김");
   ok(/\.compassing \.source \{ display: none; \}/.test(html) && /\.wrap\.compassing \{ max-width: 1200px; \}/.test(html), "나침반은 화면 너비를 다 쓰고 챗봇 근거 원문 칸은 숨김");
   // 같은 입력칸·같은 단추. 나침반 결과는 챗봇 대화와 다른 칸(#compass-thread)에 하나만

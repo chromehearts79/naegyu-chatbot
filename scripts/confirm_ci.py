@@ -19,8 +19,9 @@ ALLOWED = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
 def parse_reason(comment: str):
-    """'확인함: 사유' 면 사유(비면 ""), 아니면 None."""
-    m = re.fullmatch(r"\s*확인함\s*[:：]\s*(.*?)\s*", comment or "", re.S)
+    """'확인함' 으로 시작하는 댓글이면 사유(없으면 ""), 아니면 None.
+    '확인함: 사유', '확인함 사유', '확인함' 모두 읽는다. 글 중간에 낀 '확인함' 은 읽지 않는다."""
+    m = re.fullmatch(r"\s*확인함(?:\s*[:：]\s*|\s+|(?=\s*$))(.*?)\s*", comment or "", re.S)
     return m.group(1) if m else None
 
 
@@ -45,9 +46,10 @@ def handle(comment, association, issue_body, today, latest, seen_path, gh, issue
         return "무시"
     idx = idx_of(issue_body)
     if idx is None:
-        return "무시"
+        _say(gh, issue_number, "이 이슈는 내규 알림이 아니라서 기록하지 않았습니다. 내규 알림 이슈(제목이 '개정 의심' 등으로 시작하는 글)에 `확인함: 사유` 로 댓글을 남겨 주세요.")
+        return "대상 없음"
     if not reason:
-        _say(gh, issue_number, "사유가 비어 있어 기록하지 않았습니다. `확인함: 사유` 처럼 사유를 함께 적어 다시 댓글을 남겨 주세요.")
+        _say(gh, issue_number, "사유가 비어 있어 기록하지 않았습니다. `확인함: 재게시` 처럼 사유를 함께 적어 다시 댓글을 남겨 주세요.")
         return "다시 요청"
     item = next((f for f in pending_of(latest) if str(f.get("idx")) == idx), None)
     if item is None:

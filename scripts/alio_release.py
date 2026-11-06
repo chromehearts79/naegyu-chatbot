@@ -305,7 +305,7 @@ def refresh():
     try:
         rows, atts = fetch_all()
     except AlioError as e:
-        print(f"경고: ALIO 접속 실패로 옛 기록을 그대로 둡니다({e})")
+        print(f"경고: ALIO 접속 실패로 옛 기록을 그대로 둡니다({e}) — Claude 웹에서는 ALIO 접속이 막혀 있어 정상입니다. 합친 뒤 GitHub 가 알아서 다시 합니다.")
         write_release()
         return 0
 

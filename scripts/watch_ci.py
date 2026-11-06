@@ -98,8 +98,10 @@ def _compare_lines(f, n: int, flag: list) -> list:
         out.append(f"- 참고할 문답: {len(c.related_cards)}장 ({', '.join(clean_md(x) for x in c.related_cards[:30])})")
     if c.calcs:
         out.append("- 확인할 계산기: " + ", ".join(clean_md(x) for x in c.calcs[:30]))
-    if c.outside_diff:
-        out.append("- 조문 밖에서 달라진 글자: " + "; ".join(_cut(x, 200, flag) for x in c.outside_diff[:5]))
+    if f.verdict == T.V_OUTSIDE:
+        shown = [x for x in c.outside_diff if not str(x).startswith(("---", "+++", "@@"))]
+        if shown:
+            out.append("- 조문 밖에서 달라진 글자: " + "; ".join(_cut(x, 200, flag) for x in shown[:5]))
     if c.error:
         out.append("- 비교하지 못했습니다: " + clean_md(c.error))
     if c.before_after:
@@ -200,17 +202,20 @@ def plan_actions(findings, open_issues: list, today: str, assignees: list, weekl
     return actions
 
 
-def heartbeat_text(findings, today: str) -> str:
+def heartbeat_text(findings, today: str, unlisted: list | None = None) -> str:
     attn = [f for f in findings if f.verdict in T.ATTENTION]
     if not attn:
-        return f"{today} 확인 완료: 이번 주 변동 없음"
-    lines = [f"{today} 확인 완료: 확인할 내규 {len(attn)}건"]
-    lines += [f"- {clean_md(f.name)}: {f.verdict}" for f in attn[:50]]
+        lines = [f"{today} 확인 완료: 이번 주 변동 없음"]
+    else:
+        lines = [f"{today} 확인 완료: 확인할 내규 {len(attn)}건"]
+        lines += [f"- {clean_md(f.name)}: {f.verdict}" for f in attn[:50]]
+    if unlisted:
+        lines.append("아직 ALIO 목록에 없는 내규: " + ", ".join(clean_md(n) for n in unlisted[:50]))
     return "\n".join(lines)
 
 
-def heartbeat_actions(findings, pinned, today: str, assignees: list | None = None) -> list:
-    text = heartbeat_text(findings, today)
+def heartbeat_actions(findings, pinned, today: str, assignees: list | None = None, unlisted: list | None = None) -> list:
+    text = heartbeat_text(findings, today, unlisted)
     if pinned is None:
         body = "이 이슈에는 매주 월요일 확인이 끝날 때마다 댓글이 달립니다. 댓글 메일이 오지 않는 주는 확인이 멈춘 것입니다.\n\n" + text
         return [{"kind": "create", "title": RECORD_TITLE, "body": body, "labels": [], "assignees": list(assignees or []), "pin": True}]
@@ -230,7 +235,11 @@ def failure_actions(reason: str, open_issues, today: str, assignees: list, kind:
     if kind == "release":
         title = "새 판 실패: 새 판 만들기"
         what = "새 판 만들기가 끝까지 되지 않았습니다. 챗봇 화면은 이전 판 그대로입니다."
-        follow = "원인을 해결한 뒤 이 이슈를 직접 닫아 주세요(Close issue 버튼)."
+        follow = "원인을 해결한 뒤 다시 새 판을 만들면, 새 판이 만들어질 때 이 이슈는 저절로 닫힙니다."
+    elif kind == "upload":
+        title = "공개 점검 실패"
+        what = "공개 저장소에 올라가면 안 되는 이름의 파일이 올라갔을 수 있습니다."
+        follow = "처리가 끝난 뒤 이 이슈를 직접 닫아 주세요(Close issue 버튼). 이 이슈는 다음 주 확인이 성공해도 저절로 닫히지 않습니다."
     else:
         title = "확인 실패: ALIO 매주 확인"
         what = "이번 주 ALIO 확인이 끝까지 되지 않았습니다. 변동이 없다는 뜻이 아니라, 알 수 없다는 뜻입니다."
@@ -321,11 +330,19 @@ def gh_default(args, stdin=None) -> str:
     return r.stdout
 
 
+def _ours(author) -> bool:
+    """이 도구(GitHub Actions)가 만든 이슈만 우리 것으로 본다."""
+    a = author if isinstance(author, dict) else {}
+    return bool(a.get("is_bot")) and "github-actions" in str(a.get("login") or "")
+
+
 def _list_open(gh) -> list:
-    raw = gh(["issue", "list", "--state", "open", "--limit", "200", "--json", "number,title,body,createdAt,comments"], None)
+    raw = gh(["issue", "list", "--state", "open", "--limit", "200", "--json", "number,title,body,createdAt,comments,author"], None)
     out = []
     for i in json.loads(raw or "[]"):
         d = dict(i)
+        if not _ours(d.pop("author", None)):
+            continue  # 공개 저장소라 낯선 사람이 쓴 이슈는 우리 이슈로 믿지 않는다
         if "comments" in d:
             cs = d.pop("comments") or []
             d["lastCommentDate"] = kst_date(max(c.get("createdAt", "") for c in cs)) if cs else ""
@@ -354,7 +371,10 @@ def _write_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
 
-def _succeed(findings, gh, today, root, out, weekly, assignees) -> None:
+def _succeed(judged, gh, today, root, out, weekly, assignees) -> None:
+    # 합쳤는데 아직 ALIO 목록에 안 보이는 새 내규(idx 가 없음)는 이슈 표지가 맞지 않으므로 이슈로 다루지 않고 기록에만 적는다
+    unlisted = [f.name for f in judged if f.verdict == T.V_GONE and not f.idx]
+    findings = [f for f in judged if not (f.verdict == T.V_GONE and not f.idx)]
     for f in findings:
         if f.files and f.verdict in T.ATTENTION:
             try:
@@ -366,7 +386,7 @@ def _succeed(findings, gh, today, root, out, weekly, assignees) -> None:
     for f in findings:
         if f.verdict in T.ATTENTION:
             f.days = RP.elapsed_days(f.mod, created.get(f.idx) or None, today)
-    _write_json(out / "latest.json", {"today": today, "findings": [dataclasses.asdict(dataclasses.replace(f, files=[])) for f in findings]})
+    _write_json(out / "latest.json", {"today": today, "findings": [dataclasses.asdict(dataclasses.replace(f, files=[])) for f in findings], "unlisted": unlisted})
     actions = plan_actions(findings, issues, today, assignees, weekly)
     active = {f.idx for f in findings if f.verdict in T.ATTENTION}
     for a in actions:
@@ -374,13 +394,13 @@ def _succeed(findings, gh, today, root, out, weekly, assignees) -> None:
             drop_wait(a["name"], root)  # 해소된 내규의 폴더만 지운다
     if weekly:
         pinned = next((i for i in issues if i.get("title") == RECORD_TITLE), None)
-        actions += heartbeat_actions(findings, pinned, today, assignees)
+        actions += heartbeat_actions(findings, pinned, today, assignees, unlisted)
     actions += [{"kind": "close", "number": i["number"]} for i in issues if _fail_marker("watch") in (i.get("body") or "")]
     apply_actions(actions, gh)
     counts = {}
-    for f in findings:
+    for f in judged:
         counts[f.verdict] = counts.get(f.verdict, 0) + 1
-    _write_json(out / "last_run.json", {"today": today, "ok": True, "counts": counts, "total": len(findings)})
+    _write_json(out / "last_run.json", {"today": today, "ok": True, "counts": counts, "total": len(judged)})
 
 
 def run_ci(http, gh, compare, now, root: Path, weekly: bool = True, tries: int = 2, wait: int = 300, sleep=None, assignees: list | None = None) -> int:
@@ -429,7 +449,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="ALIO 매주 확인 결과 내기")
     ap.add_argument("--no-weekly", action="store_true", help="매주 기록 댓글과 미해소 댓글을 달지 않음")
     ap.add_argument("--report-failure", metavar="사유", help="실패 이슈만 만들거나 고침")
-    ap.add_argument("--kind", choices=("watch", "release"), default="watch")
+    ap.add_argument("--kind", choices=("watch", "release", "upload"), default="watch")
     args = ap.parse_args(argv)
     assignees = [x.strip() for x in os.environ.get("NAEGYU_ASSIGNEES", "").split(",") if x.strip()]
     now = datetime.datetime.now(KST)

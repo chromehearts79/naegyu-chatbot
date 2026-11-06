@@ -83,7 +83,11 @@ def asset_args(no: int, files) -> list:
 def assets(no: int, dist: Path, reports: Path, out: Path) -> list:
     """새 판에 붙일 파일을 out 에 모은다. 하나라도 없으면 FileNotFoundError."""
     dist, reports, out = Path(dist), Path(reports), Path(out)
-    need = [dist / "index.html", dist / "artifact.html", reports / "change_report.md"]
+    # 합치기 전에 finish 가 따로 둔 변경 보고서가 있으면 그것을, 없으면(첫 판) 보통 보고서를 쓴다
+    changes = reports / "release_changes.md"
+    if not changes.is_file():
+        changes = reports / "change_report.md"
+    need = [dist / "index.html", dist / "artifact.html", changes]
     gpts = sorted(p for p in (dist / "gpts").glob("*") if p.is_file()) if (dist / "gpts").is_dir() else []
     review = sorted((reports / "review").glob("*.xlsx")) if (reports / "review").is_dir() else []
     missing = [str(p) for p in need if not p.is_file()]

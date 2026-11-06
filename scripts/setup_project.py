@@ -69,7 +69,7 @@ def install(full):
     npm = shutil.which("npm")
     if not npm:
         sys.exit("준비 실패: npm 이 없습니다(Node.js 가 필요합니다).")
-    run([npm, "ci"], "npm 패키지 설치")
+    run([npm, "ci", "--ignore-scripts"], "npm 패키지 설치")
     reqs = ["requirements.txt"] + (["scripts/requirements-bounds.txt"] if full else [])
     cmd = [sys.executable, "-m", "pip", "install", "-q"]
     for r in reqs:
@@ -126,7 +126,8 @@ def main():
     if not problems:
         _, texts = CC.take(rules, None, snap, {})
         CC.TEXTS.write_text(json.dumps(texts, ensure_ascii=False), encoding="utf-8")
-    STAMP.write_text(stamp + "\n", encoding="utf-8")
+    if not problems:  # 문제가 있었으면 표지를 남기지 않아, 그냥 다시 돌리면 늘 다시 확인한다
+        STAMP.write_text(stamp + "\n", encoding="utf-8")
     print(f"준비 끝: 규정 {len(rules)}개, 지문과 같음." if not problems else "준비 끝(지문과 다른 곳이 있습니다).")
 
 

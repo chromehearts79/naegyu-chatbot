@@ -20,8 +20,13 @@ node_modules/
 data/
 
 # 이름이 [ 로 시작하는 파일(지난판·참고 자료)은 올리지 않는다
-원본/[[]*
+원본/**/[[]*
 대기/**/[[]*
+
+# 담당자 연락처와 그 보고서: 개인정보라 올리지 않는다
+knowledge/contacts.json
+reports/contacts/
+scripts/contacts_report.py
 
 # 질문 로그: 직원이 입력한 개인정보가 섞일 수 있다
 logs/

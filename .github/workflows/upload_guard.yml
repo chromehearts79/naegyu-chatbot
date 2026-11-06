@@ -1,0 +1,24 @@
+name: 공개 점검
+on:
+  push:
+    branches: [main]
+    paths: ['대기/**']
+permissions:
+  contents: read
+  issues: write
+env:
+  PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+  NAEGYU_ASSIGNEES: ${{ vars.NAEGYU_ASSIGNEES }}
+jobs:
+  guard:
+    if: github.event.repository.fork != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: 올리면 안 되는 이름의 파일이 있는지 보기
+        run: python3 -X utf8 scripts/check_upload.py --paths-only
+      - name: 걸렸으면 알리기
+        if: failure()
+        run: python3 -X utf8 scripts/watch_ci.py --report-failure "공개 저장소에 올라가면 안 되는 이름의 파일이 올라갔을 수 있습니다(시행문, 이름이 [ 로 시작하는 파일, 사람 이름이 든 파일). 지워도 기록에는 남으므로, 정보보안담당관과 저장소 관리자에게 바로 알려 주세요. 어떤 파일인지는 Actions 탭의 이 실행 기록에서 볼 수 있습니다." --kind upload

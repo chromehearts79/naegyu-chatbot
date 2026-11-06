@@ -61,7 +61,7 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
    3. `python3 scripts/blind_check.py first reports/blind_work/answers.json --ai Sonnet` (답 파일 경로는 실제 이름으로). 끝난 만큼 `reports/blind_work/` 에 쌓인다. `python3 scripts/blind_check.py remaining` 으로 아직 답을 못 받은 카드를 본다.
    4. `first` 가 `judge_questions.json` 을 썼으면 같은 방식으로 하위 작업이 `judge_answers.json`(각 문제의 `key` 를 열쇠로 한 `{"<key>": {"판정": "예 또는 아니오", "이유": "…"}}`)을 쓰게 한다.
    5. 남은 카드가 없을 때 `python3 scripts/blind_check.py finish [reports/blind_work/judge_answers.json] --ai Sonnet`. `reports/blind_check.md` 가 만들어지고 `reports/blind_work/` 는 지워진다.
-   6. `reports/blind_work/` 는 작업 도중 갈래에 커밋해 둔다(이어 하기 위해). `finish` 로 폴더가 지워진 뒤에는 결과 파일만 커밋한다.
+   6. `reports/blind_work/` 는 작업 도중 갈래에 커밋해 둔다(이어 하기 위해). `finish` 로 폴더가 지워진 뒤에는 `git add -u`(지워진 작업 파일을 커밋에 반영한다)와 새로 생긴 결과 파일(`reports/blind_check.md` 등)을 이름으로 지정한 `git add <파일>` 만 쓴다. `git add -A` 는 계속 쓰지 않는다. **Pull Request 를 열기 전에 `reports/blind_work/` 폴더가 갈래에서 없어졌는지 확인한다**(`git ls-files reports/blind_work` 가 비어 있어야 한다). main 에 들어가면 안 된다.
    7. 하위 작업을 쓸 수 없는 환경이면 직접 답하지 말고(카드 값을 이미 알고 있어 재확인이 되지 않는다) 사용자에게 말한다: "새 Claude 웹 세션을 열어 `reports/blind_work/questions.json` 만 주고 답 파일을 만들어 달라고 하세요." 새 세션이 쓴 답 파일을 이 갈래의 `reports/blind_work/` 에 올려 달라고 하고, 올라오면 위 3번부터 이어 간다.
    8. '확인 필요'는 원문과 대조해 카드를 고치거나 `reports/review_decisions.json` 에 결정을 남긴다.
 9. 사용자에게 보여 줄 것: 고친·새 카드 목록, 카드마다 "무엇이 바뀌었나" 한 줄(예: "배우자 출산휴가 20일 → 25일"), 고친 계산기와 바뀐 숫자, 담당부서 확인이 필요한 점.
@@ -80,7 +80,7 @@ description: 내규챗봇에 개정된 내규나 새 내규를 반영한다. 사
 
 ## 5단계 — 올리고 Pull Request 열기
 
-1. `claude/…` 갈래에 커밋한다(파일을 지정해서. `[` 로 시작하는 파일과 `knowledge/contacts.json`, `reports/contacts/` 는 올리지 않는다). 커밋 메시지: "내규 개정 반영: <규정명>(시행 YYYY.MM.DD) …".
+1. `claude/…` 갈래에 커밋한다. 이미 추적하는 파일의 바뀜과 삭제는 `git add -u` 로, 새로 생긴 파일은 이름을 하나씩 지정해 `git add <파일>` 로 올린다. 새 파일 목록에는 `원본/` 의 새 내규 파일, `knowledge/` 의 새 카드 파일, 그리고 **`reports/release_changes.md`**(새 판에 붙는 `바뀐 내용` 파일의 원본)가 들어간다. `git add -A` 는 쓰지 않는다. `[` 로 시작하는 파일과 `knowledge/contacts.json`, `reports/contacts/` 는 올리지 않는다. 올리기 전 `git ls-files reports/blind_work` 가 비어 있는지 본다. 커밋 메시지: "내규 개정 반영: <규정명>(시행 YYYY.MM.DD) …".
 2. Pull Request 글을 쉬운 말로 쓴다.
    - 무엇이 바뀌었나(카드마다 한 줄, 계산기, 담당부서 확인이 필요한 점)
    - 관련 이슈 링크(예: `관련: #12`)

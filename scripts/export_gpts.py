@@ -3,7 +3,7 @@
   python3 scripts/export_gpts.py  → dist/gpts/
     지시문.md                 : GPT '지침(Instructions)' 칸에 붙여 넣을 글
     카드_<분류>.md (11개 안팎)  : 문답 카드(답·근거 조문·인용 문구·관련 카드)
-    조문_원문.md               : 내규 71개 조문·별표 원문(카드에 없는 질문의 근거 찾기용)
+    조문_원문.md               : 내규 전체의 조문·별표 원문(카드에 없는 질문의 근거 찾기용)
 
 GPTs 지식 파일은 20개까지라 분류별로 묶는다. 내규는 공개 대상이지만, 직원이 질문에 개인정보·비공개 정보를
 넣지 않도록 지시문과 첫 인사에 안내한다(인공지능전환관리세칙 제29조제2항).
@@ -37,8 +37,13 @@ INSTRUCTIONS = """당신은 (재)우체국금융개발원 직원을 돕는 '내�
 - 쉬운 우리말로, 짧은 문장으로 답합니다. 핵심 숫자는 굵게 씁니다.
 
 [첫 인사]
-"내규챗봇입니다. 내규 71개를 근거로 답합니다. 질문에 개인정보나 비공개 정보는 넣지 마세요."
+"내규챗봇입니다. 내규 {N}개를 근거로 답합니다. 질문에 개인정보나 비공개 정보는 넣지 마세요."
 """
+
+
+def instructions(n):
+    """지시문. 첫 인사의 내규 수는 지금 내규 수로 채운다."""
+    return INSTRUCTIONS.replace("{N}", str(n))
 
 
 def card_md(c, rule):
@@ -77,7 +82,7 @@ def main():
         parts += [a["text"] for a in r["articles"]]
         parts += [f"\n[{x['title']}]\n{x.get('text', '')}" for x in r.get("annexes") or []]
     (OUT / "조문_원문.md").write_text("\n".join(parts) + "\n")
-    (OUT / "지시문.md").write_text(INSTRUCTIONS)
+    (OUT / "지시문.md").write_text(instructions(len(rules)))
     files = sorted(OUT.glob("*.md"))
     size = sum(f.stat().st_size for f in files) / 1e6
     print(f"{len(files)}개 파일, {size:.1f}MB → dist/gpts/ (GPTs 지식 파일은 20개까지)")

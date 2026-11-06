@@ -5,6 +5,7 @@
 문제가 있으면 exit 1. 작성 정보와 커밋 작성자 목록은 사람이 보고 정하는 자료라 실패시키지 않는다.
 
   python3 -X utf8 scripts/check_upload.py [--staged] [--history]
+  python3 -X utf8 scripts/check_upload.py --paths-only   # 올리면 안 되는 이름의 파일이 있는지만 본다(GitHub 에서 직접 올린 뒤 자동 점검용, 표준 라이브러리만 씀)
 """
 import json
 import re
@@ -194,8 +195,28 @@ def file_infos(paths, staged):
     return [(p, lines.get(p, "읽지 못함")) for p in kinds]
 
 
+def paths_only():
+    """HEAD 에 올리면 안 되는 이름의 파일이 있는지만 본다. 글 내용은 읽지 않는다(node 도 필요 없다)."""
+    global REPO
+    try:
+        REPO = Path(git("rev-parse", "--show-toplevel").strip())
+        bad = forbidden_paths(tracked_files(False))
+    except SystemExit as e:
+        print(f"✗ 점검하지 못했습니다: {e}")
+        return 1
+    if bad:
+        print(f"✗ 올리면 안 되는 이름의 파일 {len(bad)}개가 올라갔습니다:")
+        for p in bad:
+            print("  - " + p)
+        return 1
+    print("✓ 올리면 안 되는 이름의 파일이 없습니다.")
+    return 0
+
+
 def main(argv):
     global REPO
+    if "--paths-only" in argv:
+        return paths_only()
     staged = "--staged" in argv
     history = "--history" in argv
     problems = []

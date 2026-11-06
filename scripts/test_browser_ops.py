@@ -30,8 +30,8 @@ for rel in ("scripts/update_rules.py", "scripts/cut_forms.cjs", "scripts/convert
     ok("CloudDocs" not in (ROOT / rel).read_text(encoding="utf-8"), f"{rel}: iCloud 경로가 없다")
 ok((ROOT / ".gitattributes").read_text(encoding="utf-8").strip().startswith("* -text"), "줄바꿈 변환을 끈다")
 ign = (ROOT / ".gitignore").read_text(encoding="utf-8")
-ok("원본/[[]*" in ign, "[ 로 시작하는 원본은 올리지 않는다")
-names = sorted(p.name for p in (ROOT / "원본").iterdir() if p.is_file())
+ok("원본/**/[[]*" in ign, "[ 로 시작하는 원본은 올리지 않는다")
+names = sorted(p.name for p in (ROOT / "원본").iterdir() if p.is_file() and not p.name.startswith("."))
 manifest = json.loads((ROOT / "knowledge" / "source_files.json").read_text(encoding="utf-8"))["files"]
 ok(names == sorted(manifest) and not any(n.startswith("[") for n in names), "원본이 원본 기록과 같고 [ 파일이 없다(새 내규가 늘어도 이 시험은 그대로 통과한다)")
 
@@ -306,6 +306,9 @@ ok([a["kind"] for a in WC.failure_actions("또 실패", [dict(FAILISS, lastComme
 NOW = datetime.datetime(2026, 11, 9, 9, 0)
 
 
+BOT = {"is_bot": True, "login": "app/github-actions"}
+
+
 class StateGh(FakeGh):
     """이슈 목록과 댓글 날짜를 기억하는 가짜 gh"""
     def __init__(self, issues, fail_on=None):
@@ -333,9 +336,9 @@ def stub_collect(findings):
 
 
 def mk_issues():
-    return [{"number": 4, "title": "개정 의심: 옛규정", "body": WC.marker("5"), "createdAt": "2026-11-02T00:00:00Z", "comments": []},
-            {"number": 3, "title": "확인 실패: ALIO 매주 확인", "body": WC._fail_marker("watch"), "createdAt": "2026-11-02T00:00:00Z", "comments": []},
-            {"number": 1, "title": "매주 확인 기록", "body": "", "createdAt": "2026-11-02T00:00:00Z", "comments": []}]
+    return [{"number": 4, "title": "개정 의심: 옛규정", "body": WC.marker("5"), "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": BOT},
+            {"number": 3, "title": "확인 실패: ALIO 매주 확인", "body": WC._fail_marker("watch"), "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": BOT},
+            {"number": 1, "title": "매주 확인 기록", "body": "", "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": BOT}]
 
 
 def mk_findings():
@@ -405,7 +408,7 @@ with tempfile.TemporaryDirectory() as td:
     g = FakeGh()
     ok(call("확인함: 아무거나", "NONE", g) == "무시" and g.calls == [] and json.loads(sp.read_text(encoding="utf-8"))["rules"]["9387"]["mod"] == "m1", "외부인 댓글에는 아무 일도 없다")
     ok(call("좋아요", "OWNER", g) == "무시" and g.calls == [], "다른 댓글은 무시한다")
-    ok(call("확인함: 사유", "OWNER", g, "표시 없음") == "무시" and g.calls == [], "내규 표시가 없는 이슈는 답 없이 무시한다")
+    ok(call("확인함: 사유", "OWNER", g, "표시 없음") == "대상 없음" and len(g.calls) == 1 and "알림이 아니라서" in g.stdin[0] and not any("close" in c for c in g.calls), "내규 표시가 없는 이슈에는 알림 글이 아니라고 답한다")
     ok(call("확인함:", "OWNER", g) == "다시 요청" and json.loads(sp.read_text(encoding="utf-8"))["rules"]["9387"]["mod"] == "m1" and "comment" in g.calls[-1], "사유가 비면 다시 적어 달라고 답한다")
     g = FakeGh()
     r = call("확인함: 재게시", "OWNER", g)
@@ -501,9 +504,9 @@ rc, g, gh, rep = pub(6, ["v5", "v6"], ["knowledge/service/a.json"])
 ok(rc == 1 and not created(gh) and len(rep) == 1 and "판 번호" in rep[0], "번호를 안 올린 문답 변경은 Release 를 건드리지 않고 알린다")
 rc, g, gh, rep = pub(1, [], [])
 ok(rc == 0 and len(created(gh)) == 1, "첫 판은 만든다")
-rc, g, gh, rep = pub(7, ["v6"], ["knowledge/service/a.json"], env={}, issues=[{"number": 9, "title": "t", "body": WCI._fail_marker("release"), "createdAt": "2026-11-01T00:00:00Z"}])
+rc, g, gh, rep = pub(7, ["v6"], ["knowledge/service/a.json"], env={}, issues=[{"number": 9, "title": "t", "body": WCI._fail_marker("release"), "createdAt": "2026-11-01T00:00:00Z", "author": BOT}])
 ok(("rev-parse", "HEAD") in g.calls and any(c[0] == ["issue", "close", "9"] for c in gh.calls), "성공하면 열린 새 판 실패 이슈를 닫는다(GITHUB_SHA 가 없으면 HEAD)")
-rc, g, gh, rep = pub(7, ["v6"], ["knowledge/service/a.json"], issues=[{"number": 4, "title": "t", "body": "다른 이슈", "createdAt": "2026-11-01T00:00:00Z"}])
+rc, g, gh, rep = pub(7, ["v6"], ["knowledge/service/a.json"], issues=[{"number": 4, "title": "t", "body": "다른 이슈", "createdAt": "2026-11-01T00:00:00Z", "author": BOT}])
 ok(not any(c[0][:2] == ["issue", "close"] for c in gh.calls), "다른 이슈는 닫지 않는다")
 ok(RC.pending_edition(6, ["v5"]) and RC.pending_edition(1, []) and not RC.pending_edition(6, ["v5", "v6"]) and not RC.pending_edition(5, ["v6"]), "아직 못 만든 판을 알아본다")
 reps = []
@@ -516,7 +519,7 @@ ok(RC.check_number("BASE", fg) == 1 and ("diff", "--name-only", "BASE", "HEAD") 
 wf = {n: (ROOT / ".github" / "workflows" / n).read_text(encoding="utf-8") for n in ("watch.yml", "confirm.yml", "check.yml", "release.yml")}
 ok(not any("pull_request_target" in t for t in wf.values()), "pull_request_target 을 쓰지 않는다")
 ok(all("permissions:" in t for t in wf.values()), "권한을 적어 둔다")
-ok("schedule:" in wf["watch.yml"] and "workflow_dispatch" in wf["watch.yml"] and "cron: '0 0 * * 1'" in wf["watch.yml"], "월요일 아침(한국 시간 9시)에 돌고 손으로도 돌릴 수 있다")
+ok("schedule:" in wf["watch.yml"] and "workflow_dispatch" in wf["watch.yml"] and "cron: '17 0 * * 1'" in wf["watch.yml"] and "cron: '0 0 " not in wf["watch.yml"], "월요일 아침(한국 시간 9시 17분경, 정각 피함)에 돌고 손으로도 돌릴 수 있다")
 ok(all("github.event.repository.fork != true" in wf[n] for n in ("watch.yml", "confirm.yml", "release.yml")), "포크에서는 돌지 않는다(저장소 이름을 박아 두지 않아 넘겨도 된다)")
 ok("contents: read" in wf["check.yml"] and "issue_comment" in wf["confirm.yml"], "PR 시험은 읽기 권한만, 확인함은 댓글에 반응")
 ok(all(ln.strip().startswith(("COMMENT_BODY:", "ISSUE_BODY:", "if:")) for ln in wf["confirm.yml"].splitlines() if "comment.body" in ln or "issue.body" in ln), "댓글 글자는 환경 변수로만 넘긴다")
@@ -549,5 +552,240 @@ ok(all(w in start for w in ("github.com", "claude.ai/code", "Merge pull request"
 ok(not (ROOT / "skills" / "naegyu-update" / "SKILL.md").exists(), "옛 스킬 위치를 없앤다")
 rd = (ROOT / "README.md").read_text(encoding="utf-8")
 ok("convert.sh" not in rd.split("만드는 순서", 1)[1].split("```", 2)[1] and "ollama" not in rd and "예비" in rd, "README 가 로컬 모델과 맥 전용 단계를 요구하지 않는다")
+
+# ====================== 마지막 검토 고침 ======================
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import subprocess  # noqa: E402
+
+# ---- C1. 내규 수를 박아 두지 않는다 ----
+import export_gpts as EG  # noqa: E402
+ok("내규 72개를" in EG.instructions(72) and "내규 71개" not in EG.instructions(72) and "{N}" not in EG.instructions(72), "C1: GPTs 첫 인사의 내규 수는 지금 내규 수로 채운다")
+uit = (ROOT / "scripts" / "ui_test.js").read_text(encoding="utf-8")
+ok("/내규 \\d+개 원문/" in uit and "내규 71개" not in uit, "C1: 화면 시험이 내규 수를 박아 두지 않는다")
+hard = [f.name for f in list((ROOT / "scripts").glob("*.py")) + list((ROOT / "scripts").glob("*.js")) + list((ROOT / "web").glob("*")) if f.is_file() and not f.name.startswith("test_") and re.search(r"내규 ?\d{2}개", f.read_text(encoding="utf-8", errors="ignore"))]
+ok(not hard, "C1: scripts·web 에 내규 수를 박아 둔 곳이 없다 " + ",".join(hard))
+
+# ---- C2. 직접 올리기 점검 ----
+cu = (ROOT / "scripts" / "check_upload.py").read_text(encoding="utf-8")
+CU = ROOT / "scripts" / "check_upload.py"
+
+
+def paths_only(files):
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        subprocess.run(["git", "init", "-q"], cwd=td, check=True)
+        for rel, text in files.items():
+            (td / rel).parent.mkdir(parents=True, exist_ok=True)
+            (td / rel).write_text(text, encoding="utf-8")
+        subprocess.run(["git", "add", "-f", "."], cwd=td, check=True)
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=" + "t" + "@" + "example.invalid", "commit", "-q", "-m", "t"], cwd=td, check=True)
+        r = subprocess.run([sys.executable, "-X", "utf8", str(CU), "--paths-only"], cwd=td, capture_output=True, text=True, encoding="utf-8")
+        return r.returncode, r.stdout
+
+
+rc, out = paths_only({"대기/복무세칙_직접/Ⅲ-3-1. 복무세칙.hwp": "x", "knowledge/note.md": "문의 " + "kim" + "@" + "example.com"})
+ok(rc == 0, "C2: --paths-only 는 이름만 보고 글 내용은 읽지 않는다")
+rc, out = paths_only({"대기/복무세칙_직접/[개정근거] 복무세칙.hwp": "x"})
+ok(rc == 1 and "[개정근거]" in out, "C2: --paths-only 는 [ 로 시작하는 파일이 올라가면 실패한다")
+rc, out = paths_only({"knowledge/contacts.json": "{}"})
+ok(rc == 1, "C2: --paths-only 는 연락처 파일이 올라가면 실패한다")
+ok("import" in cu and "paths_only" in cu and not re.search(r"^import (node|kordoc)", cu, re.M), "C2: --paths-only 는 표준 라이브러리만 쓴다")
+ug = (ROOT / ".github" / "workflows" / "upload_guard.yml").read_text(encoding="utf-8")
+ok(re.search(r"push:\s*\n\s+branches: \[main\]\s*\n\s+paths: \['대기/\*\*'\]", ug), "C2: 공개 점검은 main 에 push 되고 대기/ 가 바뀔 때만 돈다")
+ok("contents: read" in ug and "issues: write" in ug and "contents: write" not in ug and "pull_request_target" not in ug, "C2: 공개 점검은 읽기와 이슈 쓰기 권한만")
+ok("github.event.repository.fork != true" in ug and "check_upload.py --paths-only" in ug and "setup-python" not in ug and "setup-node" not in ug and "npm" not in ug, "C2: 공개 점검은 포크에서 안 돌고 설치 없이 이름만 본다")
+ok(re.search(r"if: failure\(\)\s*\n\s+run: python3 -X utf8 scripts/watch_ci.py --report-failure \"[^\"]*정보보안담당관[^\"]*\" --kind upload", ug), "C2: 걸리면 쉬운 말로 알리는 이슈를 만든다")
+ok("${{" not in ug.replace("${{ github.token }}", "").replace("${{ vars.NAEGYU_ASSIGNEES }}", ""), "C2: 공개 점검 run 안에 ${{ }} 를 넣지 않는다")
+fu = WC.failure_actions("올라감", [], "2026-11-09", ["담당"], kind="upload")
+ok(fu[0]["kind"] == "create" and fu[0]["title"] == "공개 점검 실패" and WC._fail_marker("upload") in fu[0]["body"] and "naegyu-fail:watch" not in fu[0]["body"] and "저절로 닫힙니다" not in fu[0]["body"].split("다음에 할 일")[1], "C2: 공개 점검 실패 이슈는 제목과 표지가 따로이고 저절로 닫힌다고 하지 않는다")
+UPISS = {"number": 21, "title": "공개 점검 실패", "body": fu[0]["body"], "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": BOT}
+rc_g = StateGh(mk_issues() + [UPISS])
+real_collect = stub_collect(mk_findings)
+try:
+    with tempfile.TemporaryDirectory() as td:
+        rcw = WC.run_ci(None, rc_g, None, NOW, Path(td))
+finally:
+    WC._collect = real_collect
+ok(rcw == 0 and not any(c[:3] == ["issue", "close", "21"] for c in rc_g.calls) and any(c[:3] == ["issue", "close", "3"] for c in rc_g.calls), "C2: 매주 확인이 성공해도 공개 점검 실패 이슈는 닫지 않는다")
+rg = FakeGh2([UPISS])
+RC._close_release_issues(rg)
+ok(not any(c[0][:2] == ["issue", "close"] for c in rg.calls), "C2: 새 판이 만들어져도 공개 점검 실패 이슈는 닫지 않는다")
+ok(WC.failure_actions("또", [dict(UPISS, lastCommentDate="2026-11-09")], "2026-11-09", [], kind="upload") == [] and [a["kind"] for a in WC.failure_actions("또", [UPISS], "2026-11-09", [], kind="upload")] == ["comment"], "C2: 공개 점검 실패도 같은 날 겹쳐 만들지 않는다")
+ok(re.search(r"^\s+if: .*github\.event\.issue\.user\.login == 'github-actions\[bot\]'", wf["confirm.yml"], re.M) is not None, "I3: 확인함은 우리 봇이 만든 이슈에서만 돈다(job if 한 줄)")
+guide = (ROOT / "docs" / "유지보수_안내.md").read_text(encoding="utf-8")
+up = guide.split("## ALIO 보다 먼저 받은 파일 올리기", 1)[1].split("## 메일이 안 올 때", 1)[0]
+ok(up.index("공개") < up.index("Add file") and all(w in up for w in ("시행문", "[", "직원 이름", "History", "정보보안담당관", "저장소 관리자")), "C2: 직접 올리기 앞머리에 공개 저장소 경고가 있다")
+ok("정보보안담당관이 답하기 전에는" in up and "ALIO 에 아직 올라오지 않은 내규" in up, "C2: ALIO 에 없는 내규는 정보보안담당관 답 전에는 올리지 않는다고 적혀 있다")
+design = (ROOT / "docs" / "superpowers" / "specs" / "2026-11-05-browser-ops-design.md").read_text(encoding="utf-8")
+ok("정보보안담당관이 답하기 전에는" in design.split("### 6.6", 1)[1].split("### 6.7", 1)[0], "C2: 설계 문서 6.6 1번에도 같은 문장이 있다")
+ok("공개 점검 실패" in guide, "C2: 안내 표에 공개 점검 실패가 있다")
+
+# ---- I1. 새 판에 붙는 바뀐 내용 ----
+import update_rules as UR  # noqa: E402
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    (td / "knowledge").mkdir(); (td / "reports").mkdir()
+    (td / "knowledge" / "site.json").write_text(json.dumps({"release": {"no": 5, "where": ""}}), encoding="utf-8")
+    (td / "reports" / "change_report.md").write_text("진짜 바뀐 조문", encoding="utf-8")
+    saved_ur = (UR.ROOT, UR.run, UR.build_all, UR.sources, UR.refresh_alio, UR.MANIFEST)
+
+    def fake_run(*cmd, check=True):
+        if any("check_changes.py" in str(c) for c in cmd):
+            (td / "reports" / "change_report.md").write_text("바뀐 것 없음", encoding="utf-8")
+            return "비교 끝"
+        return "오류 0건"
+    UR.ROOT, UR.run, UR.build_all, UR.sources, UR.refresh_alio, UR.MANIFEST = td, fake_run, lambda: None, lambda: {}, lambda: None, td / "knowledge" / "source_files.json"
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            UR.finish(["복무세칙"])
+    finally:
+        UR.ROOT, UR.run, UR.build_all, UR.sources, UR.refresh_alio, UR.MANIFEST = saved_ur
+    ok((td / "reports" / "release_changes.md").read_text(encoding="utf-8") == "진짜 바뀐 조문" and (td / "reports" / "change_report.md").read_text(encoding="utf-8") == "바뀐 것 없음", "I1: finish 는 승인으로 보고서가 덮어쓰이기 전에 release_changes.md 로 따로 둔다")
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    (td / "dist" / "gpts").mkdir(parents=True); (td / "reports" / "review").mkdir(parents=True)
+    (td / "dist" / "index.html").write_text("a", encoding="utf-8"); (td / "dist" / "artifact.html").write_text("b", encoding="utf-8")
+    (td / "dist" / "gpts" / "지시문.md").write_text("c", encoding="utf-8")
+    (td / "reports" / "review" / "검수표_x.xlsx").write_bytes(b"d"); (td / "reports" / "change_report.md").write_text("바뀐 것 없음", encoding="utf-8")
+    RC.assets(12, td / "dist", td / "reports", td / "out1")
+    ok((td / "out1" / "changes-v12.md").read_text(encoding="utf-8") == "바뀐 것 없음", "I1: release_changes.md 가 없으면(첫 판) change_report.md 를 붙인다")
+    (td / "reports" / "release_changes.md").write_text("진짜 바뀐 조문", encoding="utf-8")
+    RC.assets(12, td / "dist", td / "reports", td / "out2")
+    ok((td / "out2" / "changes-v12.md").read_text(encoding="utf-8") == "진짜 바뀐 조문", "I1: release_changes.md 가 있으면 그것을 붙인다")
+sk = (ROOT / ".claude" / "skills" / "naegyu-update" / "SKILL.md").read_text(encoding="utf-8")
+ok("reports/release_changes.md" in sk.split("## 5단계", 1)[1], "I1: 스킬 커밋 목록에 release_changes.md 가 있다")
+
+# ---- I2. 합쳤지만 ALIO 목록에 아직 없는 내규 ----
+def gone_findings():
+    return [T.Finding(name="복무세칙", code="Ⅲ-3-1", idx="9387", verdict=T.V_SUSPECT, mod="2026.11.02", file_date="2026.11.02"),
+            T.Finding(name="새로합친내규", code="Ⅶ-9", idx="", verdict=T.V_GONE, title="새로합친내규")]
+
+
+ht = WC.heartbeat_text(gone_findings()[:1], "2026-11-09", ["새로합친내규"])
+ok("아직 ALIO 목록에 없는 내규: 새로합친내규" in ht and "새로합친내규: 목록" not in ht, "I2: 매주 기록 댓글에 아직 ALIO 목록에 없는 내규를 적는다")
+ok("아직 ALIO 목록에 없는 내규" in WC.heartbeat_text([none], "2026-11-09", ["가"]) and "아직 ALIO" not in WC.heartbeat_text([none], "2026-11-09"), "I2: 변동이 없는 주에도 적고, 없으면 적지 않는다")
+real_collect = stub_collect(gone_findings)
+try:
+    with tempfile.TemporaryDirectory() as td:
+        g = StateGh(mk_issues())
+        WC.run_ci(None, g, None, NOW, Path(td))
+        WC.run_ci(None, g, None, NOW, Path(td))
+        joined = json.dumps(g.calls, ensure_ascii=False)
+        ok("목록에서 사라짐" not in joined and "naegyu-idx: -->" not in joined and "naegyu-idx:-->" not in joined, "I2: idx 가 없는 사라짐 판정은 이슈를 만들지 않는다(몇 번 돌아도)")
+        rec = [(c, st) for c, st in zip(g.calls, g.stdin) if c[:3] == ["issue", "comment", "1"]]
+        ok(len(rec) == 1 and "새로합친내규" in rec[0][1] and "아직 ALIO 목록에 없는 내규" in rec[0][1], "I2: 기록 댓글에 그 내규 이름이 있다")
+finally:
+    WC._collect = real_collect
+
+# ---- I3. 낯선 사람의 이슈를 믿지 않는다 ----
+STRANGER = {"is_bot": False, "login": "spammer"}
+FAKEBOT = {"is_bot": False, "login": "github-actions"}
+OTHERBOT = {"is_bot": True, "login": "app/dependabot"}
+sp_issues = [
+    {"number": 4, "title": "개정 의심: 옛규정", "body": WC.marker("5"), "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": BOT},
+    {"number": 50, "title": "개정 의심: 복무세칙", "body": WC.marker("9387"), "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": STRANGER},
+    {"number": 51, "title": "매주 확인 기록", "body": "스팸", "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": STRANGER},
+    {"number": 52, "title": "확인 실패: ALIO 매주 확인", "body": WC._fail_marker("watch"), "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": FAKEBOT},
+    {"number": 53, "title": "x", "body": WC._fail_marker("watch"), "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": OTHERBOT},
+    {"number": 54, "title": "x", "body": WC.marker("5"), "createdAt": "2026-11-02T00:00:00Z", "comments": []},
+]
+nums = [i["number"] for i in WC._list_open(FakeGh(sp_issues))]
+ok(nums == [4], "I3: 목록은 GitHub Actions 봇이 만든 이슈만 남긴다(사람, 이름만 비슷한 사람, 다른 봇, 작성자 없음 제외)")
+lg = FakeGh(sp_issues)
+WC._list_open(lg)
+ok("author" in lg.calls[0][lg.calls[0].index("--json") + 1], "I3: gh 에 작성자도 달라고 한다")
+real_collect = stub_collect(mk_findings)
+try:
+    with tempfile.TemporaryDirectory() as td:
+        g = StateGh([dict(i) for i in sp_issues] + [{"number": 1, "title": "매주 확인 기록", "body": "", "createdAt": "2026-11-02T00:00:00Z", "comments": [], "author": BOT}])
+        WC.run_ci(None, g, None, NOW, Path(td))
+    touched = {c[2] for c in g.calls if c[:2] in (["issue", "edit"], ["issue", "comment"], ["issue", "close"])}
+    ok(touched.isdisjoint({"50", "51", "52", "53", "54"}) and "1" in touched, "I3: 낯선 사람의 이슈는 고치거나 댓글을 달거나 닫지 않고, 진짜 기록 이슈에 댓글을 단다")
+    ok(any(c[:2] == ["issue", "create"] and "개정 의심" in c[3] for c in g.calls), "I3: 낯선 사람이 표지를 베껴도 진짜 이슈를 따로 만든다")
+finally:
+    WC._collect = real_collect
+with tempfile.TemporaryDirectory() as td:
+    g = StateGh([dict(i) for i in sp_issues])
+    WC.run_ci(fake_http_down, g, None, NOW, Path(td), sleep=lambda s: None)
+    ok(any(c[:2] == ["issue", "create"] and "확인 실패" in c[3] for c in g.calls) and not any(c[:2] == ["issue", "comment"] and c[2] in ("52", "53") for c in g.calls), "I3: 낯선 사람이 실패 표지를 베껴도 실패 알림이 새로 만들어진다")
+
+# ---- I4. .gitignore ----
+def ignored(path):
+    return subprocess.run(["git", "check-ignore", "-q", path], cwd=ROOT).returncode == 0
+
+
+ok(all(ignored(x) for x in ("knowledge/contacts.json", "reports/contacts/a.md", "scripts/contacts_report.py", "원본/[개정근거] a.hwp", "원본/하위/[참고] a.hwp", "대기/복무세칙_직접/[시행문] a.hwp")), "I4: 연락처 파일과 [ 로 시작하는 파일은 하위 폴더에서도 올라가지 않는다")
+ok(not ignored("원본/Ⅲ-3-1. 복무세칙.hwp") and not ignored("knowledge/site.json"), "I4: 보통 파일은 막지 않는다")
+
+# ---- I5. 스킬의 blind_work 정리 ----
+ok("git add -u" in sk and "git ls-files reports/blind_work" in sk and "`git add -A` 는 쓰지 않는다" in sk and "결과 파일만 커밋한다" not in sk, "I5: blind_work 삭제를 커밋에 반영하고 PR 전에 없어졌는지 본다")
+
+# ---- I6. 확인함 읽기 ----
+ok(CC2.parse_reason("확인함") == "" and CC2.parse_reason("  확인함  ") == "" and CC2.parse_reason("확인함 재게시") == "재게시" and CC2.parse_reason("확인함: 재게시") == "재게시" and CC2.parse_reason("확인함：재게시") == "재게시", "I6: 쌍점이 없어도 확인함으로 시작하면 읽는다")
+ok(CC2.parse_reason("이미 확인함: 재게시") is None and CC2.parse_reason("확인함으로 기록했습니다") is None and CC2.parse_reason("메모\n확인함: x") is None, "I6: 글 중간에 낀 확인함은 읽지 않는다")
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    sp = td / "seen.json"
+    sp.write_text(json.dumps({"taken": "x", "rules": {"9387": {"name": "복무세칙", "title": "복무세칙", "mod": "m1", "st_date": "s1", "file_no": "1", "file_date": "f1"}}}), encoding="utf-8")
+    g = FakeGh()
+    r = CC2.handle("확인함", "OWNER", WC.marker("9387"), "2026-11-16", latest, sp, g, 7, td)
+    ok(r == "다시 요청" and len(g.calls) == 1 and "사유" in g.stdin[0] and json.loads(sp.read_text(encoding="utf-8"))["rules"]["9387"]["mod"] == "m1", "I6: 사유 없이 확인함만 쓰면 사유를 적어 달라고 답하고 기록하지 않는다")
+    g = FakeGh()
+    ok(CC2.handle("확인함 재게시", "OWNER", WC.marker("9387"), "2026-11-16", latest, sp, g, 7, td) == "기록함" and json.loads(sp.read_text(encoding="utf-8"))["rules"]["9387"]["confirmed"]["reason"] == "재게시", "I6: 쌍점 없는 확인함 사유도 기록한다")
+    g = FakeGh()
+    ok(CC2.handle("확인함", "NONE", "표시 없음", "2026-11-16", latest, sp, g, 7, td) == "무시" and g.calls == [], "I6: 권한이 없는 사람에게는 어떤 답도 하지 않는다")
+    g = FakeGh()
+    ok(CC2.handle("지나가는 말", "OWNER", "표시 없음", "2026-11-16", latest, sp, g, 7, td) == "무시" and g.calls == [], "I6: 확인함이 아닌 댓글은 표시 없는 이슈에서도 답하지 않는다")
+
+# ---- 작은 것들 ----
+spj = (ROOT / "scripts" / "setup_project.py").read_text(encoding="utf-8")
+ok('[npm, "ci", "--ignore-scripts"]' in spj, "작은것: npm ci 는 --ignore-scripts 로 한다")
+# 문제가 있으면 표지를 남기지 않는다(그래야 그냥 다시 돌렸을 때 늘 다시 확인한다)
+import check_changes as CCH  # noqa: E402
+with tempfile.TemporaryDirectory() as td:
+    td = Path(td)
+    keep = (SP.STAMP, SP.DATA, SP.convert, SP.setup_stamp, SP.baseline_problems, CCH.TEXTS, sys.argv)
+    SP.STAMP, SP.DATA, SP.convert, SP.setup_stamp, CCH.TEXTS = td / ".setup_stamp", td, lambda: None, lambda d: "STAMPVALUE", td / "snapshot_texts.json"
+    try:
+        for probs, expect in ((["문제"], False), ([], True)):
+            SP.baseline_problems = lambda c, s, p=probs: p
+            sys.argv = ["setup_project.py", "--no-install", "--allow-changes"]
+            with contextlib.redirect_stdout(io.StringIO()):
+                SP.main()
+            ok((td / ".setup_stamp").exists() == expect, f"작은것: 지문과 다른 곳이 {'있으면 준비 표지를 남기지 않는다' if not expect else '없으면 준비 표지를 남긴다'}")
+            (td / ".setup_stamp").unlink(missing_ok=True)
+            (td / "snapshot_texts.json").unlink(missing_ok=True)
+    finally:
+        SP.STAMP, SP.DATA, SP.convert, SP.setup_stamp, SP.baseline_problems, CCH.TEXTS, sys.argv = keep
+ok(re.search(r"- name: 못 만든 새 판이 있는지 확인\n\s+if: always\(\)\n\s+continue-on-error: true\n\s+run: python3 -X utf8 scripts/release_ci.py check-pending", wf["watch.yml"]) is not None, "작은것: 알림 단계(check-pending)가 실패해도 본 확인은 계속한다")
+cfg = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+ok(cfg["hooks"]["SessionStart"][0].get("matcher") == "startup|resume", "작은것: 시작 훅은 새로 열 때와 이어 열 때만 돈다(compact·clear 제외)")
+ok("9시" in wf["watch.yml"] and "오전" in guide, "작은것: 매주 확인 시각 설명이 남아 있다")
+urs = (ROOT / "scripts" / "update_rules.py").read_text(encoding="utf-8")
+ok("'지난판' 폴더로 옮겨" not in urs and "옛 파일은 지워 주세요" in urs and "iCloud" not in urs.split('"""', 2)[1] and "summary.md" not in urs, "작은것: update_rules 는 옛 파일을 지우라고 안내하고 낡은 설명이 없다")
+import alio_release as AR  # noqa: E402
+keep_ar = (AR.fetch_all, AR.write_release, AR.load_seen)
+AR.fetch_all = lambda: (_ for _ in ()).throw(AR.AlioError("막힘"))
+AR.write_release, AR.load_seen = lambda: None, lambda: {"rules": {}}
+buf = io.StringIO()
+try:
+    with contextlib.redirect_stdout(buf):
+        AR.refresh()
+finally:
+    AR.fetch_all, AR.write_release, AR.load_seen = keep_ar
+ok("접속 실패" in buf.getvalue() and "Claude 웹" in buf.getvalue() and "정상" in buf.getvalue() and "GitHub" in buf.getvalue(), "작은것: ALIO 가 막힌 클라우드 세션에서 정상이며 합친 뒤 GitHub 가 다시 한다고 알린다")
+OD = T.Finding(name="별지내규", code="", idx="8", verdict=T.V_OUTSIDE, compare=cmp_res(outside_diff=["--- 이전", "+++ 이후", "@@ -1 +1 @@", "-옛 별지", "+새 별지"]))
+bo = WC.issue_body(OD, "2026-11-09")
+ok("조문 밖에서 달라진 글자" in bo and "-옛 별지" in bo and "+새 별지" in bo and "--- 이전" not in bo and "+++ 이후" not in bo and "@@" not in bo, "작은것: 조문 밖 변화는 달라진 글자만 보이고 diff 머리 줄은 뺀다")
+SU = T.Finding(name="일반내규", code="", idx="9", verdict=T.V_SUSPECT, compare=cmp_res(changed_units=["제1조"], outside_diff=["-옛", "+새"]))
+ok("조문 밖에서 달라진 글자" not in WC.issue_body(SU, "2026-11-09"), "작은것: 조문 밖 변화가 아닌 판정에는 그 줄을 쓰지 않는다")
+start = (ROOT / "docs" / "담당자_시작_안내.md").read_text(encoding="utf-8")
+prac = start.split("## 4. 연습", 1)[1].split("## 5.", 1)[0]
+ok("임시" in prac and "실제 저장소에서는 하지 않습니다" in prac and "함께" in prac, "작은것: 연습은 인계하는 분과 임시 사본에서 하고 실제 저장소에서는 하지 않는다")
+fail_sec = guide.split("### 새 판 실패", 1)[1].split("## ALIO 보다", 1)[0]
+ok("직접 닫습니다" not in fail_sec and "저절로 닫힙니다" in fail_sec and "직접 닫아" not in WC.failure_actions("x", [], "2026-11-09", [], kind="release")[0]["body"], "작은것: 새 판 실패 이슈는 저절로 닫힌다고 안내한다(손으로 닫으라는 말 없음)")
+ok("확인함 사유" in guide and "알림 글이 아니다" in guide, "작은것: 안내에 쌍점 없는 확인함과 알림 아닌 글의 답이 적혀 있다")
+
 
 sys.exit(1 if FAIL else 0)

@@ -1,7 +1,7 @@
 name: ALIO 매주 확인
 on:
   schedule:
-    - cron: '0 0 * * 1'   # 월요일 00:00 UTC = 한국 시간 월요일 오전 9시
+    - cron: '17 0 * * 1'   # 월요일 00:17 UTC = 한국 시간 월요일 오전 9시 17분경(정각은 GitHub 이 늦추거나 건너뛸 수 있어 피한다)
   workflow_dispatch:
 permissions:
   contents: write
@@ -29,6 +29,7 @@ jobs:
         uses: ./.github/actions/setup
       - name: 못 만든 새 판이 있는지 확인
         if: always()
+        continue-on-error: true
         run: python3 -X utf8 scripts/release_ci.py check-pending
       - id: watch
         name: ALIO 확인과 이슈 내기

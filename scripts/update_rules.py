@@ -7,9 +7,9 @@
   python3 scripts/update_rules.py build     # 판 번호·지문·원본 기록은 두고, 낱말 경계·양식·화면·지식 묶음·검수표만 다시 만든다(GitHub 시험·새 판용)
   python3 scripts/update_rules.py init      # 처음 한 번: 지금 원본 파일들을 기준으로 기록
 
-원본 폴더: iCloud 내규챗봇 폴더(파일 이름 '코드. 규정명.hwp', 예: 'Ⅲ-3-1. 복무세칙.hwp').
-같은 규정의 옛 파일은 '지난판' 폴더로 옮겨 두면 된다(이 폴더와 '['로 시작하는 참고 파일은 읽지 않는다).
-결과 요약은 reports/update/status.json, reports/update/summary.md 에 남는다.
+원본 폴더: 저장소의 원본/ (파일 이름 '코드. 규정명.hwp', 예: 'Ⅲ-3-1. 복무세칙.hwp').
+같은 규정의 옛 파일은 지우면 된다(git 이 기록을 보관한다). '['로 시작하는 참고 파일은 읽지 않고 올리지도 않는다.
+결과 요약은 reports/update/status.json, reports/update/summary.json 에 남는다.
 """
 import datetime
 import hashlib
@@ -103,7 +103,7 @@ def status():
     lines += [f"- 새 파일: {n}" for n in d["new"]]
     lines += [f"- 사라진 파일: {n}" for n in d["gone"]]
     for c, ns in d["dup"].items():
-        lines.append(f"- [확인 필요] 같은 코드 {c} 파일이 {len(ns)}개: {', '.join(ns)} → 옛 파일을 '지난판' 폴더로 옮겨 주세요")
+        lines.append(f"- [확인 필요] 같은 코드 {c} 파일이 {len(ns)}개: {', '.join(ns)} → 옛 파일은 지워 주세요(git 이 기록을 보관합니다)")
     for n in d["noname"]:
         lines.append(f"- [확인 필요] '{n}' 은 이름이 '코드. 규정명' 형식이 아님(예: 'Ⅳ-30. ○○지침.hwp') → 이름을 바꿔 주세요")
     if not any(d[k] for k in ("changed", "renamed", "new", "gone")):
@@ -173,6 +173,10 @@ def finish(accept):
     if "오류 0건" not in chk:
         print(chk[-1500:])
         sys.exit("카드 검사 오류가 남아 있어 마무리하지 않습니다.")
+    # --accept 와 아래 check_changes 가 변경 보고서를 "바뀐 것 없음"으로 덮어쓰므로, 새 판 파일용으로 먼저 따로 둔다
+    report = ROOT / "reports" / "change_report.md"
+    if report.exists():
+        shutil.copyfile(report, ROOT / "reports" / "release_changes.md")
     if accept:
         print(run(sys.executable, "scripts/check_changes.py", "--accept", *accept).strip())
     # 새로 배포할 판 번호(옛 사본과 구별하려고 화면 위쪽에 '제N판'으로 보인다)
