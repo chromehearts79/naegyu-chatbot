@@ -23,7 +23,7 @@ import kordoc_tool as K  # noqa: E402
 ok(K.KORDOC == "kordoc@4.24.1", "kordoc 판은 4.24.1")
 pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
 ok(pkg["dependencies"]["kordoc"] == "4.24.1" and pkg["dependencies"]["jsdom"] == "24.1.3" and pkg["dependencies"]["cfb"] == "1.2.2", "패키지 판을 고정한다(^ 없음)")
-for rel in ("scripts/update_rules.py", "scripts/convert.sh", "scripts/alio_compare.py"):
+for rel in ("scripts/update_rules.py", "scripts/convert.sh", "scripts/alio_compare.py", "scripts/check_forms.py"):
     text = (ROOT / rel).read_text(encoding="utf-8")
     ok("npx -y kordoc " not in text and not re.search(r'"-y",\s*"kordoc"', text) and "kordoc@4.24.42" not in text, f"{rel}: 판 없는 kordoc 호출이 없다")
 for rel in ("scripts/update_rules.py", "scripts/cut_forms.cjs", "scripts/convert.sh"):
@@ -55,7 +55,7 @@ ok(CU.scan_text("a", "02-2610-" + "6000"), "그 밖의 전화번호는 잡는다
 ok(CU.scan_text("a", "sk-" + "a" * 30) and CU.scan_text("a", "ghp_" + "a" * 30) and CU.scan_text("a", "AKIA" + "A" * 16), "API 키 꼴을 잡는다")
 ok(not CU.scan_text("a", "noreply@anthropic.com") and not CU.scan_text("a", "담당자 이메일 : ○○○○○○@posid.or.kr"), "커밋 꼬리표와 가린 주소는 통과")
 ok(not CU.scan_text("a", "xxxx" + "@posid.or.kr") and not CU.scan_text("a", "나머지 ****" + "@posid.or.kr"), "x·* 로 가린 주소도 통과")
-ok(CU.forbidden_paths(["원본/[개정근거] 시행문.hwp", "knowledge/contacts.json", "reports/contacts/x.md", "scripts/contacts_report.py", "원본/Ⅰ. 정관.hwpx"]) == ["원본/[개정근거] 시행문.hwp", "knowledge/contacts.json", "reports/contacts/x.md", "scripts/contacts_report.py"], "올리면 안 되는 경로를 잡는다")
+ok(CU.forbidden_paths(["원본/[개정근거] 시행문.hwp", "knowledge/contacts.json", "reports/contacts/x.md", "scripts/contacts_report.py", "reports/review/검수표_복무.xlsx", "원본/Ⅰ. 정관.hwpx", "reports/review_decisions.json"]) == ["원본/[개정근거] 시행문.hwp", "knowledge/contacts.json", "reports/contacts/x.md", "scripts/contacts_report.py", "reports/review/검수표_복무.xlsx"], "올리면 안 되는 경로를 잡는다(검수표 포함, review_decisions.json 은 통과)")
 with tempfile.TemporaryDirectory() as td:
     td = Path(td)
     (td / "[개정근거] 시행문.md").write_text("hong" + "@example.go.kr", encoding="utf-8")
@@ -717,6 +717,7 @@ def ignored(path):
 
 ok(all(ignored(x) for x in ("knowledge/contacts.json", "reports/contacts/a.md", "scripts/contacts_report.py", "원본/[개정근거] a.hwp", "원본/하위/[참고] a.hwp", "대기/복무세칙_직접/[시행문] a.hwp")), "I4: 연락처 파일과 [ 로 시작하는 파일은 하위 폴더에서도 올라가지 않는다")
 ok(not ignored("원본/Ⅲ-3-1. 복무세칙.hwp") and not ignored("knowledge/site.json"), "I4: 보통 파일은 막지 않는다")
+ok(ignored("reports/review/검수표_x.xlsx") and ignored("reports/review/수정요청.md") and not ignored("reports/review_decisions.json"), "I4: 검수표 폴더는 올라가지 않는다(검수자 이름)")
 
 # ---- I5. 스킬의 blind_work 정리 ----
 ok("git add -u" in sk and "git ls-files reports/blind_work" in sk and "`git add -A` 는 쓰지 않는다" in sk and "결과 파일만 커밋한다" not in sk, "I5: blind_work 삭제를 커밋에 반영하고 PR 전에 없어졌는지 본다")

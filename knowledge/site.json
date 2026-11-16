@@ -1,7 +1,7 @@
 {
   "_note": "운영 설정. 운영부서와 오류 신고 창구가 정해지면 채우고 build_web.py 로 다시 묶는다. release.no 는 배포할 판 번호(update_rules.py finish 가 1씩 올린다), release.where 는 직원이 최신본을 받는 곳. calcOff 에 계산기 이름(예: \"tripExpense\")을 넣으면 그 계산기는 '점검 중'으로 멈춘다(틀린 금액이 신고되면 바로 끌 때). examples 는 첫 화면 '이렇게 물어보세요' 질문(여러 분야에서, 맞는 답에 닿는지 화면 점검으로 확인한 것만). featured 는 첫 화면 '자주 찾는 분야' 버튼(topics: \"분야id:주제id\", cards: 함께 보여 줄 카드 id). 여기에 전부 들어간 분야는 '모든 분야 보기'에서 빠진다.",
   "release": {
-    "no": 1,
+    "no": 2,
     "where": ""
   },
   "feedback": {

@@ -135,10 +135,11 @@ def main():
     domains, cards = load_domains()
     for c in cards:
         c.pop("_file", None)
+        # 검수 메모(check)는 담당부서용 내부 메모다. 직원에게 나가는 파일에는 싣지 않는다(검수표에만 있다).
+        c.pop("check", None)
     laws = json.loads((ROOT / "knowledge" / "external_laws.json").read_text())["laws"]
     blind = json.loads((ROOT / "reports" / "blind_check.json").read_text())
     decisions = json.loads((ROOT / "reports" / "review_decisions.json").read_text())["decisions"]
-    fixes = json.loads((ROOT / "knowledge" / "rule_fixes.json").read_text())["items"]
     site = json.loads((ROOT / "knowledge" / "site.json").read_text())
     site.pop("_note", None)
 
@@ -197,7 +198,6 @@ def main():
                        "need": len(need), "byCard": by_card},
             "search": {"dev": search["dev"], "top3": search["top3"], "top1": search["top1"]},
             "lawChecked": laws[0]["checked"].replace("-", ".") + ".",
-            "ruleFixes": fixes,
             "site": site,
         },
         "domains": [{"id": d["id"], "name": d["domain"], "topics": d["topics"]} for d in domains],

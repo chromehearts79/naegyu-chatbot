@@ -839,7 +839,7 @@ function statusPill(c) {
   if (c.reviewed) return h("span", { class: "pill ok", text: "담당부서 검수 완료 · " + c.reviewed.date + " " + c.reviewed.dept });
   return h("span", { class: "pill warn", text: "AI 작성 · 담당부서 검수 전" });
 }
-// 검수 메모·규정 정비 후보는 담당부서용이다. 주소 끝에 #review 를 붙여 열었을 때만 보인다.
+// 주소 끝에 #review 를 붙여 열면 검증 방법을 펼친 채로 보인다. 검수 메모·규정 정비 후보는 내부 자료라 이 파일에 싣지 않는다(검수표에 있다).
 var REVIEW = /review/.test(location.hash + location.search);
 function cardButton(id, onPick) {
   var c = byId.get(id), rule = E.ruleOfCard(c);
@@ -935,7 +935,6 @@ function renderAnswer(c, opts) {
     var r = byId.get(id), rr = E.ruleOfCard(r), own = E.ruleOfCard(c);
     return h("button", { class: "chip", type: "button", text: (rr && rr !== own ? rr + " · " : "") + r.title, onclick: function () { pick(r); } });
   }))]));
-  if (REVIEW && c.check && c.check.length) a.append(h("details", { class: "box" }, [h("summary", { text: "검수 메모 " + c.check.length + "건 (담당부서 확인용)" }), h("div", null, c.check.map(function (t) { return h("p", { class: "soft", text: "· " + t }); }))]));
   if (opts.question) { var rh = relatedHits(opts.question, opts.score !== undefined && opts.score < 0.6); if (rh) a.append(rh); }
   feedbackRow(opts.question, c).forEach(function (x) { a.append(x); });
   return a;
@@ -1446,8 +1445,6 @@ $("#ask-form").addEventListener("submit", function (e) { e.preventDefault(); if 
       h("li", { text: "시험 질문 정확도는 검색 기준값을 고를 때 같은 질문을 써서 실제보다 높게 나왔을 수 있습니다. 담당부서가 만든 질문으로 다시 재야 합니다." })
     ])
   );
-  // 검수용 화면에서만 보인다(직원 화면에 null 을 넘기면 글자 'null'이 찍힌다)
-  if (REVIEW && m.ruleFixes.length) $("#about").append(h("details", { class: "box" }, [h("summary", { text: "만들다 발견한 규정 정비 후보 " + m.ruleFixes.length + "건" }), h("ul", null, m.ruleFixes.map(function (t) { return h("li", { text: t }); }))]));
 })();
 // 화면 색: 자동(PC 설정을 따름)·밝게·어둡게. 고른 값은 이 PC의 브라우저에만 기억한다(저장이 막혀 있으면 이번에만)
 (function () {
