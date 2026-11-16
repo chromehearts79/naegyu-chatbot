@@ -251,8 +251,9 @@ ok(/AI|인공지능/.test(title(t)) || /인공지능|AI/.test(t.querySelector(".
 t = ask("자격증 따면 응시료나 교육비 지원해 주나요");
 ok(t.querySelector(".caution") && /관련 부서에 문의/.test(t.querySelector(".caution").textContent), "내규에 없을 수 있는 질문 → 관련 부서 문의 안내");
 ok(!/담당부서에 확인|담당부서 기준/.test(d.querySelector("#notice").textContent + d.querySelector(".howto").textContent), "맨 위 안내·쓰는 법도 ‘관련 부서에 문의’로 같은 말");
-w.pick(w.DATA.cards.find((c) => c.check && c.check.length));
-ok(!/검수 메모/.test(top().textContent), "검수 메모는 직원 화면에서 숨김");
+ok(!w.DATA.cards.some((c) => c.check) && !("ruleFixes" in w.DATA.meta), "검수 메모·규정 정비 후보는 직원 파일에 싣지 않음");
+w.pick(w.DATA.cards[0]);
+ok(!/검수 메모/.test(top().textContent), "검수 메모는 직원 화면에 없음");
 ok(/담당부서 검수 전/.test(top().querySelector(".pill").textContent), "검수 전 표시");
 
 // 3단계 기능: 이어 묻기, 여러 가지 묻기, 날짜 채우기

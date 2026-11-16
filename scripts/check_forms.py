@@ -3,7 +3,7 @@
 - 번호: 떼어 낸 파일의 첫 별지 표시가 그 번호인지, 다른 별지 표시가 섞이지 않았는지
 - 글: 원본 별지 부분과 같은지(원본 변환본에 없던 로고 그림 줄·머리말(내규 이름)·굵은 글씨 표시 차이는 괜찮다)
 
-  python3 scripts/check_forms.py      (npx kordoc 으로 떼어 낸 파일을 읽는다, 1~2분) — 틀린 양식이 있으면 끝 코드 1
+  python3 scripts/check_forms.py      (kordoc 4.24.1 로 떼어 낸 파일을 읽는다, 1~2분) — 틀린 양식이 있으면 끝 코드 1
 """
 import collections
 import difflib
@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_forms  # noqa: E402
+import kordoc_tool  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 FORMS = ROOT / "data" / "forms"
@@ -60,7 +61,7 @@ def main():
     rules = {r["name"]: r for r in json.loads(build_forms.RULES.read_text())["rules"]}
     files = [FORMS / v["file"] for v in index.values()]
     with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(["npx", "-y", "kordoc", "--jobs", "4", "-d", tmp, *map(str, files)], stdin=subprocess.DEVNULL, capture_output=True, check=True)
+        subprocess.run([*kordoc_tool.kordoc_cmd(), "--jobs", "4", "-d", tmp, *map(str, files)], stdin=subprocess.DEVNULL, capture_output=True, check=True)
         bad, n = [], 0
         cache = {}
         for key, v in index.items():

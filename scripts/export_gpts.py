@@ -53,8 +53,6 @@ def card_md(c, rule):
     lines += [f"  - {f['label']}: {f['value']} — {f['cite']} 「{f['quote']}」" for f in c["facts"]]
     if c.get("law_refs"):
         lines.append("- 외부 법령: " + "; ".join(f"{l['law']} {l['article']} 「{l['quote']}」" for l in c["law_refs"]))
-    if c.get("check"):
-        lines.append("- 확인 필요: " + " / ".join(c["check"]))
     if c.get("related"):
         lines.append("- 관련 카드: " + ", ".join(c["related"]))
     lines.append("- 이렇게도 물음: " + " / ".join(c["questions"][:8]))

@@ -40,6 +40,7 @@ FORBIDDEN_RES = [
     re.compile(r"(^|/)contacts\.json$"),
     re.compile(r"(^|/)reports/contacts/"),
     re.compile(r"(^|/)contacts_report\.py$"),
+    re.compile(r"(^|/)reports/review/"),        # 검수표: 돌려받은 표에 검수자 이름이 있다
 ]
 
 

@@ -122,7 +122,7 @@ python3 -X utf8 scripts/check_upload.py --staged   # 올리기 전 개인정보�
 
 ## 담당부서 검수
 
-`python3 scripts/review_workbook.py export` → `reports/review/검수표_<분류>.xlsx`(11개). 소관부서가 카드마다 판정(정확/수정 필요/삭제)·검수부서·검수일을 적어 돌려주면 `python3 scripts/review_workbook.py import reports/review/*.xlsx` 로 반영한다. '정확' 카드는 화면에 "담당부서 검수 완료 · 날짜 · 부서"로 표시되고, 카드 내용이 나중에 바뀌면 자동으로 "검수 전"으로 돌아간다. 수정 요청은 `reports/review/수정요청.md` 에 모인다.
+`python3 scripts/review_workbook.py export` → `reports/review/검수표_<분류>.xlsx`(12개, 저장소에 올리지 않음: 돌려받은 표에 검수자 이름이 있다. 새 판에 붙는 빈 표는 GitHub 가 시험 단계에서 다시 만든다). 소관부서가 카드마다 판정(정확/수정 필요/삭제)·검수부서·검수일을 적어 돌려주면 `python3 scripts/review_workbook.py import reports/review/*.xlsx` 로 반영한다. '정확' 카드는 화면에 "담당부서 검수 완료 · 날짜 · 부서"로 표시되고, 카드 내용이 나중에 바뀌면 자동으로 "검수 전"으로 돌아간다. 수정 요청은 `reports/review/수정요청.md` 에 모인다.
 
 ## 운영 설정
 
